@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff Linter
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: ruff-format
+        name: Ruff Formatter
+        entry: uv run ruff format
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: prettier
+        name: Prettier (YAML/Markdown)
+        entry: npx prettier --write
+        language: system
+        types_or: [yaml, markdown]
+        require_serial: true

@@ -27,6 +27,3 @@ jobs:
 
       - name: Lint Python (Ruff)
         run: uv run ruff check src/
-
-      - name: Lint YAML and Markdown (Prettier Check)
-        run: npx prettier --check "**/*.yml" "**/*.md"

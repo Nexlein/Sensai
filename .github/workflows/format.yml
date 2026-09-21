@@ -2,8 +2,7 @@ name: Format
 
 on:
   push:
-    branches:
-      - "**"
+    branches: ["main"]
   pull_request:
 
 concurrency:
@@ -13,15 +12,9 @@ concurrency:
 jobs:
   format:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7.0.1
-        with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.1.0
@@ -32,14 +25,8 @@ jobs:
       - name: Install Dependencies
         run: uv sync --all-extras --dev
 
-      - name: Format Python (Ruff)
-        run: uv run ruff format src/
+      - name: Check Python Format (Ruff)
+        run: uv run ruff format --check src/
 
-      - name: Format YAML and Markdown (Prettier)
-        run: npx prettier --write "**/*.yml" "**/*.md"
-
-      - name: Commit and push changes
-        uses: stefanzweifel/git-auto-commit-action@v7.2.0
-        with:
-          commit_message: "chore: format files"
-          branch: ${{ github.head_ref }}
+      - name: Check YAML and Markdown (Prettier)
+        run: npx prettier --check "**/*.yml" "**/*.md"
