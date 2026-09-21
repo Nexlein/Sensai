@@ -55,14 +55,16 @@ Acceptance criteria:
 - Observable behavior 3
 ```
 
-_Note: User stories are the contract between technical choices and the problem solved._
+_Note: User stories are not a formality. They are the contract between your technical choices and the problem you claim to solve. A feature without a credible use case is a feature without justification._
 
-## 5. Final Keynote Presentation
+## 6. Final Keynote Presentation
 
 Your final presentation will be a keynote. Expectations:
 
 - **Scenario-driven:** Open with a concrete scenario (who is using it, context, purpose).
-- **Live Demo:** Demonstrate features live within a coherent system (no disconnected demos).
+- **Live Demo:** Demonstrate features live within a coherent system. Do not switch between disconnected demos.
 - **Technical Justification:** Explain technical choices, what was considered, and what was ruled out.
 - **Honest Assessment:** Discuss what works well, current limits, and what you would do differently.
-- **Fallback Plan:** Have fallback screenshots/recordings prepared in case of live system crashes or network failures.
+- **Fallback Plan:** "A live system that crashes or hangs during a keynote is a preparation failure, not a technical one." Have fallback screenshots or recordings prepared for anything that depends on network or heavy computation.
+
+_As always, have fun !_
