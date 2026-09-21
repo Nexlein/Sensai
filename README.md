@@ -15,6 +15,7 @@ make setup
 ```
 
 ## Useful Commands
+
 - `make test` - Run the test suite
 - `make lint` - Check for logical errors
 - `make format` - Force format all files manually
