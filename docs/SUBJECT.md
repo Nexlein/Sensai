@@ -24,7 +24,16 @@ The project **must** implement a functional CLI chatbot connected to a local Oll
 
 _Note: Achieving only the Base Loop will not net you any points. You must build upon this foundation._
 
-## 4. Deliverables
+## 4. Additional Features
+
+Beyond the MVP, you are free to implement any features from the catalogue. Features are grouped by domain and rated on two axes:
+
+- **Difficulty:** (1–3) implementation effort
+- **Pedagogical value:** (1–3) depth of learning
+
+_(Note: The full feature catalogue with descriptions, examples, and ratings is available in the **companion document**, which you will need to reference.)_
+
+## 5. Deliverables
 
 Your repository must include at a minimum:
 
@@ -35,7 +44,7 @@ Your repository must include at a minimum:
 
 ### User Story Format
 
-For each implemented feature, write at least two user stories demonstrating real use cases:
+For each implemented feature, you must write **at least two** user stories demonstrating real use cases:
 
 ```text
 As a [type of user], I want to [action], so that [outcome].
