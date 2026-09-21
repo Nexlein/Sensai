@@ -4,6 +4,8 @@ This document describes the available features for the Sensai project. You must 
 
 _A group that chooses fewer well-integrated, well-justified features will be evaluated more favorably than a group that accumulates features without depth._
 
+> **Note:** Descriptions are (by design) not very precise in order to let you find in your own words why those features are interesting and pitch them during your keynote. If you have doubt about whether what you're implementing counts as a certain feature, ask this question during the **Follow-up**. If you see a feature missing from this landscape, ask your **pedago** to submit it!
+
 ---
 
 ## 🛠️ Base — Mandatory for all groups
