@@ -1,0 +1,29 @@
+name: Epitech Mirror
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  mirror_to_epitech:
+    if: github.repository == 'Nexlein/Sensai'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Push to Epitech Mirror
+        env:
+          EPITECH_REPO_URL: "git@github.com:EpitechPlaceholder/Sensai.git"
+        run: |
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git remote add epitech "$EPITECH_REPO_URL"
+          git push epitech HEAD:main --force
