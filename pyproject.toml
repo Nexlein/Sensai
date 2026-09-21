@@ -1,0 +1,26 @@
+[project]
+name = "sensai"
+version = "0.1.0"
+description = "< WATASHI WA NIHONGO O SUKOSHI SHIKA HANASEMASEN />"
+readme = "README.md"
+authors = [
+    { name = "Nielsen Combe-Bracciale (Nexlein)", email = "nielsen.combe-bracciale@epitech.eu" },
+    { name = "Bertrand Teddy (Bertrand Teddy)", email = "teddy.bertrand@epitech.eu" },
+    { name = "Aberkane Mathys (Vulcaaa)", email = "mathys.aberkane@epitech.eu" },
+    { name = "Lambrez Alban (Saitamadupauvre)", email = "alban.lambrez@epitech.eu" }
+]
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+sensai = "sensai:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.8",
+]
