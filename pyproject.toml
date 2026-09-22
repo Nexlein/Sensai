@@ -9,8 +9,11 @@ authors = [
     { name = "Aberkane Mathys (Vulcaaa)", email = "mathys.aberkane@epitech.eu" },
     { name = "Lambrez Alban (Saitamadupauvre)", email = "alban.lambrez@epitech.eu" }
 ]
-requires-python = ">=3.14"
-dependencies = []
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic>=2.11.4",
+]
 
 [project.scripts]
 sensai = "sensai:main"
@@ -23,5 +26,10 @@ build-backend = "uv_build"
 dev = [
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.0.0",
+    "pytest-cov>=6.0.0",
     "ruff>=0.16.8",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
