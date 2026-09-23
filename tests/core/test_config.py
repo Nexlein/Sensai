@@ -66,3 +66,16 @@ def test_resolve_session_returns_name_when_given():
 
 def test_resolve_session_returns_none_when_absent():
     assert resolve_session(["chat"]) is None
+
+
+def test_tools_config_defaults():
+    config = load_config(config_path=None)
+    assert config.tools.fs_allowed_root is None
+
+
+def test_tools_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text('[tools]\nfs_allowed_root = "/tmp"\n')
+
+    config = load_config(config_file)
+    assert config.tools.fs_allowed_root == "/tmp"
