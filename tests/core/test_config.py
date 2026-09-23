@@ -1,12 +1,18 @@
+from pathlib import Path
+
 import pytest
 
 from sensai.core.config import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
+    AppConfig,
     ConfigError,
+    ToolsConfig,
     load_config,
+    resolve_config_path,
     resolve_session,
+    save_config,
 )
 
 
@@ -79,3 +85,33 @@ def test_tools_config_from_file(tmp_path):
 
     config = load_config(config_file)
     assert config.tools.fs_allowed_root == "/tmp"
+
+
+def test_save_config_round_trips_all_values(tmp_path):
+    config_file = tmp_path / "nested" / "sensai.toml"
+    config = AppConfig(
+        provider="mock",
+        model="custom-model",
+        base_url="http://example:1234",
+        tools=ToolsConfig(fs_allowed_root="/tmp/project"),
+    )
+
+    save_config(config, config_file)
+    loaded = load_config(config_file)
+
+    assert loaded == config
+
+
+def test_save_config_omits_unset_tools_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[tools]" not in config_file.read_text()
+    assert load_config(config_file) == AppConfig()
+
+
+def test_resolve_config_path_returns_custom_path():
+    assert resolve_config_path(["chat", "--config", "custom.toml"]) == Path(
+        "custom.toml"
+    )

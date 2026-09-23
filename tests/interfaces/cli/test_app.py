@@ -1,6 +1,6 @@
 from rich.console import Console
 
-from sensai.interfaces.cli.app import _run
+from sensai.interfaces.cli.app import _build_tool_registry, _run
 
 
 def _script_stdin(monkeypatch, inputs):
@@ -112,3 +112,16 @@ async def test_chat_session_unknown_name_creates_new(monkeypatch, capsys, tmp_pa
     conversation = await store.load("brand-new")
     assert conversation is not None
     assert conversation.id == "brand-new"
+
+
+def test_build_tool_registry_is_empty_when_root_is_unset():
+    assert _build_tool_registry(None).get_tools_schema() == []
+
+
+def test_build_tool_registry_registers_file_tools(tmp_path):
+    schemas = _build_tool_registry(str(tmp_path)).get_tools_schema()
+
+    assert {schema["function"]["name"] for schema in schemas} == {
+        "read_file",
+        "list_dir",
+    }

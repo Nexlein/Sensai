@@ -5,7 +5,12 @@ from collections.abc import AsyncIterator
 from rich.console import Console
 
 from sensai.core.commands import CommandContext, run_repl
-from sensai.core.config import ConfigError, resolve_config, resolve_session
+from sensai.core.config import (
+    ConfigError,
+    resolve_config,
+    resolve_config_path,
+    resolve_session,
+)
 from sensai.core.engine import ChatEngine
 from sensai.domain.errors import ProviderError
 from sensai.domain.events import Event
@@ -13,6 +18,16 @@ from sensai.domain.models import Conversation
 from sensai.interfaces.cli.renderer import error_text, render_history, render_stream
 from sensai.memory.session import SqliteMemoryStore
 from sensai.providers import get_provider
+from sensai.tools.fs import ListDirTool, ReadFileTool
+from sensai.tools.registry import ToolRegistry
+
+
+def _build_tool_registry(allowed_root: str | None) -> ToolRegistry:
+    registry = ToolRegistry()
+    if allowed_root is not None:
+        registry.register(ReadFileTool(allowed_root))
+        registry.register(ListDirTool(allowed_root))
+    return registry
 
 
 async def _run(argv: list[str]) -> int:
@@ -40,12 +55,18 @@ async def _run(argv: list[str]) -> int:
     if conversation is None:
         conversation = Conversation(id=session_name) if session_name else Conversation()
 
-    engine = ChatEngine(provider, conversation)
+    tool_registry = _build_tool_registry(config.tools.fs_allowed_root)
+    engine = ChatEngine(provider, conversation, tool_registry)
 
     context = CommandContext(
         config=config,
         engine=engine,
         output=console.print,
+        provider_factory=get_provider,
+        tool_registry=tool_registry,
+        tool_registry_factory=_build_tool_registry,
+        memory_store=store,
+        config_path=resolve_config_path(argv),
     )
 
     console.clear()
