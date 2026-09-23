@@ -1,5 +1,4 @@
-import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 
 import httpx
 from rich.console import Console
@@ -8,8 +7,6 @@ from rich.text import Text
 
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event, TextChunkEvent
-
-SendFn = Callable[[str], AsyncIterator[Event]]
 
 
 def error_text(exc: Exception) -> str:
@@ -22,28 +19,11 @@ def error_text(exc: Exception) -> str:
     return f"Unexpected error — {exc}"
 
 
-async def _run_chat(send: SendFn) -> None:
-    console = Console()
-    console.clear()
-
-    while True:
-        try:
-            text = console.input("[bold blue]you:[/] ")
-        except (EOFError, KeyboardInterrupt):
-            break
-
-        console.print()
-        label = Text("sensai: ", style="bold magenta")
-        content = ""
-        try:
-            with Live(label, console=console, refresh_per_second=15) as live:
-                async for chunk_event in send(text):
-                    if isinstance(chunk_event, TextChunkEvent):
-                        content += chunk_event.content
-                        live.update(label + Text(content))
-        except (EmptyInputError, ProviderError) as exc:
-            console.print(f"[bold red]✗ {error_text(exc)}[/]")
-
-
-def run_chat(send: SendFn) -> None:
-    asyncio.run(_run_chat(send))
+async def render_stream(console: Console, events: AsyncIterator[Event]) -> None:
+    label = Text("sensai: ", style="bold magenta")
+    content = ""
+    with Live(label, console=console, refresh_per_second=15) as live:
+        async for chunk_event in events:
+            if isinstance(chunk_event, TextChunkEvent):
+                content += chunk_event.content
+                live.update(label + Text(content))
