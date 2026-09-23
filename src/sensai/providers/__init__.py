@@ -1,3 +1,4 @@
+import inspect
 from typing import Any
 
 from sensai.domain.errors import ProviderError
@@ -18,4 +19,6 @@ def get_provider(name: str, **cfg: Any) -> LLMProvider:
         raise ProviderError(
             f"Unknown provider '{name}'. Available providers: {sorted(_REGISTRY)}"
         ) from None
-    return provider_cls(**cfg)
+
+    accepted = set(inspect.signature(provider_cls).parameters)
+    return provider_cls(**{k: v for k, v in cfg.items() if k in accepted})
