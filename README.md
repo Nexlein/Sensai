@@ -31,6 +31,7 @@ make setup
 - Pluggable provider registry (currently: [Ollama](https://ollama.com/), and a `mock` provider for testing/demos)
 - Config resolved from CLI args > `sensai.toml` > built-in defaults, no source changes needed to switch model/provider
 - Secure filesystem tools (read/list) strictly bounded to an allowed root directory (T4 feature)
+- Tool-calling engine that seamlessly orchestrates tool dispatch, handles recursion limits, and gracefully recovers from unexpected errors
 
 ## 💡 Usage Examples
 
