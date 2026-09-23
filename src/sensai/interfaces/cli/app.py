@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 
 from rich.console import Console
 
-from sensai.core.commands import run_repl
+from sensai.core.commands import CommandContext, run_repl
 from sensai.core.config import ConfigError, resolve_config, resolve_session
 from sensai.core.engine import ChatEngine
 from sensai.domain.errors import ProviderError
@@ -42,6 +42,12 @@ async def _run(argv: list[str]) -> int:
 
     engine = ChatEngine(provider, conversation)
 
+    context = CommandContext(
+        config=config,
+        engine=engine,
+        output=console.print,
+    )
+
     console.clear()
     render_history(console, conversation)
 
@@ -56,7 +62,7 @@ async def _run(argv: list[str]) -> int:
     def on_error(exc: Exception) -> None:
         console.print(f"[bold red]✗ {error_text(exc)}[/]")
 
-    await run_repl(engine, read_input=read_input, render=render, on_error=on_error)
+    await run_repl(context, read_input=read_input, render=render, on_error=on_error)
     return 0
 
 
