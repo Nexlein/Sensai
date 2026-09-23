@@ -19,7 +19,7 @@ async def test_chat_streams_mock_provider_reply_until_exit(
     monkeypatch, capsys, tmp_path
 ):
     monkeypatch.chdir(tmp_path)
-    _script_stdin(monkeypatch, ["hello", "exit"])
+    _script_stdin(monkeypatch, ["hello", "/exit"])
 
     code = await _run(["chat", "--provider", "mock"])
 
@@ -40,7 +40,7 @@ async def test_chat_exits_cleanly_on_eof(monkeypatch, capsys, tmp_path):
 
 async def test_chat_reports_empty_input_and_continues(monkeypatch, capsys, tmp_path):
     monkeypatch.chdir(tmp_path)
-    _script_stdin(monkeypatch, ["", "exit"])
+    _script_stdin(monkeypatch, ["", "/exit"])
 
     code = await _run(["chat", "--provider", "mock"])
 
@@ -69,7 +69,7 @@ async def test_chat_rejects_malformed_config_file(tmp_path, capsys, monkeypatch)
 
 async def test_chat_session_resumes_across_restarts(monkeypatch, capsys, tmp_path):
     monkeypatch.chdir(tmp_path)
-    _script_stdin(monkeypatch, ["hello", "exit"])
+    _script_stdin(monkeypatch, ["hello", "/exit"])
     code = await _run(["chat", "--provider", "mock", "--session", "my-session"])
     assert code == 0
 
@@ -87,11 +87,11 @@ async def test_chat_session_resumes_across_restarts(monkeypatch, capsys, tmp_pat
 
 async def test_chat_session_resume_prints_prior_messages(monkeypatch, capsys, tmp_path):
     monkeypatch.chdir(tmp_path)
-    _script_stdin(monkeypatch, ["hello", "exit"])
+    _script_stdin(monkeypatch, ["hello", "/exit"])
     await _run(["chat", "--provider", "mock", "--session", "my-session"])
     capsys.readouterr()
 
-    _script_stdin(monkeypatch, ["exit"])
+    _script_stdin(monkeypatch, ["/exit"])
     code = await _run(["chat", "--provider", "mock", "--session", "my-session"])
 
     out = capsys.readouterr().out
@@ -102,7 +102,7 @@ async def test_chat_session_resume_prints_prior_messages(monkeypatch, capsys, tm
 
 async def test_chat_session_unknown_name_creates_new(monkeypatch, capsys, tmp_path):
     monkeypatch.chdir(tmp_path)
-    _script_stdin(monkeypatch, ["hi", "exit"])
+    _script_stdin(monkeypatch, ["hi", "/exit"])
     code = await _run(["chat", "--provider", "mock", "--session", "brand-new"])
     assert code == 0
 
