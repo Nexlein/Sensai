@@ -5,7 +5,30 @@ from rich.console import Console
 
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
-from sensai.interfaces.cli.renderer import error_text, render_stream
+from sensai.domain.models import Conversation
+from sensai.interfaces.cli.renderer import error_text, render_history, render_stream
+
+
+def test_render_history_prints_prior_messages(capsys):
+    console = Console()
+    conversation = Conversation()
+    conversation.add_message(role="user", content="hello")
+    conversation.add_message(role="assistant", content="hi there")
+
+    render_history(console, conversation)
+
+    out = capsys.readouterr().out
+    assert "you:" in out
+    assert "hello" in out
+    assert "sensai:" in out
+    assert "hi there" in out
+
+
+def test_render_history_skips_empty_conversation(capsys):
+    console = Console()
+    render_history(console, Conversation())
+
+    assert capsys.readouterr().out == ""
 
 
 async def _events(*items: Event) -> AsyncIterator[Event]:
