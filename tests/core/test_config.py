@@ -57,3 +57,16 @@ def test_no_config_path_uses_defaults():
     assert config.provider == DEFAULT_PROVIDER
     assert config.model == DEFAULT_MODEL
     assert config.base_url == DEFAULT_BASE_URL
+
+
+def test_tools_config_defaults():
+    config = load_config(config_path=None)
+    assert config.tools.fs_allowed_root is None
+
+
+def test_tools_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text('[tools]\nfs_allowed_root = "/tmp"\n')
+
+    config = load_config(config_file)
+    assert config.tools.fs_allowed_root == "/tmp"

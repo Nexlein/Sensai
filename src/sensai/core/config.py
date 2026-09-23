@@ -15,10 +15,15 @@ class ConfigError(Exception):
     """Raised when a config file exists but cannot be parsed or validated."""
 
 
+class ToolsConfig(BaseModel):
+    fs_allowed_root: str | None = None
+
+
 class AppConfig(BaseModel):
     provider: str = DEFAULT_PROVIDER
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_BASE_URL
+    tools: ToolsConfig = ToolsConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
