@@ -7,6 +7,12 @@ from rich.text import Text
 
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event, TextChunkEvent
+from sensai.domain.models import Conversation
+
+_ROLE_LABELS = {
+    "user": ("you: ", "bold blue"),
+    "assistant": ("sensai: ", "bold magenta"),
+}
 
 
 def error_text(exc: Exception) -> str:
@@ -17,6 +23,17 @@ def error_text(exc: Exception) -> str:
             return "Connection failed — could not connect to the model server."
         return "Model unavailable — the model is unavailable or returned an error."
     return f"Unexpected error — {exc}"
+
+
+def render_history(console: Console, conversation: Conversation) -> None:
+    for msg in conversation.messages:
+        label = _ROLE_LABELS.get(msg.role)
+        if label is None:
+            continue
+        prefix, style = label
+        console.print(Text(prefix, style=style) + Text(msg.content))
+    if conversation.messages:
+        console.print()
 
 
 async def render_stream(console: Console, events: AsyncIterator[Event]) -> None:

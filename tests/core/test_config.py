@@ -6,6 +6,7 @@ from sensai.core.config import (
     DEFAULT_PROVIDER,
     ConfigError,
     load_config,
+    resolve_session,
 )
 
 
@@ -57,6 +58,14 @@ def test_no_config_path_uses_defaults():
     assert config.provider == DEFAULT_PROVIDER
     assert config.model == DEFAULT_MODEL
     assert config.base_url == DEFAULT_BASE_URL
+
+
+def test_resolve_session_returns_name_when_given():
+    assert resolve_session(["chat", "--session", "my-session"]) == "my-session"
+
+
+def test_resolve_session_returns_none_when_absent():
+    assert resolve_session(["chat"]) is None
 
 
 def test_tools_config_defaults():
