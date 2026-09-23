@@ -76,6 +76,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=str(DEFAULT_CONFIG_PATH),
         help="Path to the config file",
     )
+    chat.add_argument(
+        "--session",
+        default=None,
+        help="Name of the session to resume or create",
+    )
     return parser
 
 
@@ -88,3 +93,9 @@ def resolve_config(argv: list[str]) -> AppConfig:
         cli_model=getattr(args, "model", None),
         cli_base_url=getattr(args, "base_url", None),
     )
+
+
+def resolve_session(argv: list[str]) -> str | None:
+    """Parse CLI args and return the --session name, if any."""
+    args = build_arg_parser().parse_args(argv)
+    return getattr(args, "session", None)
