@@ -1,4 +1,4 @@
-import argparse
+import json
 from pathlib import Path
 from typing import Any
 
@@ -68,39 +68,29 @@ def load_config(
         raise ConfigError(f"Invalid config values: {exc}") from exc
 
 
-def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="sensai")
-    subparsers = parser.add_subparsers(dest="command")
+def save_config(
+    config: AppConfig,
+    config_path: Path | str = DEFAULT_CONFIG_PATH,
+) -> None:
+    path = Path(config_path)
+    lines = [
+        f"provider = {json.dumps(config.provider, ensure_ascii=False)}",
+        f"model = {json.dumps(config.model, ensure_ascii=False)}",
+        f"base_url = {json.dumps(config.base_url, ensure_ascii=False)}",
+    ]
 
-    chat = subparsers.add_parser("chat", help="Start an interactive chat session")
-    chat.add_argument("--model", default=None, help="Model name to use")
-    chat.add_argument("--provider", default=None, help="Provider to use")
-    chat.add_argument("--base-url", default=None, help="Base URL of the provider")
-    chat.add_argument(
-        "--config",
-        default=str(DEFAULT_CONFIG_PATH),
-        help="Path to the config file",
-    )
-    chat.add_argument(
-        "--session",
-        default=None,
-        help="Name of the session to resume or create",
-    )
-    return parser
+    if config.tools.fs_allowed_root is not None:
+        lines.extend(
+            [
+                "",
+                "[tools]",
+                "fs_allowed_root = "
+                + json.dumps(config.tools.fs_allowed_root, ensure_ascii=False),
+            ]
+        )
 
-
-def resolve_config(argv: list[str]) -> AppConfig:
-    """Parse CLI args and resolve the effective AppConfig from them."""
-    args = build_arg_parser().parse_args(argv)
-    return load_config(
-        getattr(args, "config", DEFAULT_CONFIG_PATH),
-        cli_provider=getattr(args, "provider", None),
-        cli_model=getattr(args, "model", None),
-        cli_base_url=getattr(args, "base_url", None),
-    )
-
-
-def resolve_session(argv: list[str]) -> str | None:
-    """Parse CLI args and return the --session name, if any."""
-    args = build_arg_parser().parse_args(argv)
-    return getattr(args, "session", None)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError as exc:
+        raise ConfigError(f"Could not write config file {path}: {exc}") from exc

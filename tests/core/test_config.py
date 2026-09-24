@@ -4,9 +4,11 @@ from sensai.core.config import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
+    AppConfig,
     ConfigError,
+    ToolsConfig,
     load_config,
-    resolve_session,
+    save_config,
 )
 
 
@@ -60,14 +62,6 @@ def test_no_config_path_uses_defaults():
     assert config.base_url == DEFAULT_BASE_URL
 
 
-def test_resolve_session_returns_name_when_given():
-    assert resolve_session(["chat", "--session", "my-session"]) == "my-session"
-
-
-def test_resolve_session_returns_none_when_absent():
-    assert resolve_session(["chat"]) is None
-
-
 def test_tools_config_defaults():
     config = load_config(config_path=None)
     assert config.tools.fs_allowed_root is None
@@ -79,3 +73,27 @@ def test_tools_config_from_file(tmp_path):
 
     config = load_config(config_file)
     assert config.tools.fs_allowed_root == "/tmp"
+
+
+def test_save_config_round_trips_all_values(tmp_path):
+    config_file = tmp_path / "nested" / "sensai.toml"
+    config = AppConfig(
+        provider="mock",
+        model="custom-model",
+        base_url="http://example:1234",
+        tools=ToolsConfig(fs_allowed_root="/tmp/project"),
+    )
+
+    save_config(config, config_file)
+    loaded = load_config(config_file)
+
+    assert loaded == config
+
+
+def test_save_config_omits_unset_tools_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[tools]" not in config_file.read_text()
+    assert load_config(config_file) == AppConfig()
