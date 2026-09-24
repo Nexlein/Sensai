@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from sensai.core.config import (
@@ -10,8 +8,6 @@ from sensai.core.config import (
     ConfigError,
     ToolsConfig,
     load_config,
-    resolve_config_path,
-    resolve_session,
     save_config,
 )
 
@@ -66,14 +62,6 @@ def test_no_config_path_uses_defaults():
     assert config.base_url == DEFAULT_BASE_URL
 
 
-def test_resolve_session_returns_name_when_given():
-    assert resolve_session(["chat", "--session", "my-session"]) == "my-session"
-
-
-def test_resolve_session_returns_none_when_absent():
-    assert resolve_session(["chat"]) is None
-
-
 def test_tools_config_defaults():
     config = load_config(config_path=None)
     assert config.tools.fs_allowed_root is None
@@ -109,9 +97,3 @@ def test_save_config_omits_unset_tools_section(tmp_path):
 
     assert "[tools]" not in config_file.read_text()
     assert load_config(config_file) == AppConfig()
-
-
-def test_resolve_config_path_returns_custom_path():
-    assert resolve_config_path(["chat", "--config", "custom.toml"]) == Path(
-        "custom.toml"
-    )

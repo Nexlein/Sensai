@@ -9,13 +9,12 @@ from sensai.core.config import (
     save_config,
 )
 from sensai.core.engine import ChatEngine
-from sensai.domain.errors import EmptyInputError, ProviderError
+from sensai.domain.errors import ProviderError
 from sensai.domain.events import Event
 from sensai.domain.models import Conversation
 from sensai.domain.protocols import LLMProvider, MemoryStore, ToolRegistry
 
 ReadInputFn = Callable[[], str]
-OutputFn = Callable[[str], None]
 ProviderFactory = Callable[..., LLMProvider]
 ToolRegistryFactory = Callable[[str | None], ToolRegistry]
 RenderFn = Callable[[AsyncIterator[Event]], Awaitable[None]]
@@ -29,10 +28,15 @@ class ParsedCommand:
 
 
 @dataclass
+class CommandResult:
+    message: str | None = None
+    should_exit: bool = False
+
+
+@dataclass
 class CommandContext:
     config: AppConfig
     engine: ChatEngine
-    output: OutputFn
     provider_factory: ProviderFactory
     tool_registry: ToolRegistry
     tool_registry_factory: ToolRegistryFactory
@@ -40,7 +44,7 @@ class CommandContext:
     config_path: Path = DEFAULT_CONFIG_PATH
 
 
-CommandHandler = Callable[[CommandContext, tuple[str, ...]], Awaitable[bool]]
+CommandHandler = Callable[[CommandContext, tuple[str, ...]], Awaitable[CommandResult]]
 
 
 @dataclass(frozen=True)
@@ -52,10 +56,9 @@ class CommandSpec:
 async def handle_provider(
     context: CommandContext,
     arguments: tuple[str, ...],
-) -> bool:
+) -> CommandResult:
     if len(arguments) != 1:
-        context.output("Usage: /provider <name>")
-        return False
+        return CommandResult(message="Usage: /provider <name>")
 
     provider_name = arguments[0].lower()
 
@@ -66,22 +69,19 @@ async def handle_provider(
             base_url=context.config.base_url,
         )
     except ProviderError as exc:
-        context.output(str(exc))
-        return False
+        return CommandResult(message=str(exc))
 
     context.engine.provider = new_provider
     context.config.provider = provider_name
-    context.output(f"Provider switched to {provider_name}.")
-    return False
+    return CommandResult(message=f"Provider switched to {provider_name}.")
 
 
 async def handle_model(
     context: CommandContext,
     arguments: tuple[str, ...],
-) -> bool:
+) -> CommandResult:
     if len(arguments) != 1:
-        context.output("Usage: /model <name>")
-        return False
+        return CommandResult(message="Usage: /model <name>")
 
     model_name = arguments[0]
     try:
@@ -91,21 +91,18 @@ async def handle_model(
             base_url=context.config.base_url,
         )
     except ProviderError as exc:
-        context.output(f"Could not switch model: {exc}")
-        return False
+        return CommandResult(message=f"Could not switch model: {exc}")
     context.engine.provider = new_provider
     context.config.model = model_name
-    context.output(f"Model switched to {model_name}.")
-    return False
+    return CommandResult(message=f"Model switched to {model_name}.")
 
 
 async def handle_base_url(
     context: CommandContext,
     arguments: tuple[str, ...],
-) -> bool:
+) -> CommandResult:
     if len(arguments) != 1:
-        context.output("Usage: /config set base_url <url>")
-        return False
+        return CommandResult(message="Usage: /config set base_url <url>")
 
     base_url = arguments[0]
     try:
@@ -115,22 +112,21 @@ async def handle_base_url(
             base_url=base_url,
         )
     except ProviderError as exc:
-        context.output(f"Could not update base_url: {exc}")
-        return False
+        return CommandResult(message=f"Could not update base_url: {exc}")
 
     context.engine.provider = new_provider
     context.config.base_url = base_url
-    context.output(f"base_url = {base_url}")
-    return False
+    return CommandResult(message=f"base_url = {base_url}")
 
 
 async def handle_fs_allowed_root(
     context: CommandContext,
     arguments: tuple[str, ...],
-) -> bool:
+) -> CommandResult:
     if len(arguments) != 1:
-        context.output("Usage: /config set tools.fs_allowed_root <path|none>")
-        return False
+        return CommandResult(
+            message="Usage: /config set tools.fs_allowed_root <path|none>"
+        )
 
     value = arguments[0]
     allowed_root = None if value.lower() in {"none", "null", "off"} else value
@@ -139,8 +135,7 @@ async def handle_fs_allowed_root(
     context.tool_registry = registry
     context.engine.registry = registry
     context.config.tools.fs_allowed_root = allowed_root
-    context.output(f"tools.fs_allowed_root = {allowed_root}")
-    return False
+    return CommandResult(message=f"tools.fs_allowed_root = {allowed_root}")
 
 
 CONFIG_SETTERS = {
@@ -154,109 +149,94 @@ CONFIG_SETTERS = {
 async def handle_config(
     context: CommandContext,
     arguments: tuple[str, ...],
-) -> bool:
+) -> CommandResult:
     values = context.config.model_dump()
 
     if not arguments:
-        context.output(str(values))
-        return False
+        return CommandResult(message=str(values))
 
     action = arguments[0]
     action_arguments = arguments[1:]
 
     if action == "get":
         if not action_arguments:
-            context.output(str(values))
-            return False
+            return CommandResult(message=str(values))
         if len(action_arguments) != 1:
-            context.output("Usage: /config get [key]")
-            return False
+            return CommandResult(message="Usage: /config get [key]")
 
         key = action_arguments[0]
         value: object = values
         for part in key.split("."):
             if not isinstance(value, dict) or part not in value:
-                context.output(f"Unknown config key: {key}")
-                return False
+                return CommandResult(message=f"Unknown config key: {key}")
             value = value[part]
 
-        context.output(f"{key} = {value}")
-        return False
+        return CommandResult(message=f"{key} = {value}")
 
     if action == "save":
         if action_arguments:
-            context.output("Usage: /config save")
-            return False
+            return CommandResult(message="Usage: /config save")
 
         try:
             save_config(context.config, context.config_path)
         except ConfigError as exc:
-            context.output(str(exc))
-            return False
+            return CommandResult(message=str(exc))
 
-        context.output(f"Config saved to {context.config_path}.")
-        return False
+        return CommandResult(message=f"Config saved to {context.config_path}.")
 
     if action == "set":
         if len(action_arguments) != 2:
-            context.output("Usage: /config set <key> <value>")
-            return False
+            return CommandResult(message="Usage: /config set <key> <value>")
 
         key, value = action_arguments
         setter = CONFIG_SETTERS.get(key)
         if setter is None:
-            context.output(f"Unknown config key: {key}")
-            return False
+            return CommandResult(message=f"Unknown config key: {key}")
 
         return await setter(context, (value,))
 
-    context.output(
-        "Usage: /config get [key] | /config set <key> <value> | /config save"
+    return CommandResult(
+        message="Usage: /config get [key] | /config set <key> <value> | /config save"
     )
-    return False
 
 
 async def handle_new(
     context: CommandContext,
     arguments: tuple[str, ...],
-) -> bool:
+) -> CommandResult:
     if arguments:
-        context.output("Usage: /new")
-        return False
+        return CommandResult(message="Usage: /new")
 
     conversation = Conversation()
     await context.memory_store.save(conversation)
     context.engine.conversation = conversation
-    context.output(f"Started new conversation: {conversation.id}")
-    return False
+    return CommandResult(message=f"Started new conversation: {conversation.id}")
 
 
 async def handle_clear(
     context: CommandContext,
     arguments: tuple[str, ...],
-) -> bool:
+) -> CommandResult:
     context.engine.conversation.messages.clear()
-    context.output("Conversation cleared.")
-    return False
+    return CommandResult(message="Conversation cleared.")
 
 
 async def handle_help(
     context: CommandContext,
     arguments: tuple[str, ...],
-) -> bool:
+) -> CommandResult:
     lines = ["Available commands:"]
     lines.extend(
         f"/{name} - {command.description}" for name, command in COMMANDS.items()
     )
-    context.output("\n".join(lines))
-    return False
+    return CommandResult(message="\n".join(lines))
 
 
 async def handle_exit(
     context: CommandContext,
     arguments: tuple[str, ...],
-) -> bool:
-    return True
+) -> CommandResult:
+    return CommandResult(should_exit=True)
 
 
 COMMANDS = {
@@ -273,12 +253,11 @@ COMMANDS = {
 async def dispatch_command(
     command: ParsedCommand,
     context: CommandContext,
-) -> bool:
+) -> CommandResult:
     registered_command = COMMANDS.get(command.name)
 
     if registered_command is None:
-        context.output(f"Unknown command: /{command.name}")
-        return False
+        return CommandResult(message=f"Unknown command: /{command.name}")
 
     return await registered_command.handler(context, command.arguments)
 
@@ -298,30 +277,3 @@ def parse_commands(text: str) -> ParsedCommand | None:
         name=parts[0].lower(),
         arguments=tuple(parts[1:]),
     )
-
-
-async def run_repl(
-    context: CommandContext,
-    *,
-    read_input: ReadInputFn,
-    render: RenderFn,
-    on_error: ErrorFn,
-) -> None:
-    while True:
-        try:
-            text = read_input()
-        except (EOFError, KeyboardInterrupt):
-            break
-
-        command = parse_commands(text)
-
-        if command is not None:
-            should_exit = await dispatch_command(command, context)
-
-            if should_exit:
-                break
-            continue
-        try:
-            await render(context.engine.send(text))
-        except (EmptyInputError, ProviderError) as exc:
-            on_error(exc)

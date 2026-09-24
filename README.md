@@ -41,8 +41,16 @@ Start a chat session against a local [Ollama](https://ollama.com/) instance:
 sensai chat --model llama3.2
 ```
 
-Type a message and press enter; the reply streams in as `sensai: ...`. Type `exit` or press
-`Ctrl+C` to leave.
+Type a message and press enter; the reply streams in as `sensai: ...`. Type `/exit` or press `Ctrl+C` to leave.
+
+You can also use slash commands inside the interactive session:
+
+- `/help` - Show available commands
+- `/clear` - Clear the current conversation history
+- `/new` - Start and persist a new conversation
+- `/config get [key]` - View runtime configuration
+- `/config set <key> <value>` - Update runtime configuration
+- `/config save` - Save configuration to file
 
 Options:
 
