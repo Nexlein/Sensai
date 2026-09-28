@@ -1,97 +1,40 @@
+import argparse
 import asyncio
-import sqlite3
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 
-import httpx
 from rich.console import Console
 
-from sensai.core.commands import (
-    CommandContext,
-    dispatch_command,
-    parse_commands,
-)
-from sensai.core.config import DEFAULT_CONFIG_PATH, AppConfig, ConfigError, load_config
-from sensai.core.engine import ChatEngine
+from sensai.core.bootstrap import BootstrapError, build_session
+from sensai.core.commands import CommandContext, dispatch_command, parse_commands
+from sensai.core.config import DEFAULT_CONFIG_PATH, ConfigError
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event
-from sensai.domain.models import Conversation
 from sensai.interfaces.cli.renderer import error_text, render_history, render_stream
-from sensai.memory.rag.retriever import RAGRetriever
-from sensai.memory.rag.store import SQLiteVectorStore
-from sensai.memory.session import SqliteMemoryStore
-from sensai.providers import get_provider
-from sensai.providers.ollama import OllamaEmbeddingProvider
-from sensai.tools.fs import ListDirTool, ReadFileTool
-from sensai.tools.registry import ToolRegistry
-
-
-def _build_tool_registry(allowed_root: str | None) -> ToolRegistry:
-    registry = ToolRegistry()
-    if allowed_root is not None:
-        registry.register(ReadFileTool(allowed_root))
-        registry.register(ListDirTool(allowed_root))
-    return registry
 
 
 async def _run(argv: list[str]) -> int:
     console = Console()
-
-    try:
-        config = resolve_config(argv)
-    except ConfigError as exc:
-        console.print(f"[bold red]✗ {exc}[/]")
-        return 1
-
-    try:
-        provider = get_provider(
-            config.provider, base_url=config.base_url, model=config.model
-        )
-    except ProviderError as exc:
-        console.print(f"[bold red]✗ {exc}[/]")
-        return 1
-
-    store = SqliteMemoryStore()
-    session_name = resolve_session(argv)
-    conversation = None
-    if session_name is not None:
-        conversation = await store.load(session_name)
-    if conversation is None:
-        conversation = Conversation(id=session_name) if session_name else Conversation()
-
-    tool_registry = _build_tool_registry(config.tools.fs_allowed_root)
     args = build_arg_parser().parse_args(argv)
-    retriever = None
-    if getattr(args, "rag_dir", None):
-        try:
-            retriever = RAGRetriever(
-                OllamaEmbeddingProvider(base_url=config.base_url, model=args.rag_model),
-                SQLiteVectorStore(db_path=args.rag_db),
-            )
-            await retriever.index_directory(args.rag_dir)
-        except (
-            OSError,
-            sqlite3.Error,
-            RuntimeError,
-            ValueError,
-            httpx.HTTPError,
-        ) as exc:
-            console.print(f"[bold red]✗ RAG indexing failed: {exc}[/]")
-            return 1
-    engine = ChatEngine(provider, conversation, tool_registry, retriever)
 
-    context = CommandContext(
-        config=config,
-        engine=engine,
-        provider_factory=get_provider,
-        tool_registry=tool_registry,
-        tool_registry_factory=_build_tool_registry,
-        memory_store=store,
-        config_path=resolve_config_path(argv),
-    )
+    try:
+        context = await build_session(
+            config_path=getattr(args, "config", DEFAULT_CONFIG_PATH),
+            provider_name=getattr(args, "provider", None),
+            model=getattr(args, "model", None),
+            base_url=getattr(args, "base_url", None),
+            session_name=getattr(args, "session", None),
+            rag_dir=getattr(args, "rag_dir", None),
+            rag_db=getattr(args, "rag_db", "rag.db"),
+            rag_model=getattr(args, "rag_model", "nomic-embed-text"),
+        )
+    except (BootstrapError, ConfigError, ProviderError) as exc:
+        console.print(f"[bold red]✗ {exc}[/]")
+        return 1
 
     console.clear()
-    render_history(console, conversation)
+    render_history(console, context.engine.conversation)
 
     def read_input() -> str:
         return console.input("[bold blue]you:[/] ")
@@ -99,7 +42,7 @@ async def _run(argv: list[str]) -> int:
     async def render(events: AsyncIterator[Event]) -> None:
         console.print()
         await render_stream(console, events)
-        await store.save(engine.conversation)
+        await context.memory_store.save(context.engine.conversation)
 
     def on_error(exc: Exception) -> None:
         console.print(f"[bold red]✗ {error_text(exc)}[/]")
@@ -110,10 +53,6 @@ async def _run(argv: list[str]) -> int:
 
 def main() -> None:
     raise SystemExit(asyncio.run(_run(sys.argv[1:])))
-
-
-import argparse
-from pathlib import Path
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -142,17 +81,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Name of the session to resume or create",
     )
     return parser
-
-
-def resolve_config(argv: list[str]) -> AppConfig:
-    """Parse CLI args and resolve the effective AppConfig from them."""
-    args = build_arg_parser().parse_args(argv)
-    return load_config(
-        getattr(args, "config", DEFAULT_CONFIG_PATH),
-        cli_provider=getattr(args, "provider", None),
-        cli_model=getattr(args, "model", None),
-        cli_base_url=getattr(args, "base_url", None),
-    )
 
 
 def resolve_session(argv: list[str]) -> str | None:

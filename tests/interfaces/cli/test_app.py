@@ -7,7 +7,6 @@ from sensai.core.commands import CommandContext
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event
 from sensai.interfaces.cli.app import (
-    _build_tool_registry,
     _run,
     resolve_config_path,
     resolve_session,
@@ -15,6 +14,7 @@ from sensai.interfaces.cli.app import (
 )
 from sensai.providers import get_provider
 from sensai.providers.mock import MockLLMProvider
+from sensai.tools.registry import build_default_registry
 
 
 async def _drain(events: AsyncIterator[Event]) -> list[Event]:
@@ -136,11 +136,11 @@ async def test_chat_session_unknown_name_creates_new(monkeypatch, capsys, tmp_pa
 
 
 def test_build_tool_registry_is_empty_when_root_is_unset():
-    assert _build_tool_registry(None).get_tools_schema() == []
+    assert build_default_registry(None).get_tools_schema() == []
 
 
 def test_build_tool_registry_registers_file_tools(tmp_path):
-    schemas = _build_tool_registry(str(tmp_path)).get_tools_schema()
+    schemas = build_default_registry(str(tmp_path)).get_tools_schema()
 
     assert {schema["function"]["name"] for schema in schemas} == {
         "read_file",
@@ -335,7 +335,7 @@ async def test_chat_rag_option_indexes_local_documents(monkeypatch, tmp_path):
     (docs / "guide.md").write_text("project guide", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "sensai.interfaces.cli.app.OllamaEmbeddingProvider", FakeEmbeddingProvider
+        "sensai.core.bootstrap.OllamaEmbeddingProvider", FakeEmbeddingProvider
     )
     _script_stdin(monkeypatch, ["/exit"])
 
