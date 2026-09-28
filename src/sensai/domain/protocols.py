@@ -35,3 +35,9 @@ class ToolRegistry(Protocol):
     def get(self, name: str) -> BaseTool | None: ...
 
     def get_tools_schema(self) -> list[dict[str, Any]]: ...
+
+
+class EmbeddingProvider(Protocol):
+    """Protocol for generating vector embeddings from text."""
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]: ...

@@ -61,3 +61,25 @@ class OllamaLLMProvider(BaseHTTPProvider):
         }
         async for event in self._stream_response(payload):
             yield event
+
+
+class OllamaEmbeddingProvider(BaseHTTPProvider):
+    """Provider that calls Ollama's /api/embed to generate embeddings."""
+
+    def __init__(
+        self,
+        base_url: str = "http://localhost:11434",
+        model: str = "nomic-embed-text",
+        timeout: float = 60.0,
+    ) -> None:
+        super().__init__(base_url=base_url, timeout=timeout)
+        self.model = model
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Fetch embeddings for a list of text strings from Ollama."""
+        payload = {"model": self.model, "input": texts}
+        async with self._get_client() as client:
+            response = await client.post("/api/embed", json=payload)
+            await self._check_response_status(response)
+            data = response.json()
+            return data.get("embeddings", [])
