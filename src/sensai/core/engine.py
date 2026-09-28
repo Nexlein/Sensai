@@ -6,7 +6,7 @@ from sensai.core.prompt import build_prompt
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
 from sensai.domain.models import Conversation, ToolCall
-from sensai.domain.protocols import LLMProvider, ToolRegistry
+from sensai.domain.protocols import ContextRetriever, LLMProvider, ToolRegistry
 
 
 class ChatEngine:
@@ -15,19 +15,28 @@ class ChatEngine:
         provider: LLMProvider,
         conversation: Conversation,
         registry: ToolRegistry | None = None,
+        retriever: ContextRetriever | None = None,
     ) -> None:
         self.provider = provider
         self.conversation = conversation
         self.registry = registry
+        self.retriever = retriever
 
     async def send(self, user_text: str) -> AsyncGenerator[Event]:
         if not user_text.strip():
             raise EmptyInputError("user_text must not be empty")
 
+        rag_context = ""
+        if self.retriever is not None:
+            try:
+                rag_context = await self.retriever.retrieve_context(user_text)
+            except (RuntimeError, ValueError, httpx.HTTPError) as exc:
+                raise ProviderError("retrieval failed") from exc
+
         self.conversation.add_message(role="user", content=user_text)
 
         for _ in range(5):
-            prompt = build_prompt(self.conversation)
+            prompt = build_prompt(self.conversation, rag_context=rag_context)
 
             chunks: list[str] = []
             tool_calls: list[ToolCallEvent] = []

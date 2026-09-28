@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 from typing import Any, Protocol
 
 from sensai.domain.events import Event
-from sensai.domain.models import Conversation, Message
+from sensai.domain.models import Chunk, Conversation, Message, ScoredChunk
 
 
 class LLMProvider(Protocol):
@@ -41,3 +41,15 @@ class EmbeddingProvider(Protocol):
     """Protocol for generating vector embeddings from text."""
 
     async def embed_texts(self, texts: list[str]) -> list[list[float]]: ...
+
+
+class VectorStore(Protocol):
+    def replace_chunks(self, chunks: list[Chunk]) -> None: ...
+
+    def search(
+        self, query_embedding: list[float], top_k: int = 5
+    ) -> list[ScoredChunk]: ...
+
+
+class ContextRetriever(Protocol):
+    async def retrieve_context(self, query: str, top_k: int = 5) -> str: ...
