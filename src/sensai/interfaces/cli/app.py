@@ -1,7 +1,9 @@
 import asyncio
+import sqlite3
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable
 
+import httpx
 from rich.console import Console
 
 from sensai.core.commands import (
@@ -15,8 +17,11 @@ from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event
 from sensai.domain.models import Conversation
 from sensai.interfaces.cli.renderer import error_text, render_history, render_stream
+from sensai.memory.rag.retriever import RAGRetriever
+from sensai.memory.rag.store import SQLiteVectorStore
 from sensai.memory.session import SqliteMemoryStore
 from sensai.providers import get_provider
+from sensai.providers.ollama import OllamaEmbeddingProvider
 from sensai.tools.fs import ListDirTool, ReadFileTool
 from sensai.tools.registry import ToolRegistry
 
@@ -55,7 +60,25 @@ async def _run(argv: list[str]) -> int:
         conversation = Conversation(id=session_name) if session_name else Conversation()
 
     tool_registry = _build_tool_registry(config.tools.fs_allowed_root)
-    engine = ChatEngine(provider, conversation, tool_registry)
+    args = build_arg_parser().parse_args(argv)
+    retriever = None
+    if getattr(args, "rag_dir", None):
+        try:
+            retriever = RAGRetriever(
+                OllamaEmbeddingProvider(base_url=config.base_url, model=args.rag_model),
+                SQLiteVectorStore(db_path=args.rag_db),
+            )
+            await retriever.index_directory(args.rag_dir)
+        except (
+            OSError,
+            sqlite3.Error,
+            RuntimeError,
+            ValueError,
+            httpx.HTTPError,
+        ) as exc:
+            console.print(f"[bold red]✗ RAG indexing failed: {exc}[/]")
+            return 1
+    engine = ChatEngine(provider, conversation, tool_registry, retriever)
 
     context = CommandContext(
         config=config,
@@ -105,6 +128,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--config",
         default=str(DEFAULT_CONFIG_PATH),
         help="Path to the config file",
+    )
+    chat.add_argument(
+        "--rag-dir", default=None, help="Directory of .txt and .md files to index"
+    )
+    chat.add_argument("--rag-db", default="rag.db", help="Path to the local RAG index")
+    chat.add_argument(
+        "--rag-model", default="nomic-embed-text", help="Ollama embedding model"
     )
     chat.add_argument(
         "--session",

@@ -1,56 +1,67 @@
 import os
+from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
-from sensai.domain.models import Chunk, Document, generate_uuid
+from sensai.domain.models import Chunk, Document
 
 
 class TextChunker:
-    """Utility to ingest documents and split them into smaller chunks."""
+    """Ingest local text documents and split them into overlapping chunks."""
 
     def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50):
+        if chunk_size <= 0 or not 0 <= chunk_overlap < chunk_size:
+            raise ValueError(
+                "chunk_size must be positive and chunk_overlap must be in [0, chunk_size)"
+            )
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
     def ingest_directory(self, path: str) -> list[Document]:
-        """Walk a directory and ingest all .txt and .md files."""
+        """Read .txt and .md files within a directory."""
+        directory = Path(path).resolve()
+        if not directory.is_dir():
+            raise NotADirectoryError(f"RAG directory does not exist: {path}")
+
         docs = []
-        for root, _, files in os.walk(path):
-            for file in files:
-                if file.endswith((".txt", ".md")):
-                    file_path = os.path.join(root, file)
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                        docs.append(
-                            Document(
-                                id=generate_uuid(),
-                                path=file_path,
-                                content=content,
-                                metadata={"filename": file},
-                            )
-                        )
-                    except (OSError, UnicodeDecodeError):
+        for root, _, files in os.walk(directory):
+            for filename in sorted(files):
+                if not filename.endswith((".txt", ".md")):
+                    continue
+                file_path = Path(root, filename)
+                try:
+                    resolved_path = file_path.resolve()
+                    if not resolved_path.is_relative_to(directory):
                         continue
+                    content = file_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    continue
+                docs.append(
+                    Document(
+                        id=str(uuid5(NAMESPACE_URL, str(resolved_path))),
+                        path=str(resolved_path),
+                        content=content,
+                        metadata={"filename": filename, "path": str(resolved_path)},
+                    )
+                )
         return docs
 
     def chunk_documents(self, documents: list[Document]) -> list[Chunk]:
-        """Split a list of Documents into a list of Chunks."""
+        """Split documents without emitting an overlap-only trailing chunk."""
         chunks = []
         for doc in documents:
             text = doc.content
-            if not text:
-                continue
-
             start = 0
             while start < len(text):
                 end = start + self.chunk_size
-                chunk_text = text[start:end]
                 chunks.append(
                     Chunk(
-                        id=generate_uuid(),
+                        id=str(uuid5(NAMESPACE_URL, f"{doc.id}:{start}")),
                         doc_id=doc.id,
-                        text=chunk_text,
+                        text=text[start:end],
                         metadata=doc.metadata.copy(),
                     )
                 )
+                if end >= len(text):
+                    break
                 start += self.chunk_size - self.chunk_overlap
         return chunks

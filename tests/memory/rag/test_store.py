@@ -27,3 +27,26 @@ def test_store_save_search():
     assert results[0].score == 1.0
 
     os.remove(db_path)
+
+
+def test_store_rejects_unembedded_chunks_and_preserves_previous_index(tmp_path):
+    import pytest
+
+    store = SQLiteVectorStore(str(tmp_path / "rag.db"))
+    good = Chunk(id="good", doc_id="d1", text="good", embedding=[1.0, 0.0])
+    store.replace_chunks([good])
+
+    with pytest.raises(ValueError, match="embedding"):
+        store.replace_chunks([Chunk(id="bad", doc_id="d2", text="bad")])
+
+    assert [chunk.text for chunk in store.search([1.0, 0.0])] == ["good"]
+
+
+def test_search_rejects_embedding_dimension_mismatch(tmp_path):
+    import pytest
+
+    store = SQLiteVectorStore(str(tmp_path / "rag.db"))
+    store.save_chunks([Chunk(id="c", doc_id="d", text="text", embedding=[1.0, 0.0])])
+
+    with pytest.raises(ValueError, match="dimensions"):
+        store.search([1.0, 0.0, 0.0])

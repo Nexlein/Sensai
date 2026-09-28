@@ -159,3 +159,50 @@ async def test_tool_unexpected_exception():
     assert "boom" in conversation.messages[2].content
     assert conversation.messages[3].role == "assistant"
     assert conversation.messages[3].content == "final answer"
+
+
+class RecordingLLMProvider:
+    def __init__(self):
+        self.prompts = []
+
+    async def chat_stream(self, messages, tools=None):
+        self.prompts.append(messages)
+        yield TextChunkEvent(content="answer")
+
+
+class FakeContextRetriever:
+    async def retrieve_context(self, query: str, top_k: int = 5) -> str:
+        return "--- Source: docs.md ---\nverified fact"
+
+
+@pytest.mark.asyncio
+async def test_send_injects_retrieved_context_without_persisting_it():
+    conversation = Conversation()
+    provider = RecordingLLMProvider()
+    engine = ChatEngine(provider, conversation, retriever=FakeContextRetriever())
+
+    _ = [event async for event in engine.send("question")]
+
+    assert provider.prompts[0][0].role == "system"
+    assert "verified fact" in provider.prompts[0][0].content
+    assert [message.role for message in conversation.messages] == ["user", "assistant"]
+    assert all(
+        "verified fact" not in message.content for message in conversation.messages
+    )
+
+
+@pytest.mark.asyncio
+async def test_failed_retrieval_does_not_add_user_message():
+    class FailingRetriever:
+        async def retrieve_context(self, query: str, top_k: int = 5) -> str:
+            raise ValueError("bad embedding")
+
+    conversation = Conversation()
+    engine = ChatEngine(
+        RecordingLLMProvider(), conversation, retriever=FailingRetriever()
+    )
+
+    with pytest.raises(ProviderError, match="retrieval failed"):
+        _ = [event async for event in engine.send("question")]
+
+    assert conversation.messages == []

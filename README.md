@@ -66,3 +66,18 @@ provider = "ollama"
 model = "llama3.2"
 base_url = "http://localhost:11434"
 ```
+
+### Ask questions about local documents (RAG)
+
+Start Ollama with an embedding model such as `nomic-embed-text`, then point Sensai
+at a directory of Markdown or text files:
+
+```bash
+ollama pull nomic-embed-text
+sensai chat --rag-dir ./docs --rag-model nomic-embed-text --rag-db rag.db
+```
+
+Sensai indexes the directory when chat starts, replacing stale chunks in the local
+SQLite index. Each question retrieves the closest chunks and includes them in
+the model prompt. The retrieved text is not saved in conversation history.
+`--rag-dir` is optional; omit it to chat without document retrieval.

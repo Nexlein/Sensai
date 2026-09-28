@@ -317,3 +317,32 @@ async def test_run_repl_reports_provider_error_and_continues():
 
     assert len(errors) == 1
     assert isinstance(errors[0], ProviderError)
+
+
+async def test_chat_rag_option_indexes_local_documents(monkeypatch, tmp_path):
+    from sensai.memory.rag.store import SQLiteVectorStore
+
+    class FakeEmbeddingProvider:
+        def __init__(self, base_url: str, model: str):
+            self.base_url = base_url
+            self.model = model
+
+        async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            return [[1.0, 0.0] for _ in texts]
+
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "guide.md").write_text("project guide", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "sensai.interfaces.cli.app.OllamaEmbeddingProvider", FakeEmbeddingProvider
+    )
+    _script_stdin(monkeypatch, ["/exit"])
+
+    code = await _run(
+        ["chat", "--provider", "mock", "--rag-dir", str(docs), "--rag-db", "rag.db"]
+    )
+
+    assert code == 0
+    results = SQLiteVectorStore("rag.db").search([1.0, 0.0])
+    assert [chunk.text for chunk in results] == ["project guide"]

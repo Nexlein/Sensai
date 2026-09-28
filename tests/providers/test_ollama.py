@@ -162,3 +162,25 @@ async def test_chat_stream_omits_tools_key_when_not_given():
         pass
 
     assert "tools" not in captured["body"]
+
+
+async def test_embedding_provider_calls_embed_endpoint():
+    from sensai.providers.ollama import OllamaEmbeddingProvider
+
+    provider = OllamaEmbeddingProvider(model="nomic-embed-text")
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"embeddings": [[1.0, 0.0], [0.0, 1.0]]})
+
+    _patch_client(provider, httpx.MockTransport(handler))
+    vectors = await provider.embed_texts(["first", "second"])
+
+    assert captured["path"] == "/api/embed"
+    assert captured["body"] == {
+        "model": "nomic-embed-text",
+        "input": ["first", "second"],
+    }
+    assert vectors == [[1.0, 0.0], [0.0, 1.0]]
