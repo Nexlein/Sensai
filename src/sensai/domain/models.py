@@ -54,3 +54,28 @@ class Persona(BaseModel):
     name: str
     description: str
     system_instruction: str
+
+
+class Document(BaseModel):
+    """A raw document ingested from the filesystem."""
+
+    id: ID
+    path: str
+    content: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class Chunk(BaseModel):
+    """A segment of text split from a Document."""
+
+    id: ID
+    doc_id: str
+    text: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    embedding: list[float] | None = None
+
+
+class ScoredChunk(Chunk):
+    """A retrieved Chunk augmented with a similarity score."""
+
+    score: float
