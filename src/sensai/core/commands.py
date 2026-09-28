@@ -218,6 +218,7 @@ async def handle_clear(
     arguments: tuple[str, ...],
 ) -> CommandResult:
     context.engine.conversation.messages.clear()
+    await context.memory_store.save(context.engine.conversation)
     return CommandResult(message="Conversation cleared.")
 
 

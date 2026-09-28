@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import tomllib
 from pydantic import BaseModel, ValidationError
 
+DEFAULT_INTERFACE = "cli"
 DEFAULT_PROVIDER = "ollama"
 DEFAULT_MODEL = "llama3.2"
 DEFAULT_BASE_URL = "http://localhost:11434"
@@ -20,6 +21,7 @@ class ToolsConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
+    interface: Literal["cli", "tui", "web"] = DEFAULT_INTERFACE
     provider: str = DEFAULT_PROVIDER
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_BASE_URL
@@ -39,6 +41,7 @@ def _read_config_file(path: Path) -> dict[str, Any]:
 def load_config(
     config_path: Path | str | None = DEFAULT_CONFIG_PATH,
     *,
+    cli_interface: str | None = None,
     cli_provider: str | None = None,
     cli_model: str | None = None,
     cli_base_url: str | None = None,
@@ -55,6 +58,8 @@ def load_config(
             file_data = _read_config_file(path)
 
     merged = {**file_data}
+    if cli_interface is not None:
+        merged["interface"] = cli_interface
     if cli_provider is not None:
         merged["provider"] = cli_provider
     if cli_model is not None:
@@ -74,6 +79,7 @@ def save_config(
 ) -> None:
     path = Path(config_path)
     lines = [
+        f"interface = {json.dumps(config.interface, ensure_ascii=False)}",
         f"provider = {json.dumps(config.provider, ensure_ascii=False)}",
         f"model = {json.dumps(config.model, ensure_ascii=False)}",
         f"base_url = {json.dumps(config.base_url, ensure_ascii=False)}",

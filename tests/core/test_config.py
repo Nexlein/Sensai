@@ -97,3 +97,26 @@ def test_save_config_omits_unset_tools_section(tmp_path):
 
     assert "[tools]" not in config_file.read_text()
     assert load_config(config_file) == AppConfig()
+
+
+def test_interface_cli_override_takes_precedence_over_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text('interface = "tui"\n', encoding="utf-8")
+
+    assert load_config(config_file).interface == "tui"
+    assert load_config(config_file, cli_interface="cli").interface == "cli"
+
+
+def test_invalid_interface_is_rejected(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text('interface = "unknown"\n', encoding="utf-8")
+
+    with pytest.raises(ConfigError, match="Invalid config values"):
+        load_config(config_file)
+
+
+def test_save_config_preserves_interface(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    save_config(AppConfig(interface="tui"), config_file)
+
+    assert load_config(config_file).interface == "tui"

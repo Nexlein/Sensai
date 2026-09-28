@@ -6,12 +6,9 @@ from rich.console import Console
 from sensai.core.commands import CommandContext
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event
-from sensai.interfaces.cli.app import (
-    _run,
-    resolve_config_path,
-    resolve_session,
-    run_repl,
-)
+from sensai.interfaces.cli.app import run_repl
+from sensai.interfaces.dispatcher import dispatch as _run
+from sensai.interfaces.dispatcher import resolve_config_path, resolve_session
 from sensai.providers import get_provider
 from sensai.providers.mock import MockLLMProvider
 from sensai.tools.registry import build_default_registry
@@ -346,3 +343,38 @@ async def test_chat_rag_option_indexes_local_documents(monkeypatch, tmp_path):
     assert code == 0
     results = SQLiteVectorStore("rag.db").search([1.0, 0.0])
     assert [chunk.text for chunk in results] == ["project guide"]
+
+
+async def test_ui_flag_dispatches_to_tui(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    selected = []
+
+    async def fake_run_tui(context):
+        selected.append(context.config.interface)
+
+    monkeypatch.setattr("sensai.interfaces.dispatcher.run_tui", fake_run_tui)
+
+    code = await _run(["chat", "--provider", "mock", "--ui", "tui"])
+
+    assert code == 0
+    assert selected == ["tui"]
+
+
+async def test_ui_flag_overrides_config_file(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text('interface = "tui"\nprovider = "mock"\n')
+    _script_stdin(monkeypatch, ["/exit"])
+
+    code = await _run(["chat", "--config", str(config_path), "--ui", "cli"])
+
+    assert code == 0
+
+
+async def test_web_ui_reports_not_implemented(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    code = await _run(["chat", "--provider", "mock", "--ui", "web"])
+
+    assert code == 1
+    assert "not implemented" in capsys.readouterr().out

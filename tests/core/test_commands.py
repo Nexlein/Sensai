@@ -103,6 +103,7 @@ async def test_dispatch_clear_empties_current_conversation():
 
     assert not result.should_exit
     assert context.engine.conversation.messages == []
+    assert context.memory_store.saved == [context.engine.conversation]
     assert result.message == "Conversation cleared."
 
 

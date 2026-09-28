@@ -1,14 +1,15 @@
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 
 import httpx
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Input, Markdown, Static
 
+from sensai.core.commands import CommandResult, RenderFn
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event, TextChunkEvent
 
-SendFn = Callable[[str], AsyncIterator[Event]]
+ProcessFn = Callable[[str, RenderFn], Awaitable[CommandResult]]
 
 
 def error_text(exc: Exception) -> str:
@@ -79,9 +80,9 @@ class ChatApp(App[None]):
     }
     """
 
-    def __init__(self, send: SendFn) -> None:
+    def __init__(self, process: ProcessFn) -> None:
         super().__init__()
-        self._send = send
+        self._process = process
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="history")
@@ -100,22 +101,33 @@ class ChatApp(App[None]):
         await history.mount(UserMessage(text))
         history.scroll_end(animate=False)
 
-        await history.mount(RoleLabel("sensai", classes="assistant"))
-        reply = AssistantMessage("")
-        await history.mount(reply)
-        history.scroll_end(animate=False)
+        async def render(events: AsyncIterator[Event]) -> None:
+            await history.mount(RoleLabel("sensai", classes="assistant"))
+            reply = AssistantMessage("")
+            await history.mount(reply)
+            history.scroll_end(animate=False)
 
-        content = ""
-        try:
-            async for chunk_event in self._send(text):
+            content = ""
+            async for chunk_event in events:
                 if isinstance(chunk_event, TextChunkEvent):
                     content += chunk_event.content
                     await reply.update(content)
                     history.scroll_end(animate=False)
+
+        try:
+            result = await self._process(text, render)
         except (EmptyInputError, ProviderError) as exc:
             await history.mount(ErrorMessage(error_text(exc)))
             history.scroll_end(animate=False)
+            return
+
+        if result.message:
+            await history.mount(RoleLabel("sensai", classes="assistant"))
+            await history.mount(AssistantMessage(result.message))
+            history.scroll_end(animate=False)
+        if result.should_exit:
+            self.exit()
 
 
-def run_chat(send: SendFn) -> None:
-    ChatApp(send).run()
+def run_chat(process: ProcessFn) -> None:
+    ChatApp(process).run()

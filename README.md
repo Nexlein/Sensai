@@ -54,6 +54,7 @@ You can also use slash commands inside the interactive session:
 
 Options:
 
+- `--ui <cli|tui>` — interface to use (defaults to `cli`)
 - `--model <name>` — model to use
 - `--provider <name>` — provider to use (`ollama` by default, or `mock` for a offline demo)
 - `--base-url <url>` — base URL of the provider's API (defaults to `http://localhost:11434`)
@@ -62,10 +63,13 @@ Options:
 Instead of CLI flags, you can set defaults in a `sensai.toml` file:
 
 ```toml
+interface = "cli"
 provider = "ollama"
 model = "llama3.2"
 base_url = "http://localhost:11434"
 ```
+
+Run `sensai chat --ui tui` to use the Textual interface. The flag takes precedence over `interface` in `sensai.toml`. The web interface is planned but not available yet.
 
 ### Ask questions about local documents (RAG)
 

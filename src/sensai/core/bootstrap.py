@@ -22,6 +22,7 @@ class BootstrapError(Exception):
 async def build_session(
     *,
     config_path: Path | str = DEFAULT_CONFIG_PATH,
+    interface: str | None = None,
     provider_name: str | None = None,
     model: str | None = None,
     base_url: str | None = None,
@@ -33,6 +34,7 @@ async def build_session(
     """Resolve settings and construct the provider, memory, tools, and engine."""
     config = load_config(
         config_path,
+        cli_interface=interface,
         cli_provider=provider_name,
         cli_model=model,
         cli_base_url=base_url,

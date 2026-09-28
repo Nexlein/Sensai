@@ -31,3 +31,20 @@ Acceptance criteria:
 
 - Retrieval finds semantically relevant chunks.
 - The retrieved context is injected into the prompt before generation.
+
+## Feature: Shared CLI/TUI Session Bootstrap
+
+As a user, I want to select the CLI or TUI from the command line or my config file, so I can use my preferred interface with the same assistant settings.
+
+Acceptance criteria:
+
+- `interface` defaults to `cli` and accepts `cli`, `tui`, or `web`.
+- `--ui` overrides `interface` from `sensai.toml`.
+- Selecting `web` reports that the interface is not implemented yet.
+
+As a user, I want my saved conversation and tools available in the TUI, so switching interfaces does not lose my session.
+
+Acceptance criteria:
+
+- CLI and TUI obtain their engine, session store, tools, and RAG from the same bootstrap.
+- TUI replies are saved to the existing session store.

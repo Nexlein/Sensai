@@ -69,3 +69,13 @@ async def test_build_session_reports_rag_failure(monkeypatch, tmp_path):
             rag_dir=str(tmp_path / "missing"),
             rag_db=str(tmp_path / "rag.db"),
         )
+
+
+async def test_build_session_uses_interface_override(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text('interface = "tui"\nprovider = "mock"\n')
+
+    context = await build_session(config_path=config_path, interface="cli")
+
+    assert context.config.interface == "cli"
