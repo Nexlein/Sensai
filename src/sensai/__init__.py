@@ -1,2 +1,3 @@
-def main() -> None:
-    print("Hello from sensai!")
+from sensai.interfaces.cli.app import main
+
+__all__ = ["main"]

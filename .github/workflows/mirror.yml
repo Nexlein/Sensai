@@ -26,7 +26,7 @@ jobs:
 
       - name: Push to Epitech Mirror
         env:
-          EPITECH_REPO_URL: "git@github.com:EpitechPlaceholder/Sensai.git"
+          EPITECH_REPO_URL: "git@github.com:EpitechPGE3-2026/G-AIA-500-MPL-5-1-sensai-1.git"
         run: |
           ssh-keyscan github.com >> ~/.ssh/known_hosts
           git remote add epitech "$EPITECH_REPO_URL"

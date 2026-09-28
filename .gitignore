@@ -16,6 +16,9 @@ __pycache__/
 htmlcov/
 coverage.xml
 
+# Local session database
+*.db
+
 # Distribution / packaging
 build/
 dist/

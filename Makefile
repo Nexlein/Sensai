@@ -1,4 +1,12 @@
-.PHONY: setup test lint format
+.PHONY: all setup test lint format run
+
+all: format lint test
+
+run:
+	uv run sensai $(filter-out $@,$(MAKECMDGOALS))
+
+%:
+	@:
 
 setup:
 	@echo "Installing dependencies..."
