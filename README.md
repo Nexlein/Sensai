@@ -32,6 +32,7 @@ make setup
 - Config resolved from CLI args > `sensai.toml` > built-in defaults, no source changes needed to switch model/provider
 - Secure filesystem tools (read/list) strictly bounded to an allowed root directory (T4 feature)
 - Tool-calling engine that seamlessly orchestrates tool dispatch, handles recursion limits, and gracefully recovers from unexpected errors
+- Opt-in privacy and content guardrails (EV2): prompt-injection blocking on input, PII masking or refusal on input, streamed output and tool results
 
 ## 💡 Usage Examples
 
@@ -85,3 +86,24 @@ Sensai indexes the directory when chat starts, replacing stale chunks in the loc
 SQLite index. Each question retrieves the closest chunks and includes them in
 the model prompt. The retrieved text is not saved in conversation history.
 `--rag-dir` is optional; omit it to chat without document retrieval.
+
+### Privacy and content guardrails
+
+Guardrails are off by default. Turn them on in `sensai.toml`:
+
+```toml
+[guardrails]
+enabled = true
+injection = "block" # or "flag": warn but send the message anyway
+pii = "redact"      # or "block": refuse instead of masking
+```
+
+When enabled, Sensai checks three places:
+
+- **Your message**: prompt-injection attempts ("ignore all previous instructions", "reveal your system prompt", jailbreak personas, in English and French) are blocked and never reach the model. Personal data is masked before the model, the document retriever and the session history see it.
+- **The model's reply**: personal data is masked while the reply streams, even if a value arrives split across chunks. With `pii = "block"` the reply is cut and replaced by a refusal notice.
+- **Tool results**: personal data returned by a tool such as `read_file` is masked before the model sees it.
+
+Detected personal data: email addresses, phone numbers, IBANs, credit card numbers and French social security numbers. Card, IBAN and SSN candidates are checked against their checksum, so an ordinary long number is left alone. A notice such as `⚠ Personal data in your message was masked (pii: email).` tells you what happened, naming the rule and never the value.
+
+Limits: names and postal addresses are not detected, the injection rules are heuristics that paraphrases can get past, and personal data inside tool-call arguments or retrieved documents is not filtered.
