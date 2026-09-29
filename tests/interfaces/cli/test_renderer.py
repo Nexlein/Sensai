@@ -6,12 +6,7 @@ from rich.console import Console
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import BudgetEvent, Event, TextChunkEvent, ToolCallEvent
 from sensai.domain.models import Conversation
-from sensai.interfaces.cli.renderer import (
-    error_text,
-    render_history,
-    render_stream,
-    usage_text,
-)
+from sensai.interfaces.cli.renderer import error_text, render_history, render_stream
 
 
 def test_render_history_prints_prior_messages(capsys):
@@ -62,24 +57,6 @@ async def test_render_stream_ignores_non_text_events(capsys):
     )
 
     assert "hi" in capsys.readouterr().out
-
-
-def test_usage_text_shows_short_counts_and_percent():
-    text = usage_text(BudgetEvent(used=4100, max_tokens=8192))
-
-    assert text.plain == "4.1k / 8.2k tokens (50%)"
-
-
-def test_usage_text_keeps_small_counts_exact():
-    text = usage_text(BudgetEvent(used=5, max_tokens=800))
-
-    assert text.plain == "5 / 800 tokens (0%)"
-
-
-def test_usage_text_can_exceed_full():
-    text = usage_text(BudgetEvent(used=1200, max_tokens=1000))
-
-    assert "(120%)" in text.plain
 
 
 async def test_render_stream_shows_usage_footer(capsys):

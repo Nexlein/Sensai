@@ -8,6 +8,7 @@ from rich.text import Text
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import BudgetEvent, Event, TextChunkEvent
 from sensai.domain.models import Conversation
+from sensai.interfaces.usage import format_usage
 
 _ROLE_LABELS = {
     "user": ("you: ", "bold blue"),
@@ -36,16 +37,6 @@ def render_history(console: Console, conversation: Conversation) -> None:
         console.print()
 
 
-def _short(tokens: int) -> str:
-    return f"{tokens / 1000:.1f}k" if tokens >= 1000 else str(tokens)
-
-
-def usage_text(event: BudgetEvent) -> Text:
-    percent = event.used * 100 // event.max_tokens
-    line = f"{_short(event.used)} / {_short(event.max_tokens)} tokens ({percent}%)"
-    return Text(line, style="dim")
-
-
 async def render_stream(console: Console, events: AsyncIterator[Event]) -> None:
     label = Text("sensai: ", style="bold magenta")
     content = ""
@@ -55,7 +46,7 @@ async def render_stream(console: Console, events: AsyncIterator[Event]) -> None:
             if isinstance(event, TextChunkEvent):
                 content += event.content
             elif isinstance(event, BudgetEvent):
-                footer = usage_text(event)
+                footer = Text(format_usage(event), style="dim")
             else:
                 continue
             body = label + Text(content)
