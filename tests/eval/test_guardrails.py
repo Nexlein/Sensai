@@ -361,6 +361,7 @@ def test_stream_block_emits_clean_prefix_then_refusal_and_swallows_the_rest():
     text = f"Sure! The address is a@b.io and more text. {PROSE}"
     streamed, stream = _stream(text, 3, action="block")
     assert streamed == "Sure! The address is " + REFUSAL_TEXT
+    assert stream.refused
     assert [f.rule for f in stream.findings] == ["email"]
     assert stream.feed("anything") == ""
     assert stream.flush() == ""
@@ -369,6 +370,7 @@ def test_stream_block_emits_clean_prefix_then_refusal_and_swallows_the_rest():
 def test_stream_block_without_pii_passes_text_through():
     streamed, stream = _stream(PROSE, 5, action="block")
     assert streamed == PROSE
+    assert not stream.refused
     assert stream.findings == []
 
 

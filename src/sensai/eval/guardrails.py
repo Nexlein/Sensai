@@ -242,17 +242,17 @@ class PiiOutputStream:
         self._action = action
         self._rules = rules
         self._buffer = ""
-        self._refused = False
+        self.refused = False
         self.findings: list[GuardrailFinding] = []
 
     def feed(self, chunk: str) -> str:
-        if self._refused:
+        if self.refused:
             return ""
         self._buffer += chunk
         return self._drain(final=False)
 
     def flush(self) -> str:
-        if self._refused:
+        if self.refused:
             return ""
         return self._drain(final=True)
 
@@ -274,7 +274,7 @@ class PiiOutputStream:
         return emitted
 
     def _refuse(self, first: PiiMatch) -> str:
-        self._refused = True
+        self.refused = True
         self.findings.append(GuardrailFinding(rule=first.rule, category="pii"))
         clean_prefix = self._buffer[: first.start]
         self._buffer = ""

@@ -36,10 +36,12 @@ class OutputStream(Protocol):
     """Incremental output filter: PII may be split across chunks.
 
     `findings` accumulates what was redacted or refused, so the caller can report
-    it after the stream ends.
+    it after the stream ends. `refused` is True once the stream gave up on the
+    reply: it then emits a refusal notice and swallows everything after it.
     """
 
     findings: list[GuardrailFinding]
+    refused: bool
 
     def feed(self, chunk: str) -> str: ...
 
