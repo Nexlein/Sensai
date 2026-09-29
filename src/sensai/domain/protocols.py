@@ -31,6 +31,10 @@ class Guardrail(Protocol):
     async def filter_output(self, text: str) -> str: ...
 
 
+class Summarizer(Protocol):
+    async def summarize(self, messages: list[Message]) -> str: ...
+
+
 class ToolRegistry(Protocol):
     def get(self, name: str) -> BaseTool | None: ...
 
