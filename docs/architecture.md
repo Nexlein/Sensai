@@ -55,7 +55,7 @@ tool calls? ── yes ──► [ToolRegistry.get(name).execute()] ──► [6
 [assistant message stored] ──► [renderer] ──► [SqliteMemoryStore.save]
 ```
 
-Guardrails are optional (`[guardrails] enabled = true`). With none injected, the engine behaves exactly as without them. Whenever a guardrail acts, the engine yields a `GuardrailEvent` (stage, action, rule names, never the matched value) and the renderers display a one-line notice.
+Guardrails are on by default and can be disabled with `[guardrails] enabled = false`. With none injected, the engine behaves exactly as without them. Whenever a guardrail acts, the engine yields a `GuardrailEvent` (stage, action, rule names, never the matched value) and the renderers display a one-line notice.
 
 ## 5. Guardrails (EV2) in detail
 
@@ -65,7 +65,7 @@ Guardrails are optional (`[guardrails] enabled = true`). With none injected, the
 | `eval/guardrails.py` detectors  | Regex + checksum validators (Luhn, IBAN mod-97, NIR key) for PII; heuristic rules for prompt injection.                           |
 | `RegexGuardrail`                | Implements the `Guardrail` protocol: `filter_input`, `filter_output` (also used for tool results), `new_output_stream`.           |
 | `PiiOutputStream`               | Incremental filter. Holds back a short tail (at least 48 characters, plus the trailing word up to 320) so a value is never split. |
-| `core/config.py` `[guardrails]` | `enabled` (default off), `injection = block \| flag`, `pii = redact \| block`.                                                    |
+| `core/config.py` `[guardrails]` | `enabled` (default on), `injection = block \| flag`, `pii = redact \| block`.                                                     |
 
 Design choices and the reference design they were compared against are in [elevenlabs-guardrails.md](elevenlabs-guardrails.md).
 
@@ -81,7 +81,7 @@ Design choices and the reference design they were compared against are in [eleve
 | FS tools with sandbox root (T4)              | Done                             |
 | RAG chunker / vector store / retriever       | Done, enabled with `--rag-dir`   |
 | CLI and TUI, shared bootstrap                | Done, `--ui cli\|tui`            |
-| Content & privacy guardrails (EV2)           | Done, opt-in                     |
+| Content & privacy guardrails (EV2)           | Done, on by default              |
 | Turn logger (EV3)                            | Built, not wired into the engine |
 | Token budget (M2), artifact (M4), manager    | Stubs                            |
 | MCP (T1), sandbox exec (T2), web search (T3) | Stubs                            |

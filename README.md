@@ -32,7 +32,7 @@ make setup
 - Config resolved from CLI args > `sensai.toml` > built-in defaults, no source changes needed to switch model/provider
 - Secure filesystem tools (read/list) strictly bounded to an allowed root directory (T4 feature)
 - Tool-calling engine that seamlessly orchestrates tool dispatch, handles recursion limits, and gracefully recovers from unexpected errors
-- Opt-in privacy and content guardrails (EV2): prompt-injection blocking on input, PII masking or refusal on input, streamed output and tool results
+- Privacy and content guardrails (EV2), on by default: prompt-injection blocking on input, PII masking or refusal on input, streamed output and tool results
 
 ## 💡 Usage Examples
 
@@ -89,11 +89,11 @@ the model prompt. The retrieved text is not saved in conversation history.
 
 ### Privacy and content guardrails
 
-Guardrails are off by default. Turn them on in `sensai.toml`:
+Guardrails are on by default, with no configuration needed. Tune or disable them in `sensai.toml`:
 
 ```toml
 [guardrails]
-enabled = true
+enabled = true      # set to false to turn all guardrails off
 injection = "block" # or "flag": warn but send the message anyway
 pii = "redact"      # or "block": refuse instead of masking
 ```
@@ -105,5 +105,7 @@ When enabled, Sensai checks three places:
 - **Tool results**: personal data returned by a tool such as `read_file` is masked before the model sees it.
 
 Detected personal data: email addresses, phone numbers, IBANs, credit card numbers and French social security numbers. Card, IBAN and SSN candidates are checked against their checksum, so an ordinary long number is left alone. A notice such as `⚠ Personal data in your message was masked (pii: email).` tells you what happened, naming the rule and never the value.
+
+Because the rules favour masking over leaking, an ordinary number can occasionally be masked (a 10-digit number starting with `0` looks like a French phone number). Set `enabled = false` if that gets in the way.
 
 Limits: names and postal addresses are not detected, the injection rules are heuristics that paraphrases can get past, and personal data inside tool-call arguments or retrieved documents is not filtered.

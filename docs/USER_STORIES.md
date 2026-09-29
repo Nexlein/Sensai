@@ -87,11 +87,17 @@ Acceptance criteria:
 - With `pii = "block"` the result is replaced by a placeholder and the model is told it was withheld.
 - Clean tool results are passed through unchanged and without any notice.
 
-As a user who does not want surprise redactions, I want guardrails to be opt-in and configurable, so that I choose which protections apply and how strict they are.
+As a user who never touched the configuration, I want to be protected by default, so that a forgotten setting cannot expose personal data or let an injection attempt through.
 
 Acceptance criteria:
 
-- Guardrails are off by default: without a `[guardrails]` section the engine behaves exactly as before.
+- Without any `[guardrails]` section, guardrails are active with the strict actions (`injection = "block"`, `pii = "redact"`).
+- Setting `enabled = false` turns every guardrail off, and the engine then behaves exactly as if none existed.
+
+As a user who needs different behaviour (for example a security team reviewing prompts, or a workflow that must see raw numbers), I want to tune or disable the guardrails, so that I choose which protections apply and how strict they are.
+
+Acceptance criteria:
+
 - `[guardrails]` accepts `enabled`, `injection` (`block` or `flag`) and `pii` (`redact` or `block`) in `sensai.toml`.
 - Any other value is rejected with a clear config error.
-- `/config save` writes the section only when it differs from the defaults.
+- `/config save` writes the section only when it differs from the defaults, and a disabled configuration is preserved when saved.

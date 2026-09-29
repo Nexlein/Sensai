@@ -55,7 +55,7 @@ Implemented:
 - `core/`: `ChatEngine` (streaming, tool-calling loop capped at 5 iterations, optional RAG retriever and guardrail), `bootstrap.py` (`build_session`), `commands.py` (slash commands), `config.py` (CLI > `sensai.toml` > defaults, `[tools]` and `[guardrails]` sections), `prompt.py`, `input.py`.
 - `tools/`: `ToolRegistry`, `ReadFileTool`, `ListDirTool` (confined to `fs_allowed_root`).
 - `memory/`: SQLite session persistence (`--session`), RAG (`TextChunker`, `SQLiteVectorStore`, `RAGRetriever`, enabled with `--rag-dir`).
-- `eval/guardrails.py` (EV2): regex + checksum PII detectors, heuristic injection rules, `RegexGuardrail`, `PiiOutputStream`. Opt-in via `[guardrails] enabled = true`.
+- `eval/guardrails.py` (EV2): regex + checksum PII detectors, heuristic injection rules, `RegexGuardrail`, `PiiOutputStream`. On by default; disable with `[guardrails] enabled = false`.
 - `interfaces/`: CLI (rich), TUI (textual, `--ui tui`), shared dispatcher and notice wording.
 
 Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`), `Persona` (`build_prompt` accepts one, nothing passes it).
