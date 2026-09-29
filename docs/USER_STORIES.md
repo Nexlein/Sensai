@@ -80,6 +80,7 @@ Acceptance criteria:
 
 - Empty queries and search service failures return clear error messages.
 - Searches with no usable results are reported as such.
+
 ## Feature: [EV2] Content & Privacy Guardrails
 
 As a clinic receptionist drafting messages with the assistant, I want the personal data I type (email, phone number, IBAN, card number, social security number) masked before it reaches the model, so that patient data is neither processed by the model nor kept in clear text.
