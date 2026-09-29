@@ -5,6 +5,7 @@ from sensai.domain.events import Event
 from sensai.domain.models import (
     Chunk,
     Conversation,
+    GuardrailFinding,
     GuardrailVerdict,
     Message,
     ScoredChunk,
@@ -32,7 +33,13 @@ class MemoryStore(Protocol):
 
 
 class OutputStream(Protocol):
-    """Incremental output filter: PII may be split across chunks."""
+    """Incremental output filter: PII may be split across chunks.
+
+    `findings` accumulates what was redacted or refused, so the caller can report
+    it after the stream ends.
+    """
+
+    findings: list[GuardrailFinding]
 
     def feed(self, chunk: str) -> str: ...
 

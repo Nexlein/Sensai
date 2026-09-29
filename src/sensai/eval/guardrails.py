@@ -7,9 +7,10 @@ merely looks like a card or IBAN is left alone.
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Literal
 
-from sensai.domain.models import GuardrailFinding
+from sensai.domain.models import GuardrailAction, GuardrailFinding, GuardrailVerdict
 
 
 def luhn_valid(number: str) -> bool:
@@ -142,19 +143,26 @@ def find_pii(text: str, rules: tuple[PiiRule, ...] = PII_RULES) -> list[PiiMatch
     return sorted(taken, key=lambda m: m.start)
 
 
+def _substitute(text: str, matches: list[PiiMatch], upto: int) -> str:
+    """Return text[:upto] with every match that ends at or before `upto` replaced."""
+    pieces: list[str] = []
+    cursor = 0
+    for match in matches:
+        if match.end > upto:
+            break
+        pieces.append(text[cursor : match.start])
+        pieces.append(match.replacement)
+        cursor = match.end
+    pieces.append(text[cursor:upto])
+    return "".join(pieces)
+
+
 def redact_pii(
     text: str, rules: tuple[PiiRule, ...] = PII_RULES
 ) -> tuple[str, list[PiiMatch]]:
     """Replace every PII match by its token. Returns the new text and the matches."""
     matches = find_pii(text, rules)
-    pieces: list[str] = []
-    cursor = 0
-    for match in matches:
-        pieces.append(text[cursor : match.start])
-        pieces.append(match.replacement)
-        cursor = match.end
-    pieces.append(text[cursor:])
-    return "".join(pieces), matches
+    return _substitute(text, matches, len(text)), matches
 
 
 _FLAGS = re.IGNORECASE | re.DOTALL
@@ -163,16 +171,12 @@ INJECTION_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "ignore_instructions",
         re.compile(
+            # English
             r"\b(?:ignore|disregard|forget|override)\b.{0,30}"
             r"\b(?:previous|prior|above|earlier|all|any|your|the)\b.{0,30}"
-            r"\b(?:instructions?|rules?|prompts?|guidelines?)\b",
-            _FLAGS,
-        ),
-    ),
-    (
-        "ignore_instructions_fr",
-        re.compile(
-            r"\b(?:ignore[rsz]?|oublie[rsz]?)\b.{0,40}"
+            r"\b(?:instructions?|rules?|prompts?|guidelines?)\b"
+            # French
+            r"|\b(?:ignore[rsz]?|oublie[rsz]?)\b.{0,40}"
             r"\b(?:instructions?|consignes?|r[èe]gles?)\b",
             _FLAGS,
         ),
@@ -204,3 +208,138 @@ def find_injection(text: str) -> list[GuardrailFinding]:
         for name, pattern in INJECTION_RULES
         if pattern.search(text)
     ]
+
+
+REFUSAL_TEXT = "[response withheld: it contained personal data]"
+
+# Streaming hold-back. A match can only be completed by text still to come, so
+# the tail of the buffer is kept until it can no longer be part of a match.
+# - spaced formats (IBAN <= 34 chars + 8 spaces) never exceed 48 chars;
+# - an email has no spaces, so a partial one lives inside the trailing word,
+#   and is at most 64 + 1 + 253 chars.
+MAX_SPACED_PII = 48
+MAX_EMAIL = 320
+_WHITESPACE = " \t\r\n"
+
+
+def _last_whitespace(text: str, before: int) -> int:
+    """Index of the last whitespace char strictly before `before`, or -1."""
+    return max(text.rfind(ch, 0, before) for ch in _WHITESPACE)
+
+
+class PiiOutputStream:
+    """Redacts (or refuses) PII in a stream of chunks, without splitting matches.
+
+    Each `feed` returns the part of the buffered text that is safe to show; the
+    rest stays buffered until later chunks or `flush` settle it.
+    """
+
+    def __init__(
+        self,
+        action: Literal["redact", "block"] = "redact",
+        rules: tuple[PiiRule, ...] = PII_RULES,
+    ) -> None:
+        self._action = action
+        self._rules = rules
+        self._buffer = ""
+        self._refused = False
+        self.findings: list[GuardrailFinding] = []
+
+    def feed(self, chunk: str) -> str:
+        if self._refused:
+            return ""
+        self._buffer += chunk
+        return self._drain(final=False)
+
+    def flush(self) -> str:
+        if self._refused:
+            return ""
+        return self._drain(final=True)
+
+    def _drain(self, *, final: bool) -> str:
+        matches = find_pii(self._buffer, self._rules)
+        if matches and self._action == "block":
+            return self._refuse(matches[0])
+
+        cut = len(self._buffer) if final else self._cut_point(matches)
+        if cut <= 0:
+            return ""
+        emitted = _substitute(self._buffer, matches, cut)
+        self.findings.extend(
+            GuardrailFinding(rule=m.rule, category="pii")
+            for m in matches
+            if m.end <= cut
+        )
+        self._buffer = self._buffer[cut:]
+        return emitted
+
+    def _refuse(self, first: PiiMatch) -> str:
+        self._refused = True
+        self.findings.append(GuardrailFinding(rule=first.rule, category="pii"))
+        clean_prefix = self._buffer[: first.start]
+        self._buffer = ""
+        return clean_prefix + REFUSAL_TEXT
+
+    def _cut_point(self, matches: list[PiiMatch]) -> int:
+        """How much of the buffer can be released now."""
+        buffer = self._buffer
+        trailing_word = len(buffer) - _last_whitespace(buffer, len(buffer)) - 1
+        hold = max(MAX_SPACED_PII, min(trailing_word, MAX_EMAIL))
+        cut = len(buffer) - hold
+        if cut <= 0:
+            return 0
+        # Start the kept buffer at a word start, so lookbehinds (`\b`, "not
+        # preceded by a digit") see the same context as in the full text.
+        boundary = _last_whitespace(buffer, cut)
+        if boundary >= 0:
+            cut = boundary + 1
+        # Never release half of a match.
+        for match in matches:
+            if match.start < cut < match.end:
+                cut = match.start
+        return cut
+
+
+@dataclass(frozen=True)
+class RegexGuardrail:
+    """Deterministic Guardrail: PII redaction/refusal plus injection heuristics."""
+
+    injection_action: Literal["block", "flag"] = "block"
+    pii_action: Literal["redact", "block"] = "redact"
+    pii_rules: tuple[PiiRule, ...] = field(default=PII_RULES, repr=False)
+
+    async def filter_input(self, text: str) -> GuardrailVerdict:
+        injection = find_injection(text)
+        redacted, matches = redact_pii(text, self.pii_rules)
+        pii = [GuardrailFinding(rule=m.rule, category="pii") for m in matches]
+        findings = [*injection, *pii]
+
+        # Precedence: block > redact > flag > allow.
+        action: GuardrailAction
+        refused = bool(injection) and self.injection_action == "block"
+        refused = refused or (bool(matches) and self.pii_action == "block")
+        if refused:
+            action = "block"
+        elif matches:
+            action = "redact"
+        elif injection:
+            action = "flag"
+        else:
+            action = "allow"
+        return GuardrailVerdict(
+            action=action,
+            text=redacted if action == "redact" else text,
+            findings=findings,
+        )
+
+    async def filter_output(self, text: str) -> GuardrailVerdict:
+        redacted, matches = redact_pii(text, self.pii_rules)
+        if not matches:
+            return GuardrailVerdict(action="allow", text=text)
+        findings = [GuardrailFinding(rule=m.rule, category="pii") for m in matches]
+        if self.pii_action == "block":
+            return GuardrailVerdict(action="block", text=text, findings=findings)
+        return GuardrailVerdict(action="redact", text=redacted, findings=findings)
+
+    def new_output_stream(self) -> PiiOutputStream:
+        return PiiOutputStream(self.pii_action, self.pii_rules)
