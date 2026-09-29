@@ -64,3 +64,19 @@ Acceptance criteria:
 
 - Read and list tools reuse one path validation implementation.
 - Relative traversal, absolute paths outside the root, and symlinks escaping the root are rejected.
+
+## Feature: [T3] Web Search
+
+As a user, I want Sensai to search the web when I ask for current information, so that its answer can use recent sources instead of relying only on the model's memory.
+
+Acceptance criteria:
+
+- `web_search` is available in CLI and TUI sessions through the shared registry.
+- Search results include page titles, links, and excerpts in the conversation context.
+
+As a user, I want Sensai to tell me when a web search cannot be completed, so that I do not mistake an unavailable search service for a verified answer.
+
+Acceptance criteria:
+
+- Empty queries and search service failures return clear error messages.
+- Searches with no usable results are reported as such.
