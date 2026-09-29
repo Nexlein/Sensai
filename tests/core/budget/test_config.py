@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from sensai.core.budget import BudgetConfig
-from sensai.core.config import AppConfig, load_config, save_config
+from sensai.core.config import AppConfig, ConfigError, load_config, save_config
 
 
 def test_defaults():
@@ -40,6 +40,14 @@ def test_budget_section_loaded_from_file(tmp_path):
     assert config.budget.max_tokens == 2048
     assert config.budget.threshold == 0.5
     assert config.budget.keep_recent_turns == 4
+
+
+def test_invalid_budget_in_file_raises_config_error(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text("[budget]\nthreshold = 2\n")
+
+    with pytest.raises(ConfigError):
+        load_config(config_file)
 
 
 def test_save_config_round_trips_budget(tmp_path):
