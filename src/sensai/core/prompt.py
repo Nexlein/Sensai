@@ -1,10 +1,14 @@
 from sensai.domain.models import Conversation, Message, Persona
 
 PRIVACY_NOTE = (
-    "Some personal data in this conversation was replaced by placeholders in square "
-    "brackets, such as [EMAIL] or [IBAN], to protect the user's privacy. The real "
-    "values are not available to you. Treat a placeholder as a value that was "
-    "intentionally hidden: do not ask the user to repeat it and do not try to guess it."
+    "PRIVACY: the user's personal data was replaced by placeholders in square "
+    "brackets, such as [EMAIL], [PHONE] or [IBAN]. You cannot see the real values. "
+    "If the user shares one, say you received it but cannot see it because it was "
+    "hidden to protect their privacy. "
+    "Never repeat a placeholder back as if it were the value, never guess or invent "
+    "the value, and never ask the user to send it again. "
+    'Example: the user writes "my IBAN is [IBAN]", you answer "Thanks, I received '
+    'it, but it was hidden to protect your privacy so I cannot see it."'
 )
 
 
