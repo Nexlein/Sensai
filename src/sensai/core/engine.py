@@ -49,6 +49,10 @@ class ChatEngine:
         if not user_text.strip():
             raise EmptyInputError("user_text must not be empty")
 
+        # True once something the model will see was replaced by a placeholder this
+        # turn; the model is then told so, otherwise "[IBAN]" reads like a glitch.
+        masked = False
+
         if self.guardrail is not None:
             verdict = await self.guardrail.filter_input(user_text)
             if verdict.action != "allow":
@@ -62,6 +66,7 @@ class ChatEngine:
             # From here on only the filtered text exists: it is what the retriever
             # embeds, what the provider sees and what gets stored in the history.
             user_text = verdict.text
+            masked = verdict.action == "redact"
 
         rag_context = ""
         if self.retriever is not None:
@@ -73,7 +78,9 @@ class ChatEngine:
         self.conversation.add_message(role="user", content=user_text)
 
         for _ in range(5):
-            prompt = build_prompt(self.conversation, rag_context=rag_context)
+            prompt = build_prompt(
+                self.conversation, rag_context=rag_context, privacy_note=masked
+            )
 
             chunks: list[str] = []
             tool_calls: list[ToolCallEvent] = []
@@ -154,5 +161,6 @@ class ChatEngine:
                         if verdict.action == "block"
                         else verdict.text
                     )
+                    masked = masked or verdict.action == "redact"
 
                 self.conversation.add_message(role="tool", content=content)
