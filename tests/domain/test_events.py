@@ -1,4 +1,4 @@
-from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import BudgetEvent, Event, TextChunkEvent, ToolCallEvent
 
 
 def test_text_chunk_event_type_and_content():
@@ -13,6 +13,12 @@ def test_tool_call_event_type_and_fields():
     assert event.type == "tool_call"
     assert event.tool_name == "search"
     assert event.arguments == {"q": "x"}
+
+
+def test_budget_event_type_and_fields():
+    event = BudgetEvent(used=10, max_tokens=100)
+    assert event.type == "budget"
+    assert (event.used, event.max_tokens) == (10, 100)
 
 
 def test_events_are_event_instances():

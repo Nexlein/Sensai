@@ -16,6 +16,12 @@ class TextChunkEvent(Event):
     content: str
 
 
+class BudgetEvent(Event):
+    type: Literal["budget"] = "budget"
+    used: int
+    max_tokens: int
+
+
 class ToolCallEvent(Event):
     type: Literal["tool_call"] = "tool_call"
     tool_name: str
