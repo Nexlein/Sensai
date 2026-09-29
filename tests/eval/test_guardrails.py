@@ -112,6 +112,28 @@ def test_card_is_found_inside_a_longer_run_of_digit_groups(text, expected):
     assert redact_pii(text)[0] == expected
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("我的IBAN是FR1420041010050500013M02606谢谢", "我的IBAN是[IBAN]谢谢"),
+        ("邮箱john.doe@example.com谢谢", "邮箱[EMAIL]谢谢"),
+        ("电话0612345678谢谢", "电话[PHONE]谢谢"),
+        ("卡号4111 1111 1111 1111谢谢", "卡号[CARD]谢谢"),
+        ("社保号1 84 12 76 451 089 46谢谢", "社保号[SSN]谢谢"),
+        ("私のメールはjohn@example.comです", "私のメールは[EMAIL]です"),
+    ],
+)
+def test_pii_glued_to_text_without_spaces_is_still_masked(text, expected):
+    assert redact_pii(text)[0] == expected
+
+
+def test_ascii_word_boundaries_do_not_break_latin_text():
+    # Glued to an ASCII letter it is still not a card / phone number.
+    assert find_pii("ref4111111111111111") == []
+    assert find_pii("abc0612345678") == []
+    assert redact_pii("café: 0612345678")[0] == "café: [PHONE]"
+
+
 def test_digits_glued_to_a_card_are_not_cut_apart():
     # No group boundary inside the run, so it is one long number, not a card.
     assert find_pii("4111111111111111123") == []

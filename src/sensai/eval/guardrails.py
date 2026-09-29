@@ -106,6 +106,16 @@ def _card_span(value: str) -> tuple[int, int] | None:
     return best[1] if best else None
 
 
+def _ascii_pattern(pattern: str) -> re.Pattern[str]:
+    """Compile a PII pattern where only ASCII letters/digits are word characters.
+
+    With the default Unicode semantics a word boundary is not found between a CJK
+    character and the PII next to it ("邮箱john@example.com谢谢"), so the value
+    would go through unmasked in languages that do not put spaces between words.
+    """
+    return re.compile(pattern, re.ASCII)
+
+
 # Order is priority: when two rules overlap, the earlier rule keeps the span.
 # Structured + checksummed formats go first, loose ones (phone) last.
 # Every quantifier is bounded (RFC 5321 limits for email): an unbounded `+` makes
@@ -114,7 +124,7 @@ def _card_span(value: str) -> tuple[int, int] | None:
 PII_RULES: tuple[PiiRule, ...] = (
     PiiRule(
         name="iban",
-        pattern=re.compile(
+        pattern=_ascii_pattern(
             r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b"
         ),
         replacement="[IBAN]",
@@ -122,7 +132,7 @@ PII_RULES: tuple[PiiRule, ...] = (
     ),
     PiiRule(
         name="ssn",
-        pattern=re.compile(
+        pattern=_ascii_pattern(
             r"\b[12] ?\d{2} ?(?:0[1-9]|1[0-2]|[2-9]\d) ?(?:\d{2}|2[AB]) ?\d{3} ?\d{3} ?\d{2}\b"
         ),
         replacement="[SSN]",
@@ -130,21 +140,21 @@ PII_RULES: tuple[PiiRule, ...] = (
     ),
     PiiRule(
         name="credit_card",
-        pattern=re.compile(r"\b(?:\d[ -]?){12,18}\d\b"),
+        pattern=_ascii_pattern(r"\b(?:\d[ -]?){12,18}\d\b"),
         replacement="[CARD]",
         validator=_card_valid,
         recover=_card_span,
     ),
     PiiRule(
         name="email",
-        pattern=re.compile(
+        pattern=_ascii_pattern(
             r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})+\b"
         ),
         replacement="[EMAIL]",
     ),
     PiiRule(
         name="phone",
-        pattern=re.compile(
+        pattern=_ascii_pattern(
             r"(?<![\w+])(?:"
             r"(?:\+|00)33[ .-]?[1-9](?:[ .-]?\d{2}){4}"  # French, international form
             r"|0[1-9](?:[ .-]?\d{2}){4}"  # French, national form
