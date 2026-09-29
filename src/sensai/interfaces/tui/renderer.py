@@ -7,7 +7,8 @@ from textual.widgets import Input, Markdown, Static
 
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, TextChunkEvent
+from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent
+from sensai.interfaces.notices import guardrail_notice
 
 ProcessFn = Callable[[str, RenderFn], Awaitable[CommandResult]]
 
@@ -73,6 +74,15 @@ class ErrorMessage(Static):
     """
 
 
+class GuardrailNotice(Static):
+    DEFAULT_CSS = """
+    GuardrailNotice {
+        color: $text-warning;
+        margin: 0 0 0 2;
+    }
+    """
+
+
 class ChatApp(App[None]):
     CSS = """
     Input {
@@ -102,16 +112,23 @@ class ChatApp(App[None]):
         history.scroll_end(animate=False)
 
         async def render(events: AsyncIterator[Event]) -> None:
-            await history.mount(RoleLabel("sensai", classes="assistant"))
-            reply = AssistantMessage("")
-            await history.mount(reply)
-            history.scroll_end(animate=False)
-
+            # The reply widget appears with the first text, so a blocked message
+            # does not leave an empty "sensai" bubble behind.
+            reply: AssistantMessage | None = None
             content = ""
             async for chunk_event in events:
                 if isinstance(chunk_event, TextChunkEvent):
+                    if reply is None:
+                        await history.mount(RoleLabel("sensai", classes="assistant"))
+                        reply = AssistantMessage("")
+                        await history.mount(reply)
                     content += chunk_event.content
                     await reply.update(content)
+                    history.scroll_end(animate=False)
+                elif isinstance(chunk_event, GuardrailEvent):
+                    await history.mount(
+                        GuardrailNotice(f"⚠ {guardrail_notice(chunk_event)}")
+                    )
                     history.scroll_end(animate=False)
 
         try:
