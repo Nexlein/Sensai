@@ -48,3 +48,19 @@ Acceptance criteria:
 
 - CLI and TUI obtain their engine, session store, tools, and RAG from the same bootstrap.
 - TUI replies are saved to the existing session store.
+
+## Feature: Shared Tool Registry and Permission Boundary
+
+As a developer, I want CLI and TUI sessions to build tools through the same registry factory, so that a tool is available consistently in either interface.
+
+Acceptance criteria:
+
+- `build_default_registry()` constructs the default tools in one place.
+- The shared bootstrap passes that registry to the chat engine.
+
+As a user, I want every filesystem tool to enforce the same allowed directory, so that changing tools cannot expose files outside my project.
+
+Acceptance criteria:
+
+- Read and list tools reuse one path validation implementation.
+- Relative traversal, absolute paths outside the root, and symlinks escaping the root are rejected.
