@@ -49,3 +49,11 @@ def test_registry_get_tools_schema():
             "parameters": {"type": "object", "properties": {}},
         },
     }
+
+
+def test_build_default_registry_registers_file_tools_only_when_allowed(tmp_path):
+    from sensai.tools.registry import build_default_registry
+
+    assert build_default_registry(None).get_tools_schema() == []
+    registry = build_default_registry(str(tmp_path))
+    assert {tool.name for tool in registry.list_tools()} == {"read_file", "list_dir"}
