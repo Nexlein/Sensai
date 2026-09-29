@@ -83,10 +83,23 @@ async def test_build_session_uses_interface_override(monkeypatch, tmp_path):
     assert context.config.interface == "cli"
 
 
-async def test_build_session_has_no_guardrail_by_default(monkeypatch, tmp_path):
+async def test_build_session_has_a_guardrail_by_default(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
     context = await build_session(provider_name="mock")
+
+    guardrail = context.engine.guardrail
+    assert isinstance(guardrail, RegexGuardrail)
+    assert guardrail.injection_action == "block"
+    assert guardrail.pii_action == "redact"
+
+
+async def test_build_session_has_no_guardrail_when_disabled(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text('provider = "mock"\n[guardrails]\nenabled = false\n')
+
+    context = await build_session(config_path=config_path)
 
     assert context.engine.guardrail is None
 

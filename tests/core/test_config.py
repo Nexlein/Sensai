@@ -123,12 +123,29 @@ def test_save_config_preserves_interface(tmp_path):
     assert load_config(config_file).interface == "tui"
 
 
-def test_guardrails_are_off_by_default_with_safe_actions():
+def test_guardrails_are_on_by_default_with_safe_actions():
     guardrails = load_config(config_path=None).guardrails
 
-    assert guardrails.enabled is False
+    assert guardrails.enabled is True
     assert guardrails.injection == "block"
     assert guardrails.pii == "redact"
+
+
+def test_guardrails_can_be_disabled_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text("[guardrails]\nenabled = false\n")
+
+    assert load_config(config_file).guardrails.enabled is False
+
+
+def test_save_config_keeps_guardrails_disabled(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(guardrails=GuardrailsConfig(enabled=False))
+
+    save_config(config, config_file)
+
+    assert "enabled = false" in config_file.read_text()
+    assert load_config(config_file).guardrails.enabled is False
 
 
 def test_guardrails_config_from_file(tmp_path):

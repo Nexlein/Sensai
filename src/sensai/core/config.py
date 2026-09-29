@@ -21,9 +21,9 @@ class ToolsConfig(BaseModel):
 
 
 class GuardrailsConfig(BaseModel):
-    """Privacy/content guardrails (EV2). Opt-in: off unless `enabled` is set."""
+    """Privacy/content guardrails (EV2). On by default; `enabled = false` opts out."""
 
-    enabled: bool = False
+    enabled: bool = True
     injection: Literal["block", "flag"] = "block"
     pii: Literal["redact", "block"] = "redact"
 
