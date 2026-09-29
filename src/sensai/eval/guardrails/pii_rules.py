@@ -12,20 +12,13 @@ from sensai.eval.guardrails.pii_types import PiiRule
 
 
 def _ascii_pattern(pattern: str) -> re.Pattern[str]:
-    """Compile a PII pattern where only ASCII letters/digits are word characters.
-
-    With the default Unicode semantics a word boundary is not found between a CJK
-    character and the PII next to it ("邮箱john@example.com谢谢"), so the value
-    would go through unmasked in languages that do not put spaces between words.
-    """
+    """Compile with ASCII word boundaries so PII glued to CJK text still matches."""
     return re.compile(pattern, re.ASCII)
 
 
-# Order is priority: when two rules overlap, the earlier rule keeps the span.
-# Structured + checksummed formats go first, loose ones (phone) last.
-# Every quantifier is bounded (RFC 5321 limits for email): an unbounded `+` makes
-# find_pii quadratic on long runs like "1-1-1-...", since \b matches everywhere.
-# The email rule has no leading \b so an over-long local part is still redacted.
+# Order is priority: on overlap the earlier rule keeps the span.
+# Quantifiers stay bounded: unbounded `+` makes find_pii quadratic on "1-1-1-...".
+# No leading \b on email so an over-long local part is still redacted.
 PII_RULES: tuple[PiiRule, ...] = (
     PiiRule(
         name="iban",

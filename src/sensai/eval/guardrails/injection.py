@@ -8,9 +8,7 @@ _FLAGS = re.IGNORECASE | re.DOTALL
 
 _IGNORE_EN = r"\b(?:ignore|disregard|forget|override)\b"
 _NOUNS_EN = r"\b(?:instructions?|rules?|prompts?|guidelines?)\b"
-# "the rules of chess", "your instructions for cooking": the noun starts a topic,
-# it does not refer to the assistant's own rules. Only applied where the match is
-# otherwise weak (see below), so "ignore all previous instructions for now" stays.
+# Topic nouns ("the rules of chess") are not the assistant's own rules.
 _NOT_A_TOPIC_EN = r"(?!\s+(?:of|for|about|in|on|to)\b)"
 _NOT_A_TOPIC_FR = r"(?!\s+(?:du|de|des|pour|sur|[àa]|en)\b)"
 

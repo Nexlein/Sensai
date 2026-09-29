@@ -11,8 +11,7 @@ class PiiRule:
     pattern: re.Pattern[str]
     replacement: str
     validator: Callable[[str], bool] | None = None
-    # Called with a match that failed `validator`: returns the (start, end) of a
-    # valid part inside it, if any.
+    # For a match that failed `validator`: span of a valid part inside it, if any.
     recover: Callable[[str], tuple[int, int] | None] | None = None
 
 

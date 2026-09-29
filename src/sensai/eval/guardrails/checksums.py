@@ -19,22 +19,18 @@ def luhn_valid(number: str) -> bool:
 
 
 def iban_valid(iban: str) -> bool:
-    """ISO 13616 mod-97 check. Length is bounded but not checked per country."""
+    """ISO 13616 mod-97 check (length bounded, not checked per country)."""
     compact = iban.replace(" ", "").upper()
     if not 15 <= len(compact) <= 34 or not compact.isalnum():
         return False
     rearranged = compact[4:] + compact[:4]
-    # Letters map to 10..35, digits stay as they are (base 36 does exactly that).
+    # Base 36 maps letters to 10..35 and leaves digits alone.
     numeric = "".join(str(int(char, 36)) for char in rearranged)
     return int(numeric) % 97 == 1
 
 
 def nir_valid(nir: str) -> bool:
-    """French social security number (NIR): 13 digits + 2-digit key.
-
-    key = 97 - (first 13 digits mod 97). Corsican departments 2A/2B are
-    computed as 19/18.
-    """
+    """French NIR: key = 97 - (first 13 digits mod 97), with 2A/2B read as 19/18."""
     compact = nir.replace(" ", "").upper()
     if len(compact) != 15:
         return False
@@ -55,15 +51,7 @@ def card_valid(value: str) -> bool:
 
 
 def card_span(value: str) -> tuple[int, int] | None:
-    """Find a valid card inside a longer run of digit groups.
-
-    "4111 1111 1111 1111 123" (card + CVV) is one 19-digit run that fails Luhn,
-    yet its first four groups are a card. Candidates are runs of whole groups
-    (split on space/hyphen), so digits glued together are never cut apart. The
-    longest valid run wins: in "105 4111 1111 1111 1111" the 15 digits
-    "105 4111 1111 1111" also pass Luhn by chance, but taking them would leave
-    the last "1111" of the real card unmasked.
-    """
+    """Longest run of whole digit groups that is a valid card ("card + CVV")."""
     groups = [m.span() for m in re.finditer(r"[^ -]+", value)]
     best: tuple[int, tuple[int, int]] | None = None
     for first in range(len(groups)):
