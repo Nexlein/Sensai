@@ -62,7 +62,7 @@ Guardrails are on by default and can be disabled with `[guardrails] enabled = fa
 | Piece                           | Role                                                                                                                              |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `domain`: `GuardrailVerdict`    | Result of a check: `allow`, `redact`, `block` or `flag`, the text to use, and the findings (rule + category).                     |
-| `eval/guardrails.py` detectors  | Regex + checksum validators (Luhn, IBAN mod-97, NIR key) for PII; heuristic rules for prompt injection.                           |
+| `eval/guardrails/` detectors | Regex + checksum validators (Luhn, IBAN mod-97, NIR key) for PII; heuristic rules for prompt injection.                           |
 | `RegexGuardrail`                | Implements the `Guardrail` protocol: `filter_input`, `filter_output` (also used for tool results), `new_output_stream`.           |
 | `PiiOutputStream`               | Incremental filter. Holds back a short tail (at least 48 characters, plus the trailing word up to 320) so a value is never split. |
 | `core/config.py` `[guardrails]` | `enabled` (default on), `injection = block \| flag`, `pii = redact \| block`.                                                     |
