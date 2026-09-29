@@ -48,3 +48,50 @@ Acceptance criteria:
 
 - CLI and TUI obtain their engine, session store, tools, and RAG from the same bootstrap.
 - TUI replies are saved to the existing session store.
+
+## Feature: [EV2] Content & Privacy Guardrails
+
+As a clinic receptionist drafting messages with the assistant, I want the personal data I type (email, phone number, IBAN, card number, social security number) masked before it reaches the model, so that patient data is neither processed by the model nor kept in clear text.
+
+Acceptance criteria:
+
+- Structured PII in the input is replaced by a token (`[EMAIL]`, `[PHONE]`, `[IBAN]`, `[CARD]`, `[SSN]`) before the provider and the RAG retriever see it.
+- Only the masked text is stored in the session history, so the raw value is never replayed to the model on later turns.
+- A notice tells the user what was masked, naming the rule (`pii: email`) and never the value.
+- Numbers that fail their checksum (a 16-digit order number, a wrong IBAN) are left untouched.
+
+As a user of a public-facing assistant, I want prompt-injection attempts ("ignore all previous instructions", "reveal your system prompt", jailbreak personas) stopped before they reach the model, so that hostile text cannot override the assistant's instructions.
+
+Acceptance criteria:
+
+- A blocked message is not sent to the provider, not embedded by the retriever and not stored in the history.
+- The user gets a notice explaining that the message was blocked and which rule fired.
+- With `injection = "flag"` the message is sent as written and the user is only warned.
+- Benign prompts that merely contain similar words ("how do I ignore whitespace in a regex?") are not blocked.
+- English and French phrasings are both detected.
+
+As a user reading a streamed answer, I want personal data in the model's reply masked as it streams, even when a value arrives split across several chunks, so that nothing sensitive is ever displayed or saved.
+
+Acceptance criteria:
+
+- A value split across chunks (`jo` + `hn@exam` + `ple.com`) never appears on screen, not even partially.
+- The text stored in the history is the masked reply.
+- With `pii = "block"` the reply is cut at the first PII, replaced by a refusal notice, the rest of the reply is dropped and any tool calls it made are not executed.
+- Streaming stays live: text is released as it is produced, with only a short tail held back until it can no longer be part of a PII value.
+
+As a developer letting the agent read project files, I want PII found in tool results (for example a customer list read with `read_file`) masked before the model sees it, so that a file access permission does not become a data leak.
+
+Acceptance criteria:
+
+- A tool result containing PII is masked in the stored `tool` message and in the next prompt sent to the model.
+- With `pii = "block"` the result is replaced by a placeholder and the model is told it was withheld.
+- Clean tool results are passed through unchanged and without any notice.
+
+As a user who does not want surprise redactions, I want guardrails to be opt-in and configurable, so that I choose which protections apply and how strict they are.
+
+Acceptance criteria:
+
+- Guardrails are off by default: without a `[guardrails]` section the engine behaves exactly as before.
+- `[guardrails]` accepts `enabled`, `injection` (`block` or `flag`) and `pii` (`redact` or `block`) in `sensai.toml`.
+- Any other value is rejected with a clear config error.
+- `/config save` writes the section only when it differs from the defaults.
