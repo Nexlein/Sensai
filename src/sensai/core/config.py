@@ -20,12 +20,21 @@ class ToolsConfig(BaseModel):
     fs_allowed_root: str | None = None
 
 
+class GuardrailsConfig(BaseModel):
+    """Privacy/content guardrails (EV2). Opt-in: off unless `enabled` is set."""
+
+    enabled: bool = False
+    injection: Literal["block", "flag"] = "block"
+    pii: Literal["redact", "block"] = "redact"
+
+
 class AppConfig(BaseModel):
     interface: Literal["cli", "tui", "web"] = DEFAULT_INTERFACE
     provider: str = DEFAULT_PROVIDER
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_BASE_URL
     tools: ToolsConfig = ToolsConfig()
+    guardrails: GuardrailsConfig = GuardrailsConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -92,6 +101,17 @@ def save_config(
                 "[tools]",
                 "fs_allowed_root = "
                 + json.dumps(config.tools.fs_allowed_root, ensure_ascii=False),
+            ]
+        )
+
+    if config.guardrails != GuardrailsConfig():
+        lines.extend(
+            [
+                "",
+                "[guardrails]",
+                f"enabled = {json.dumps(config.guardrails.enabled)}",
+                f"injection = {json.dumps(config.guardrails.injection)}",
+                f"pii = {json.dumps(config.guardrails.pii)}",
             ]
         )
 

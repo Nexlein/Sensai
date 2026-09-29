@@ -6,6 +6,7 @@ from sensai.core.config import (
     DEFAULT_PROVIDER,
     AppConfig,
     ConfigError,
+    GuardrailsConfig,
     ToolsConfig,
     load_config,
     save_config,
@@ -120,3 +121,67 @@ def test_save_config_preserves_interface(tmp_path):
     save_config(AppConfig(interface="tui"), config_file)
 
     assert load_config(config_file).interface == "tui"
+
+
+def test_guardrails_are_off_by_default_with_safe_actions():
+    guardrails = load_config(config_path=None).guardrails
+
+    assert guardrails.enabled is False
+    assert guardrails.injection == "block"
+    assert guardrails.pii == "redact"
+
+
+def test_guardrails_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(
+        '[guardrails]\nenabled = true\ninjection = "flag"\npii = "block"\n'
+    )
+
+    guardrails = load_config(config_file).guardrails
+
+    assert guardrails == GuardrailsConfig(enabled=True, injection="flag", pii="block")
+
+
+def test_guardrails_partial_section_keeps_other_defaults(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text("[guardrails]\nenabled = true\n")
+
+    guardrails = load_config(config_file).guardrails
+
+    assert guardrails == GuardrailsConfig(enabled=True)
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        '[guardrails]\ninjection = "redact"\n',
+        '[guardrails]\npii = "flag"\n',
+        '[guardrails]\nenabled = "maybe"\n',
+    ],
+)
+def test_invalid_guardrails_values_are_rejected(tmp_path, section):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(section)
+
+    with pytest.raises(ConfigError, match="Invalid config values"):
+        load_config(config_file)
+
+
+def test_save_config_round_trips_guardrails(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(
+        tools=ToolsConfig(fs_allowed_root="/tmp/project"),
+        guardrails=GuardrailsConfig(enabled=True, injection="flag", pii="block"),
+    )
+
+    save_config(config, config_file)
+
+    assert load_config(config_file) == config
+
+
+def test_save_config_omits_default_guardrails_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[guardrails]" not in config_file.read_text()
