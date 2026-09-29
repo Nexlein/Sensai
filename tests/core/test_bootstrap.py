@@ -1,7 +1,9 @@
 import pytest
 
 from sensai.core.bootstrap import BootstrapError, build_session
+from sensai.domain.events import GuardrailEvent
 from sensai.domain.models import Conversation
+from sensai.eval.guardrails import RegexGuardrail
 from sensai.memory.rag.store import SQLiteVectorStore
 
 
@@ -79,3 +81,39 @@ async def test_build_session_uses_interface_override(monkeypatch, tmp_path):
     context = await build_session(config_path=config_path, interface="cli")
 
     assert context.config.interface == "cli"
+
+
+async def test_build_session_has_no_guardrail_by_default(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    context = await build_session(provider_name="mock")
+
+    assert context.engine.guardrail is None
+
+
+async def test_build_session_builds_guardrail_from_config(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(
+        'provider = "mock"\n'
+        '[guardrails]\nenabled = true\ninjection = "flag"\npii = "block"\n'
+    )
+
+    context = await build_session(config_path=config_path)
+
+    guardrail = context.engine.guardrail
+    assert isinstance(guardrail, RegexGuardrail)
+    assert guardrail.injection_action == "flag"
+    assert guardrail.pii_action == "block"
+
+
+async def test_enabled_guardrail_protects_a_real_session_turn(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text('provider = "mock"\n[guardrails]\nenabled = true\n')
+    context = await build_session(config_path=config_path)
+
+    events = [e async for e in context.engine.send("my mail is a@b.io")]
+
+    assert [e.action for e in events if isinstance(e, GuardrailEvent)] == ["redact"]
+    assert context.engine.conversation.messages[0].content == "my mail is [EMAIL]"
