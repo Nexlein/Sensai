@@ -96,6 +96,40 @@ def test_credit_card_requires_valid_luhn():
     assert find_pii("order 4111 1111 1111 1112") == []
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("card 4111 1111 1111 1111 123", "card [CARD] 123"),  # card + CVV
+        # A number before the card. "105 4111 1111 1111" is Luhn-valid by chance
+        # (a trap): masking it would leave the card's last group in clear.
+        ("105 4111 1111 1111 1111", "105 [CARD]"),
+        ("4111-1111-1111-1111-123", "[CARD]-123"),  # hyphen separated
+        ("4111 1111 1111 1111 555123", "[CARD] 555123"),
+        ("pay 3782 822463 10005 456", "pay [CARD] 456"),  # 15-digit card + extra
+    ],
+)
+def test_card_is_found_inside_a_longer_run_of_digit_groups(text, expected):
+    assert redact_pii(text)[0] == expected
+
+
+def test_digits_glued_to_a_card_are_not_cut_apart():
+    # No group boundary inside the run, so it is one long number, not a card.
+    assert find_pii("4111111111111111123") == []
+
+
+def test_card_recovery_does_not_invent_cards_in_ordinary_numbers():
+    text = "reference 1234 5678 9012 3456 789 confirmed"
+    assert find_pii(text) == []
+
+
+def test_card_followed_by_cvv_is_redacted_when_streamed_in_small_chunks():
+    text = f"Use card {VALID_CARD} 123 for the order. " + PROSE
+    for size in (1, 3, 7):
+        streamed, _ = _stream(text, size)
+        assert streamed == redact_pii(text)[0]
+        assert "4111" not in streamed
+
+
 def test_iban_requires_valid_checksum():
     assert [m.rule for m in find_pii(f"iban {VALID_IBAN}")] == ["iban"]
     assert find_pii("iban GB82 WEST 1234 5698 7654 33") == []

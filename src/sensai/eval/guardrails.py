@@ -61,6 +61,9 @@ class PiiRule:
     pattern: re.Pattern[str]
     replacement: str
     validator: Callable[[str], bool] | None = None
+    # Called with a match that failed `validator`: returns the (start, end) of a
+    # valid part inside it, if any.
+    recover: Callable[[str], tuple[int, int] | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +81,29 @@ def _digits_only(value: str) -> str:
 def _card_valid(value: str) -> bool:
     digits = _digits_only(value)
     return 13 <= len(digits) <= 19 and luhn_valid(digits)
+
+
+def _card_span(value: str) -> tuple[int, int] | None:
+    """Find a valid card inside a longer run of digit groups.
+
+    "4111 1111 1111 1111 123" (card + CVV) is one 19-digit run that fails Luhn,
+    yet its first four groups are a card. Candidates are runs of whole groups
+    (split on space/hyphen), so digits glued together are never cut apart. The
+    longest valid run wins: in "105 4111 1111 1111 1111" the 15 digits
+    "105 4111 1111 1111" also pass Luhn by chance, but taking them would leave
+    the last "1111" of the real card unmasked.
+    """
+    groups = [m.span() for m in re.finditer(r"[^ -]+", value)]
+    best: tuple[int, tuple[int, int]] | None = None
+    for first in range(len(groups)):
+        for last in range(first, len(groups)):
+            start, end = groups[first][0], groups[last][1]
+            if not _card_valid(value[start:end]):
+                continue
+            digits = len(_digits_only(value[start:end]))
+            if best is None or digits > best[0]:
+                best = (digits, (start, end))
+    return best[1] if best else None
 
 
 # Order is priority: when two rules overlap, the earlier rule keeps the span.
@@ -107,6 +133,7 @@ PII_RULES: tuple[PiiRule, ...] = (
         pattern=re.compile(r"\b(?:\d[ -]?){12,18}\d\b"),
         replacement="[CARD]",
         validator=_card_valid,
+        recover=_card_span,
     ),
     PiiRule(
         name="email",
@@ -134,9 +161,12 @@ def find_pii(text: str, rules: tuple[PiiRule, ...] = PII_RULES) -> list[PiiMatch
     taken: list[PiiMatch] = []
     for rule in rules:
         for match in rule.pattern.finditer(text):
-            if rule.validator is not None and not rule.validator(match.group()):
-                continue
             start, end = match.span()
+            if rule.validator is not None and not rule.validator(match.group()):
+                inner = rule.recover(match.group()) if rule.recover else None
+                if inner is None:
+                    continue
+                start, end = match.start() + inner[0], match.start() + inner[1]
             if any(start < t.end and t.start < end for t in taken):
                 continue
             taken.append(PiiMatch(rule.name, start, end, rule.replacement))
