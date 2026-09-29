@@ -56,6 +56,29 @@ class Persona(BaseModel):
     system_instruction: str
 
 
+GuardrailAction = Literal["allow", "redact", "block", "flag"]
+
+
+class GuardrailFinding(BaseModel):
+    """A rule that matched. Never carries the matched value itself."""
+
+    rule: str
+    category: str
+
+
+class GuardrailVerdict(BaseModel):
+    """Outcome of a guardrail check.
+
+    `text` is what callers must use in place of the original: redacted text
+    for `redact`, unchanged text otherwise. On `block`, callers must not
+    forward it anywhere.
+    """
+
+    action: GuardrailAction
+    text: str
+    findings: list[GuardrailFinding] = Field(default_factory=list)
+
+
 class Document(BaseModel):
     """A raw document ingested from the filesystem."""
 

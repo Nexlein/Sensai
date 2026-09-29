@@ -2,7 +2,13 @@ from collections.abc import AsyncGenerator
 from typing import Any, Protocol
 
 from sensai.domain.events import Event
-from sensai.domain.models import Chunk, Conversation, Message, ScoredChunk
+from sensai.domain.models import (
+    Chunk,
+    Conversation,
+    GuardrailVerdict,
+    Message,
+    ScoredChunk,
+)
 
 
 class LLMProvider(Protocol):
@@ -25,10 +31,20 @@ class MemoryStore(Protocol):
     async def load(self, conversation_id: str) -> Conversation | None: ...
 
 
-class Guardrail(Protocol):
-    async def filter_input(self, text: str) -> str: ...
+class OutputStream(Protocol):
+    """Incremental output filter: PII may be split across chunks."""
 
-    async def filter_output(self, text: str) -> str: ...
+    def feed(self, chunk: str) -> str: ...
+
+    def flush(self) -> str: ...
+
+
+class Guardrail(Protocol):
+    async def filter_input(self, text: str) -> GuardrailVerdict: ...
+
+    async def filter_output(self, text: str) -> GuardrailVerdict: ...
+
+    def new_output_stream(self) -> OutputStream: ...
 
 
 class ToolRegistry(Protocol):
