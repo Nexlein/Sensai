@@ -286,16 +286,35 @@ REFUSAL_TEXT = "[response withheld: it contained personal data]"
 # Streaming hold-back. A match can only be completed by text still to come, so
 # the tail of the buffer is kept until it can no longer be part of a match.
 # - spaced formats (IBAN <= 34 chars + 8 spaces) never exceed 48 chars;
-# - an email has no spaces, so a partial one lives inside the trailing word,
-#   and is at most 64 + 1 + 253 chars.
+# - an email has no spaces, so a partial one lives inside the trailing run of
+#   characters an email can contain, and is at most 64 + 1 + 253 chars.
 MAX_SPACED_PII = 48
 MAX_EMAIL = 320
 _WHITESPACE = " \t\r\n"
+_EMAIL_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._%+-@"
+)
 
 
 def _last_whitespace(text: str, before: int) -> int:
     """Index of the last whitespace char strictly before `before`, or -1."""
     return max(text.rfind(ch, 0, before) for ch in _WHITESPACE)
+
+
+def _trailing_email_run(text: str) -> int:
+    """Length of the run of email characters at the end of `text`, capped.
+
+    Measured on email characters, not on "the last word": text written without
+    spaces (Chinese, Japanese) has no word breaks, and holding the whole tail back
+    would delay it by MAX_EMAIL characters for nothing. Scanning from the end and
+    stopping at the cap keeps the cost independent of the buffer size.
+    """
+    length = 0
+    for char in reversed(text):
+        if char not in _EMAIL_CHARS or length >= MAX_EMAIL:
+            break
+        length += 1
+    return length
 
 
 class PiiOutputStream:
@@ -354,8 +373,7 @@ class PiiOutputStream:
     def _cut_point(self, matches: list[PiiMatch]) -> int:
         """How much of the buffer can be released now."""
         buffer = self._buffer
-        trailing_word = len(buffer) - _last_whitespace(buffer, len(buffer)) - 1
-        hold = max(MAX_SPACED_PII, min(trailing_word, MAX_EMAIL))
+        hold = max(MAX_SPACED_PII, _trailing_email_run(buffer))
         cut = len(buffer) - hold
         if cut <= 0:
             return 0

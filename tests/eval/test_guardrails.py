@@ -431,6 +431,42 @@ def test_stream_holds_a_partial_email_until_it_completes():
     assert stream.feed("ple.com and more") + stream.flush() == "mail: [EMAIL] and more"
 
 
+def test_stream_does_not_hold_back_text_written_without_spaces():
+    # Found by review: with no whitespace the whole 320-char email window was kept,
+    # so Chinese text arrived in bursts 320 characters behind the model.
+    text = "这是一个没有空格的中文句子，" * 40
+    stream = PiiOutputStream()
+    emitted = 0
+    worst_lag = 0
+    for count, char in enumerate(text, start=1):
+        emitted += len(stream.feed(char))
+        worst_lag = max(worst_lag, count - emitted)
+
+    assert worst_lag <= MAX_SPACED_PII
+    assert emitted + len(stream.flush()) == len(text)
+
+
+@pytest.mark.parametrize("size", [1, 2, 5, 11])
+def test_stream_masks_pii_glued_to_text_without_spaces(size):
+    text = (
+        "这是一个没有空格的中文句子，" * 8
+        + "邮箱john.doe@example.com谢谢"
+        + "好的" * 30
+    )
+    streamed, _ = _stream(text, size)
+
+    assert streamed == redact_pii(text)[0]
+    assert "john" not in streamed
+    assert "[EMAIL]" in streamed
+
+
+def test_stream_still_holds_a_long_partial_email_after_chinese_text():
+    stream = PiiOutputStream()
+    released = stream.feed("联系" + "u" * 60 + "@exam")
+    assert "u" not in released
+    assert released + stream.feed("ple.com谢谢") + stream.flush() == "联系[EMAIL]谢谢"
+
+
 def test_stream_handles_empty_chunks():
     stream = PiiOutputStream()
     assert stream.feed("") == ""
