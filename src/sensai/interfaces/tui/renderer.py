@@ -7,7 +7,8 @@ from textual.widgets import Input, Markdown, Static
 
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, TextChunkEvent
+from sensai.domain.events import BudgetEvent, Event, TextChunkEvent
+from sensai.interfaces.usage import format_usage
 
 ProcessFn = Callable[[str, RenderFn], Awaitable[CommandResult]]
 
@@ -63,6 +64,15 @@ class AssistantMessage(Markdown):
     """
 
 
+class UsageLabel(Static):
+    DEFAULT_CSS = """
+    UsageLabel {
+        margin: 0 0 0 2;
+        color: $text-muted;
+    }
+    """
+
+
 class ErrorMessage(Static):
     DEFAULT_CSS = """
     ErrorMessage {
@@ -108,11 +118,17 @@ class ChatApp(App[None]):
             history.scroll_end(animate=False)
 
             content = ""
-            async for chunk_event in events:
-                if isinstance(chunk_event, TextChunkEvent):
-                    content += chunk_event.content
+            usage: UsageLabel | None = None
+            async for streamed in events:
+                if isinstance(streamed, TextChunkEvent):
+                    content += streamed.content
                     await reply.update(content)
-                    history.scroll_end(animate=False)
+                elif isinstance(streamed, BudgetEvent):
+                    if usage is None:
+                        usage = UsageLabel()
+                        await history.mount(usage)
+                    usage.update(format_usage(streamed))
+                history.scroll_end(animate=False)
 
         try:
             result = await self._process(text, render)
