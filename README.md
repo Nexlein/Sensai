@@ -104,7 +104,7 @@ When enabled, Sensai checks three places:
 - **The model's reply**: personal data is masked while the reply streams, even if a value arrives split across chunks. With `pii = "block"` the reply is cut and replaced by a refusal notice.
 - **Tool results**: personal data returned by a tool such as `read_file` is masked before the model sees it.
 
-Detected personal data: email addresses, phone numbers, IBANs, credit card numbers and French social security numbers. Card, IBAN and SSN candidates are checked against their checksum, so an ordinary long number is left alone. A notice such as `⚠ Personal data in your message was masked (pii: email).` tells you what happened, naming the rule and never the value.
+Detected personal data: email addresses, phone numbers, IBANs, credit card numbers and French social security numbers. Card, IBAN and SSN candidates are checked against their checksum, so an ordinary long number is left alone. A notice such as `⚠ Personal data in your message was masked (pii: email).` tells you what happened, naming the rule and never the value. The model is also told, for that turn, that the placeholders were inserted on purpose, so it answers "that value was hidden" instead of sounding broken.
 
 Because the rules favour masking over leaking, an ordinary number can occasionally be masked (a 10-digit number starting with `0` looks like a French phone number). Set `enabled = false` if that gets in the way.
 

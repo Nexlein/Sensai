@@ -58,6 +58,7 @@ Acceptance criteria:
 - Structured PII in the input is replaced by a token (`[EMAIL]`, `[PHONE]`, `[IBAN]`, `[CARD]`, `[SSN]`) before the provider and the RAG retriever see it.
 - Only the masked text is stored in the session history, so the raw value is never replayed to the model on later turns.
 - A notice tells the user what was masked, naming the rule (`pii: email`) and never the value.
+- The model is told, for that turn only, that placeholders were inserted on purpose, so it does not read `[IBAN]` as a glitch or ask for the value again. This note is never stored in the history.
 - Numbers that fail their checksum (a 16-digit order number, a wrong IBAN) are left untouched.
 
 As a user of a public-facing assistant, I want prompt-injection attempts ("ignore all previous instructions", "reveal your system prompt", jailbreak personas) stopped before they reach the model, so that hostile text cannot override the assistant's instructions.
