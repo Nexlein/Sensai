@@ -3,6 +3,7 @@ from pathlib import Path
 
 import httpx
 
+from sensai.core.budget import ContextBudget, LLMSummarizer
 from sensai.core.commands import CommandContext
 from sensai.core.config import DEFAULT_CONFIG_PATH, load_config
 from sensai.core.engine import ChatEngine
@@ -69,6 +70,7 @@ async def build_session(
             raise BootstrapError(f"RAG indexing failed: {exc}") from exc
 
     engine = ChatEngine(provider, conversation, tool_registry, retriever)
+    engine.budget = ContextBudget(config.budget, LLMSummarizer(lambda: engine.provider))
     return CommandContext(
         config=config,
         engine=engine,

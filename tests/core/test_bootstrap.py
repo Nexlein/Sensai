@@ -79,3 +79,24 @@ async def test_build_session_uses_interface_override(monkeypatch, tmp_path):
     context = await build_session(config_path=config_path, interface="cli")
 
     assert context.config.interface == "cli"
+
+
+async def test_build_session_wires_budget_from_config(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text('provider = "mock"\n[budget]\nmax_tokens = 512\n')
+
+    context = await build_session(config_path=config_path)
+
+    assert context.engine.budget is not None
+    assert context.engine.budget.config.max_tokens == 512
+
+
+async def test_budget_summarizer_follows_provider_swap(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    context = await build_session(provider_name="mock")
+    swapped = object()
+
+    context.engine.provider = swapped
+
+    assert context.engine.budget.summarizer.get_provider() is swapped
