@@ -9,6 +9,10 @@ class UsageTracker:
         self.used = prompt_tokens
         self.max_tokens = max_tokens
 
+    @property
+    def usage(self) -> BudgetUsage:
+        return BudgetUsage(self.used, self.max_tokens)
+
     def add(self, text: str) -> BudgetUsage:
         self.used += count_text(text)
-        return BudgetUsage(self.used, self.max_tokens)
+        return self.usage

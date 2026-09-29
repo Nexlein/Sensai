@@ -21,6 +21,14 @@ def test_usage_reports_ratio_and_max():
     assert usage.ratio == 0.5
 
 
+def test_usage_reads_current_state_without_adding():
+    tracker = UsageTracker(prompt_tokens=10, max_tokens=100)
+    tracker.add("abcd")
+
+    assert tracker.usage.used == 11
+    assert tracker.usage.used == 11
+
+
 def test_can_exceed_the_cap():
     usage = UsageTracker(prompt_tokens=99, max_tokens=100).add("x" * 40)
 

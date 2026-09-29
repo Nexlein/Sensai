@@ -53,6 +53,19 @@ def test_usage_of_empty_conversation_is_zero():
     assert (usage.used, usage.ratio) == (0, 0)
 
 
+def test_tracker_starts_from_prompt_size():
+    conversation = _conversation(2)
+    budget = _budget(FakeSummarizer(), conversation)
+    extra = Message(role="system", content="x" * 40)
+
+    tracker = budget.tracker([*conversation.messages, extra])
+
+    assert tracker.usage.used == (
+        budget.usage(conversation).used + count_message(extra)
+    )
+    assert tracker.usage.max_tokens == budget.config.max_tokens
+
+
 async def test_below_threshold_does_nothing():
     conversation = _conversation(4)
     summarizer = FakeSummarizer()

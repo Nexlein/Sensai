@@ -2,6 +2,7 @@ import httpx
 
 from sensai.core.budget.config import BudgetConfig
 from sensai.core.budget.tokens import count_message
+from sensai.core.budget.tracker import UsageTracker
 from sensai.core.budget.usage import BudgetUsage
 from sensai.core.budget.window import split_window
 from sensai.domain.models import Conversation, Message, now_utc
@@ -22,6 +23,11 @@ class ContextBudget:
     def usage(self, conversation: Conversation) -> BudgetUsage:
         used = sum(count_message(m) for m in conversation.messages)
         return BudgetUsage(used, self.config.max_tokens)
+
+    def tracker(self, prompt: list[Message]) -> UsageTracker:
+        """Start live counting from the exact prompt about to be sent."""
+        used = sum(count_message(m) for m in prompt)
+        return UsageTracker(used, self.config.max_tokens)
 
     async def fit(self, conversation: Conversation) -> bool:
         """Condense the oldest turns once the threshold is reached."""
