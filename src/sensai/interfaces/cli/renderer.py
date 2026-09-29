@@ -1,12 +1,12 @@
 from collections.abc import AsyncIterator
 
 import httpx
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.text import Text
 
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, TextChunkEvent
+from sensai.domain.events import BudgetEvent, Event, TextChunkEvent
 from sensai.domain.models import Conversation
 
 _ROLE_LABELS = {
@@ -36,11 +36,27 @@ def render_history(console: Console, conversation: Conversation) -> None:
         console.print()
 
 
+def _short(tokens: int) -> str:
+    return f"{tokens / 1000:.1f}k" if tokens >= 1000 else str(tokens)
+
+
+def usage_text(event: BudgetEvent) -> Text:
+    percent = event.used * 100 // event.max_tokens
+    line = f"{_short(event.used)} / {_short(event.max_tokens)} tokens ({percent}%)"
+    return Text(line, style="dim")
+
+
 async def render_stream(console: Console, events: AsyncIterator[Event]) -> None:
     label = Text("sensai: ", style="bold magenta")
     content = ""
+    footer: Text | None = None
     with Live(label, console=console, refresh_per_second=15) as live:
-        async for chunk_event in events:
-            if isinstance(chunk_event, TextChunkEvent):
-                content += chunk_event.content
-                live.update(label + Text(content))
+        async for event in events:
+            if isinstance(event, TextChunkEvent):
+                content += event.content
+            elif isinstance(event, BudgetEvent):
+                footer = usage_text(event)
+            else:
+                continue
+            body = label + Text(content)
+            live.update(Group(body, footer) if footer else body)
