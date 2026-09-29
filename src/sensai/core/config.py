@@ -41,10 +41,10 @@ def _read_config_file(path: Path) -> dict[str, Any]:
 def load_config(
     config_path: Path | str | None = DEFAULT_CONFIG_PATH,
     *,
-    cli_interface: str | None = None,
-    cli_provider: str | None = None,
-    cli_model: str | None = None,
-    cli_base_url: str | None = None,
+    interface: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
 ) -> AppConfig:
     """Resolve config with precedence: CLI arg > config file > built-in default.
 
@@ -58,14 +58,14 @@ def load_config(
             file_data = _read_config_file(path)
 
     merged = {**file_data}
-    if cli_interface is not None:
-        merged["interface"] = cli_interface
-    if cli_provider is not None:
-        merged["provider"] = cli_provider
-    if cli_model is not None:
-        merged["model"] = cli_model
-    if cli_base_url is not None:
-        merged["base_url"] = cli_base_url
+    if interface is not None:
+        merged["interface"] = interface
+    if provider is not None:
+        merged["provider"] = provider
+    if model is not None:
+        merged["model"] = model
+    if base_url is not None:
+        merged["base_url"] = base_url
 
     try:
         return AppConfig(**merged)

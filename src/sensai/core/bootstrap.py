@@ -34,10 +34,10 @@ async def build_session(
     """Resolve settings and construct the provider, memory, tools, and engine."""
     config = load_config(
         config_path,
-        cli_interface=interface,
-        cli_provider=provider_name,
-        cli_model=model,
-        cli_base_url=base_url,
+        interface=interface,
+        provider=provider_name,
+        model=model,
+        base_url=base_url,
     )
     provider = get_provider(
         config.provider, base_url=config.base_url, model=config.model
