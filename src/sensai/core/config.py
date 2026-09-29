@@ -5,6 +5,8 @@ from typing import Any, Literal
 import tomllib
 from pydantic import BaseModel, ValidationError
 
+from sensai.core.budget import BudgetConfig
+
 DEFAULT_INTERFACE = "cli"
 DEFAULT_PROVIDER = "ollama"
 DEFAULT_MODEL = "llama3.2"
@@ -26,6 +28,7 @@ class AppConfig(BaseModel):
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_BASE_URL
     tools: ToolsConfig = ToolsConfig()
+    budget: BudgetConfig = BudgetConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -92,6 +95,17 @@ def save_config(
                 "[tools]",
                 "fs_allowed_root = "
                 + json.dumps(config.tools.fs_allowed_root, ensure_ascii=False),
+            ]
+        )
+
+    if config.budget != BudgetConfig():
+        lines.extend(
+            [
+                "",
+                "[budget]",
+                f"max_tokens = {config.budget.max_tokens}",
+                f"threshold = {config.budget.threshold}",
+                f"keep_recent_turns = {config.budget.keep_recent_turns}",
             ]
         )
 
