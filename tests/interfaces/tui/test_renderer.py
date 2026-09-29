@@ -5,11 +5,12 @@ import pytest
 
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent, ToolCallEvent
 from sensai.interfaces.tui.renderer import (
     AssistantMessage,
     ChatApp,
     ErrorMessage,
+    GuardrailNotice,
     UserMessage,
     error_text,
 )
@@ -70,6 +71,48 @@ async def test_submitting_input_ignores_non_text_events():
         await pilot.pause()
 
         assert app.query(AssistantMessage).first().source == "hi"
+
+
+@pytest.mark.asyncio
+async def test_blocked_input_mounts_notice_and_no_empty_reply():
+    app = ChatApp(
+        _process_events(
+            GuardrailEvent(
+                stage="input", action="block", reason="injection: ignore_instructions"
+            )
+        )
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        notices = app.query(GuardrailNotice)
+        assert len(notices) == 1
+        assert "Message blocked" in str(notices.first().content)
+        assert "injection: ignore_instructions" in str(notices.first().content)
+        assert len(app.query(AssistantMessage)) == 0
+
+
+@pytest.mark.asyncio
+async def test_masked_reply_shows_text_then_notice():
+    app = ChatApp(
+        _process_events(
+            TextChunkEvent(content="Write to [EMAIL]"),
+            GuardrailEvent(stage="output", action="redact", reason="pii: email"),
+        )
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert app.query(AssistantMessage).first().source == "Write to [EMAIL]"
+        notices = app.query(GuardrailNotice)
+        assert len(notices) == 1
+        assert "masked" in str(notices.first().content)
 
 
 @pytest.mark.asyncio

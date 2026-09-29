@@ -1,4 +1,14 @@
-from sensai.domain.models import Conversation, Message, Persona, ToolCall
+import pytest
+from pydantic import ValidationError
+
+from sensai.domain.models import (
+    Conversation,
+    GuardrailFinding,
+    GuardrailVerdict,
+    Message,
+    Persona,
+    ToolCall,
+)
 
 
 def test_message_defaults_id_and_timestamp():
@@ -59,3 +69,25 @@ def test_persona_fields():
     )
     assert persona.id == "p1"
     assert persona.name == "Assistant"
+
+
+def test_guardrail_verdict_defaults_to_no_findings():
+    verdict = GuardrailVerdict(action="allow", text="hello")
+    assert verdict.findings == []
+
+
+def test_guardrail_verdict_findings_are_not_shared_between_instances():
+    a = GuardrailVerdict(action="allow", text="a")
+    b = GuardrailVerdict(action="allow", text="b")
+    a.findings.append(GuardrailFinding(rule="email", category="pii"))
+    assert b.findings == []
+
+
+def test_guardrail_verdict_rejects_unknown_action():
+    with pytest.raises(ValidationError):
+        GuardrailVerdict(action="explode", text="x")
+
+
+def test_guardrail_finding_holds_rule_and_category_only():
+    finding = GuardrailFinding(rule="iban", category="pii")
+    assert finding.model_dump() == {"rule": "iban", "category": "pii"}
