@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from sensai.domain.events import TextChunkEvent
 from sensai.domain.models import Message
 from sensai.domain.protocols import LLMProvider
@@ -15,8 +17,8 @@ def _render(message: Message) -> str:
 
 
 class LLMSummarizer:
-    def __init__(self, provider: LLMProvider) -> None:
-        self.provider = provider
+    def __init__(self, get_provider: Callable[[], LLMProvider]) -> None:
+        self.get_provider = get_provider
 
     async def summarize(self, messages: list[Message]) -> str:
         prompt = [
@@ -25,7 +27,7 @@ class LLMSummarizer:
         ]
         chunks = [
             event.content
-            async for event in self.provider.chat_stream(prompt)
+            async for event in self.get_provider().chat_stream(prompt)
             if isinstance(event, TextChunkEvent)
         ]
         return "".join(chunks).strip()

@@ -25,7 +25,7 @@ class RecordingProvider:
 async def test_joins_streamed_chunks_and_strips():
     provider = MockLLMProvider(default_response=" the summary ", simulated_delay=0)
 
-    result = await LLMSummarizer(provider).summarize(
+    result = await LLMSummarizer(lambda: provider).summarize(
         [Message(role="user", content="hi")]
     )
 
@@ -44,7 +44,7 @@ async def test_prompt_is_instruction_then_transcript():
         Message(role="tool", content="body"),
     ]
 
-    await LLMSummarizer(provider).summarize(messages)
+    await LLMSummarizer(lambda: provider).summarize(messages)
 
     system, transcript = provider.prompts[0]
     assert system.role == "system"
@@ -60,7 +60,9 @@ async def test_prompt_is_instruction_then_transcript():
 async def test_no_tools_offered_to_the_model():
     provider = RecordingProvider([TextChunkEvent(content="ok")])
 
-    await LLMSummarizer(provider).summarize([Message(role="user", content="hi")])
+    await LLMSummarizer(lambda: provider).summarize(
+        [Message(role="user", content="hi")]
+    )
 
     assert provider.tools == [None]
 
@@ -73,7 +75,7 @@ async def test_tool_call_events_are_ignored():
         ]
     )
 
-    result = await LLMSummarizer(provider).summarize(
+    result = await LLMSummarizer(lambda: provider).summarize(
         [Message(role="user", content="hi")]
     )
 
@@ -81,8 +83,21 @@ async def test_tool_call_events_are_ignored():
 
 
 async def test_empty_stream_gives_empty_summary():
-    result = await LLMSummarizer(RecordingProvider([])).summarize(
+    provider = RecordingProvider([])
+
+    result = await LLMSummarizer(lambda: provider).summarize(
         [Message(role="user", content="hi")]
     )
 
     assert result == ""
+
+
+async def test_provider_is_resolved_on_each_call():
+    current = RecordingProvider([TextChunkEvent(content="first")])
+    summarizer = LLMSummarizer(lambda: current)
+    messages = [Message(role="user", content="hi")]
+
+    assert await summarizer.summarize(messages) == "first"
+    current = RecordingProvider([TextChunkEvent(content="second")])
+
+    assert await summarizer.summarize(messages) == "second"
