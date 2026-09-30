@@ -49,6 +49,25 @@ Acceptance criteria:
 - CLI and TUI obtain their engine, session store, tools, and RAG from the same bootstrap.
 - TUI replies are saved to the existing session store.
 
+## Feature: [M2] Token Budgeting & Semantic Compression
+
+As a user, I want long conversations to keep working, so the agent does not lose the thread or hit the model's context limit.
+
+Acceptance criteria:
+
+- Token usage is counted for every outgoing prompt against `budget.max_tokens`.
+- At `budget.threshold`, the oldest turns are replaced by one summary message.
+- The last `budget.keep_recent_turns` turns are kept verbatim, and a tool call is never separated from its result.
+- If summarizing fails, the chat continues with the history unchanged.
+
+As a user, I want to set the token budget in `sensai.toml`, so it matches the context window of the model I run.
+
+Acceptance criteria:
+
+- `[budget]` accepts `max_tokens`, `threshold` and `keep_recent_turns`, with defaults when omitted.
+- Out-of-range values are rejected with a config error.
+- The engine emits a budget event before and during streaming, so an interface can show live usage.
+
 ## Feature: Shared Tool Registry and Permission Boundary
 
 As a developer, I want CLI and TUI sessions to build tools through the same registry factory, so that a tool is available consistently in either interface.

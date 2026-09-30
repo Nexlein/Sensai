@@ -1,14 +1,15 @@
 from collections.abc import AsyncIterator
 
 import httpx
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.text import Text
 
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent
+from sensai.domain.events import BudgetEvent, Event, GuardrailEvent, TextChunkEvent
 from sensai.domain.models import Conversation
 from sensai.interfaces.notices import guardrail_notice
+from sensai.interfaces.usage import format_usage
 
 _ROLE_LABELS = {
     "user": ("you: ", "bold blue"),
@@ -40,14 +41,19 @@ def render_history(console: Console, conversation: Conversation) -> None:
 async def render_stream(console: Console, events: AsyncIterator[Event]) -> None:
     label = Text("sensai: ", style="bold magenta")
     content = ""
+    footer: Text | None = None
     # The label only appears with the first text, so a blocked message does not
     # leave an empty "sensai:" line behind.
     with Live(Text(""), console=console, refresh_per_second=15) as live:
-        async for chunk_event in events:
-            if isinstance(chunk_event, TextChunkEvent):
-                content += chunk_event.content
-                live.update(label + Text(content))
-            elif isinstance(chunk_event, GuardrailEvent):
-                console.print(
-                    Text(f"⚠ {guardrail_notice(chunk_event)}", style="yellow")
-                )
+        async for event in events:
+            if isinstance(event, TextChunkEvent):
+                content += event.content
+            elif isinstance(event, BudgetEvent):
+                footer = Text(format_usage(event), style="dim")
+            elif isinstance(event, GuardrailEvent):
+                console.print(Text(f"⚠ {guardrail_notice(event)}", style="yellow"))
+                continue
+            else:
+                continue
+            body = label + Text(content) if content else Text("")
+            live.update(Group(body, footer) if footer else body)

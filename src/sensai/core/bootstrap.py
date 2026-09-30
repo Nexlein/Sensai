@@ -3,6 +3,7 @@ from pathlib import Path
 
 import httpx
 
+from sensai.core.budget import ContextBudget, LLMSummarizer
 from sensai.core.commands import CommandContext
 from sensai.core.config import DEFAULT_CONFIG_PATH, GuardrailsConfig, load_config
 from sensai.core.engine import ChatEngine
@@ -81,8 +82,9 @@ async def build_session(
         conversation,
         tool_registry,
         retriever,
-        _build_guardrail(config.guardrails),
+        guardrail=_build_guardrail(config.guardrails),
     )
+    engine.budget = ContextBudget(config.budget, LLMSummarizer(lambda: engine.provider))
     return CommandContext(
         config=config,
         engine=engine,

@@ -4,7 +4,13 @@ import httpx
 from rich.console import Console
 
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import (
+    BudgetEvent,
+    Event,
+    GuardrailEvent,
+    TextChunkEvent,
+    ToolCallEvent,
+)
 from sensai.domain.models import Conversation
 from sensai.interfaces.cli.renderer import error_text, render_history, render_stream
 
@@ -91,6 +97,36 @@ async def test_render_stream_shows_output_notice_after_the_masked_reply(capsys):
     out = capsys.readouterr().out
     assert "sensai: Write to [EMAIL]" in out
     assert "Personal data in the reply was masked" in out
+
+
+async def test_render_stream_shows_usage_footer(capsys):
+    console = Console()
+    await render_stream(
+        console,
+        _events(
+            BudgetEvent(used=100, max_tokens=1000),
+            TextChunkEvent(content="hi"),
+            BudgetEvent(used=101, max_tokens=1000),
+        ),
+    )
+
+    out = capsys.readouterr().out
+    assert "hi" in out
+    assert "101 / 1.0k tokens (10%)" in out
+
+
+async def test_render_stream_footer_shows_before_first_chunk(capsys):
+    console = Console()
+    await render_stream(console, _events(BudgetEvent(used=100, max_tokens=1000)))
+
+    assert "100 / 1.0k tokens (10%)" in capsys.readouterr().out
+
+
+async def test_render_stream_without_budget_prints_no_footer(capsys):
+    console = Console()
+    await render_stream(console, _events(TextChunkEvent(content="hi")))
+
+    assert "tokens" not in capsys.readouterr().out
 
 
 def test_error_text_reports_empty_input():

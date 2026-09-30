@@ -56,6 +56,10 @@ class Guardrail(Protocol):
     def new_output_stream(self) -> OutputStream: ...
 
 
+class Summarizer(Protocol):
+    async def summarize(self, messages: list[Message]) -> str: ...
+
+
 class ToolRegistry(Protocol):
     def get(self, name: str) -> BaseTool | None: ...
 

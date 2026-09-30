@@ -2,9 +2,16 @@ from collections.abc import AsyncGenerator
 
 import httpx
 
+from sensai.core.budget import ContextBudget
 from sensai.core.prompt import build_prompt
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import (
+    BudgetEvent,
+    Event,
+    GuardrailEvent,
+    TextChunkEvent,
+    ToolCallEvent,
+)
 from sensai.domain.models import Conversation, GuardrailFinding, ToolCall
 from sensai.domain.protocols import (
     ContextRetriever,
@@ -37,12 +44,14 @@ class ChatEngine:
         conversation: Conversation,
         registry: ToolRegistry | None = None,
         retriever: ContextRetriever | None = None,
+        budget: ContextBudget | None = None,
         guardrail: Guardrail | None = None,
     ) -> None:
         self.provider = provider
         self.conversation = conversation
         self.registry = registry
         self.retriever = retriever
+        self.budget = budget
         self.guardrail = guardrail
 
     async def send(self, user_text: str) -> AsyncGenerator[Event]:
@@ -78,9 +87,16 @@ class ChatEngine:
         self.conversation.add_message(role="user", content=user_text)
 
         for _ in range(5):
+            if self.budget is not None:
+                await self.budget.fit(self.conversation)
             prompt = build_prompt(
                 self.conversation, rag_context=rag_context, privacy_note=masked
             )
+            tracker = self.budget.tracker(prompt) if self.budget else None
+            if tracker is not None:
+                yield BudgetEvent(
+                    used=tracker.usage.used, max_tokens=tracker.max_tokens
+                )
 
             chunks: list[str] = []
             tool_calls: list[ToolCallEvent] = []
@@ -103,6 +119,9 @@ class ChatEngine:
                     elif isinstance(event, ToolCallEvent):
                         tool_calls.append(event)
                     yield event
+                    if tracker is not None and isinstance(event, TextChunkEvent):
+                        usage = tracker.add(event.content)
+                        yield BudgetEvent(used=usage.used, max_tokens=usage.max_tokens)
             except (RuntimeError, httpx.ConnectError) as exc:
                 self.conversation.messages.pop()
                 raise ProviderError("provider request failed") from exc

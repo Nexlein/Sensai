@@ -5,12 +5,19 @@ import pytest
 
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import (
+    BudgetEvent,
+    Event,
+    GuardrailEvent,
+    TextChunkEvent,
+    ToolCallEvent,
+)
 from sensai.interfaces.tui.renderer import (
     AssistantMessage,
     ChatApp,
     ErrorMessage,
     GuardrailNotice,
+    UsageLabel,
     UserMessage,
     error_text,
 )
@@ -113,6 +120,39 @@ async def test_masked_reply_shows_text_then_notice():
         notices = app.query(GuardrailNotice)
         assert len(notices) == 1
         assert "masked" in str(notices.first().content)
+
+
+@pytest.mark.asyncio
+async def test_budget_events_update_a_single_usage_label():
+    app = ChatApp(
+        _process_events(
+            BudgetEvent(used=100, max_tokens=1000),
+            TextChunkEvent(content="hi"),
+            BudgetEvent(used=101, max_tokens=1000),
+        )
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        labels = app.query(UsageLabel)
+        assert len(labels) == 1
+        assert "101 / 1.0k tokens (10%)" in str(labels.first().content)
+        assert app.query(AssistantMessage).first().source == "hi"
+
+
+@pytest.mark.asyncio
+async def test_no_usage_label_without_budget_events():
+    app = ChatApp(_process_events(TextChunkEvent(content="hi")))
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert len(app.query(UsageLabel)) == 0
 
 
 @pytest.mark.asyncio
