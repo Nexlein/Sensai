@@ -4,10 +4,10 @@ from typing import Any
 import httpx
 import pytest
 
-from sensai.core.engine import TOOL_RESULT_WITHHELD, ChatEngine
+from sensai.core.engine import TOOL_RESULT_WITHHELD, TOOL_USE_GUIDANCE, ChatEngine
 from sensai.core.prompt import PRIVACY_NOTE
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, GuardrailEvent
+from sensai.domain.events import AssistantStartEvent, Event, GuardrailEvent
 from sensai.domain.models import Conversation, Message
 from sensai.eval.guardrails import REFUSAL_TEXT, RegexGuardrail
 from sensai.providers.mock import MockLLMProvider
@@ -32,7 +32,7 @@ async def test_send_accumulates_chunks_into_single_assistant_message():
 
     events = [event async for event in engine.send("hi")]
 
-    assert len(events) > 0
+    assert isinstance(events[0], AssistantStartEvent)
     assert conversation.messages[-1].role == "assistant"
     assert conversation.messages[-1].content == "hello world"
     assert len([m for m in conversation.messages if m.role == "assistant"]) == 1
@@ -83,6 +83,7 @@ from sensai.tools.registry import ToolRegistry
 
 
 class DummyTool:
+    requires_confirmation = False
     name = "dummy"
     description = "a dummy tool"
     parameters_schema = {}  # noqa: RUF012
@@ -532,8 +533,8 @@ async def test_model_is_told_when_a_tool_result_was_masked():
 
     _ = [e async for e in engine.send("look it up")]
 
-    assert _system_notes(provider.prompts[0]) == []
-    assert _system_notes(provider.prompts[1]) == [PRIVACY_NOTE]
+    assert _system_notes(provider.prompts[0]) == [TOOL_USE_GUIDANCE]
+    assert _system_notes(provider.prompts[1]) == [TOOL_USE_GUIDANCE, PRIVACY_NOTE]
     assert all(m.role != "system" for m in conversation.messages)
 
 
@@ -545,4 +546,180 @@ async def test_withheld_tool_result_gets_no_privacy_note():
 
     _ = [e async for e in engine.send("look it up")]
 
-    assert _system_notes(provider.prompts[1]) == []
+    assert _system_notes(provider.prompts[1]) == [TOOL_USE_GUIDANCE]
+
+
+@pytest.mark.parametrize(
+    "requires_confirmation, answer, expected_executions",
+    [
+        (True, True, 1),
+        (True, False, 0),
+        (True, None, 0),
+        (True, "yes", 0),
+        (False, False, 1),
+    ],
+)
+async def test_tool_confirmation_controls_execution(
+    requires_confirmation, answer, expected_executions
+):
+    executed = []
+    confirmations = []
+
+    class RecordingTool(DummyTool):
+        async def execute(self, **kwargs):
+            executed.append(kwargs)
+            return "tool result"
+
+    tool = RecordingTool()
+    tool.requires_confirmation = requires_confirmation
+    registry = ToolRegistry()
+    registry.register(tool)
+    conversation = Conversation()
+    engine = ChatEngine(MockRoundTripProvider(), conversation, registry)
+
+    async def confirm(tc):
+        confirmations.append(tc)
+        assert not executed
+        return answer
+
+    events = [
+        event
+        async for event in engine.send(
+            "do it", confirm_tool=confirm if answer is not None else None
+        )
+    ]
+    assert events
+    assert len(executed) == expected_executions
+    assert len(confirmations) == int(requires_confirmation and answer is not None)
+    if requires_confirmation and answer is not True:
+        assert (
+            conversation.messages[-1].content
+            == "I didn't run the requested tool: dummy."
+        )
+        assert (
+            conversation.messages[-2].content == "Tool execution declined by the user."
+        )
+    else:
+        assert conversation.messages[-1].content == "final answer"
+
+
+async def test_multiple_tool_calls_confirm_each_sensitive_tool_before_execution():
+    executed = []
+    confirmations = []
+
+    class RecordingTool(DummyTool):
+        requires_confirmation = True
+
+        def __init__(self, name):
+            super().__init__()
+            self.name = name
+
+        async def execute(self, **kwargs):
+            executed.append((self.name, kwargs))
+            return f"result from {self.name}"
+
+    registry = ToolRegistry()
+    registry.register(RecordingTool("first"))
+    registry.register(RecordingTool("second"))
+    provider = ScriptedProvider(
+        [
+            ToolCallEvent(tool_name="first", arguments={"step": 1}),
+            ToolCallEvent(tool_name="second", arguments={"step": 2}),
+        ]
+    )
+    conversation = Conversation()
+    engine = ChatEngine(provider, conversation, registry)
+
+    async def confirm(tc):
+        confirmations.append((tc.name, tc.arguments, list(executed)))
+        return tc.name == "first"
+
+    events = [event async for event in engine.send("run both", confirm_tool=confirm)]
+
+    assert confirmations == [
+        ("first", {"step": 1}, []),
+        ("second", {"step": 2}, [("first", {"step": 1})]),
+    ]
+    assert executed == [("first", {"step": 1})]
+    assert [message.content for message in conversation.messages[2:4]] == [
+        "result from first",
+        "Tool execution declined by the user.",
+    ]
+    assert len(provider.prompts) == 1
+    assert shown_text(events) == "I didn't run the requested tool: second."
+
+
+async def test_multiple_tool_calls_prompt_only_for_sensitive_tool():
+    executed = []
+    confirmed = []
+
+    class RecordingTool(DummyTool):
+        def __init__(self, name, requires_confirmation):
+            super().__init__()
+            self.name = name
+            self.requires_confirmation = requires_confirmation
+
+        async def execute(self, **kwargs):
+            executed.append(self.name)
+            return f"result from {self.name}"
+
+    registry = ToolRegistry()
+    registry.register(RecordingTool("safe", False))
+    registry.register(RecordingTool("sensitive", True))
+    provider = ScriptedProvider(
+        [
+            ToolCallEvent(tool_name="safe", arguments={}),
+            ToolCallEvent(tool_name="sensitive", arguments={}),
+        ],
+        chunks("finished"),
+    )
+    conversation = Conversation()
+    engine = ChatEngine(provider, conversation, registry)
+
+    async def confirm(tc):
+        confirmed.append(tc.name)
+        return True
+
+    events = [event async for event in engine.send("run both", confirm_tool=confirm)]
+
+    assert confirmed == ["sensitive"]
+    assert executed == ["safe", "sensitive"]
+    assert [message.content for message in conversation.messages[2:4]] == [
+        "result from safe",
+        "result from sensitive",
+    ]
+    assert len(provider.prompts) == 2
+    assert shown_text(events) == "finished"
+
+
+async def test_confirmation_callback_error_cancels_tool_without_retrying_model():
+    executed = []
+
+    class RecordingTool(DummyTool):
+        requires_confirmation = True
+
+        async def execute(self, **kwargs):
+            executed.append(kwargs)
+            return "should not run"
+
+    registry = ToolRegistry()
+    registry.register(RecordingTool())
+    provider = ScriptedProvider(
+        [ToolCallEvent(tool_name="dummy", arguments={"step": 1})]
+    )
+    conversation = Conversation()
+    engine = ChatEngine(provider, conversation, registry)
+
+    async def broken_confirmation(tc):
+        raise RuntimeError("confirmation UI failed")
+
+    events = [
+        event async for event in engine.send("run it", confirm_tool=broken_confirmation)
+    ]
+
+    assert executed == []
+    assert len(provider.prompts) == 1
+    assert conversation.messages[2].content == (
+        "Tool confirmation failed; execution cancelled."
+    )
+    assert shown_text(events) == "I didn't run the requested tool: dummy."

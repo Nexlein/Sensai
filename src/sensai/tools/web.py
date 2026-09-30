@@ -14,6 +14,7 @@ class WebSearch(Tool):
         "the results justify one. Returns page titles, URLs, and excerpts. Use the "
         "results as evidence and include relevant source links in the answer."
     )
+    requires_confirmation = True
 
     def __init__(self, base_url: str) -> None:
         if not base_url.strip():

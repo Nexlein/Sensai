@@ -1,10 +1,17 @@
 from collections.abc import AsyncIterator
 
 import httpx
+import pytest
 from rich.console import Console
 
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import (
+    AssistantStartEvent,
+    Event,
+    GuardrailEvent,
+    TextChunkEvent,
+    ToolCallEvent,
+)
 from sensai.domain.models import Conversation
 from sensai.interfaces.cli.renderer import error_text, render_history, render_stream
 
@@ -45,6 +52,21 @@ async def test_render_stream_prints_text_chunks(capsys):
     out = capsys.readouterr().out
     assert "sensai:" in out
     assert "hello" in out
+
+
+async def test_render_stream_shows_speaker_before_first_chunk():
+    from io import StringIO
+
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+
+    async def events():
+        yield AssistantStartEvent()
+        assert output.getvalue() == "sensai: "
+        yield TextChunkEvent(content="Bonjour")
+
+    await render_stream(console, events())
+    assert output.getvalue() == "sensai: Bonjour\n"
 
 
 async def test_render_stream_ignores_non_text_events(capsys):
@@ -113,3 +135,52 @@ def test_error_text_handles_unknown_exception():
     text = error_text(ValueError("boom"))
     assert "Unexpected error" in text
     assert "boom" in text
+
+
+@pytest.mark.parametrize(
+    "answer, approved",
+    [
+        ("oui", True),
+        ("yes", True),
+        ("non", False),
+        ("", True),
+        (EOFError(), False),
+        (KeyboardInterrupt(), False),
+    ],
+)
+async def test_confirmation_keeps_streamed_text_and_resumes_reply(
+    monkeypatch, answer, approved
+):
+    from io import StringIO
+
+    from sensai.domain.models import ToolCall
+    from sensai.interfaces.cli.renderer import CliRenderer
+
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    renderer = CliRenderer(console)
+
+    def read_answer():
+        assert output.getvalue().startswith("sensai: Avant la recherche.\n")
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+    monkeypatch.setattr("builtins.input", read_answer)
+
+    async def events():
+        yield TextChunkEvent(content="Avant la recherche.")
+        assert (
+            await renderer.confirm_tool(
+                ToolCall(name="web_search", arguments={"query": "[test]"})
+            )
+            is approved
+        )
+        yield TextChunkEvent(content="Après la décision.")
+
+    await renderer.render(events())
+    rendered = output.getvalue()
+    assert "Autoriser web_search ? [O/n]" in rendered
+    assert "[test]" in rendered
+    assert rendered.count("Avant la recherche.") == 1
+    assert rendered.count("Après la décision.") == 1

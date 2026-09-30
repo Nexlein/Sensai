@@ -81,6 +81,23 @@ Acceptance criteria:
 - Empty queries and search service failures return clear error messages.
 - Searches with no usable results are reported as such.
 
+## Feature: [A3] Human-in-the-Loop Tool Confirmation
+
+As a user, I want to review a web search request before Sensai contacts the search service, so that I control when an external tool runs.
+
+Acceptance criteria:
+
+- CLI and TUI show the tool name and arguments and wait for my decision before `web_search` runs.
+- Approval runs the requested search; refusal leaves it unexecuted and tells me it was declined.
+
+As a developer, I want one confirmation gate for every tool marked as sensitive, so that new write, execution, or network tools do not implement their own approval flow.
+
+Acceptance criteria:
+
+- `BaseTool`/`Tool` expose `requires_confirmation`; the engine checks it before each tool execution.
+- A flagged tool runs only after the interface callback approves it; without a callback, the engine denies it.
+- Tools without the flag run without prompting.
+
 ## Feature: [EV2] Content & Privacy Guardrails
 
 As a clinic receptionist drafting messages with the assistant, I want the personal data I type (email, phone number, IBAN, card number, social security number) masked before it reaches the model, so that patient data is neither processed by the model nor kept in clear text.

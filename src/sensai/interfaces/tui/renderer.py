@@ -1,16 +1,22 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import ClassVar
 
 import httpx
+from textual import work
 from textual.app import App, ComposeResult
+from textual.binding import BindingType
 from textual.containers import VerticalScroll
-from textual.widgets import Input, Markdown, Static
+from textual.screen import ModalScreen
+from textual.widgets import Button, Input, Markdown, Static
 
 from sensai.core.commands import CommandResult, RenderFn
+from sensai.core.engine import ConfirmTool
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent
+from sensai.domain.models import ToolCall
 from sensai.interfaces.notices import guardrail_notice
 
-ProcessFn = Callable[[str, RenderFn], Awaitable[CommandResult]]
+ProcessFn = Callable[[str, RenderFn, ConfirmTool], Awaitable[CommandResult]]
 
 
 def error_text(exc: Exception) -> str:
@@ -55,7 +61,7 @@ class UserMessage(Markdown):
 class AssistantMessage(Markdown):
     DEFAULT_CSS = """
     AssistantMessage {
-        margin: 0 0 0 2;
+        margin: 0 0 1 2;
         padding: 0 0 0 0;
     }
     AssistantMessage > MarkdownParagraph {
@@ -83,6 +89,30 @@ class GuardrailNotice(Static):
     """
 
 
+class ConfirmToolScreen(ModalScreen[bool]):
+    BINDINGS: ClassVar[list[BindingType]] = [("escape", "deny", "Refuser")]
+
+    def __init__(self, tc: ToolCall) -> None:
+        super().__init__()
+        self.tc = tc
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            f"Autoriser l'outil {self.tc.name} ?\n{self.tc.arguments}", markup=False
+        )
+        yield Button("Oui", id="yes")
+        yield Button("Non", id="no")
+
+    def on_mount(self) -> None:
+        self.query_one("#yes", Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "yes")
+
+    def action_deny(self) -> None:
+        self.dismiss(False)
+
+
 class ChatApp(App[None]):
     CSS = """
     Input {
@@ -101,38 +131,57 @@ class ChatApp(App[None]):
     def on_mount(self) -> None:
         self.query_one(Input).focus()
 
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
-        text = event.value
+    def on_input_submitted(self, event: Input.Submitted) -> None:
         input_widget = self.query_one(Input)
+        if input_widget.disabled:
+            return
+        input_widget.disabled = True
         input_widget.value = ""
+        self._respond(event.value, input_widget)
 
+    @work
+    async def _respond(self, text: str, input_widget: Input) -> None:
+        try:
+            await self._process_turn(text)
+        finally:
+            input_widget.disabled = False
+            input_widget.focus()
+
+    async def _process_turn(self, text: str) -> None:
         history = self.query_one("#history", VerticalScroll)
         await history.mount(RoleLabel("you", classes="user"))
         await history.mount(UserMessage(text))
         history.scroll_end(animate=False)
 
+        async def confirm_tool(tc: ToolCall) -> bool:
+            return await self.push_screen_wait(ConfirmToolScreen(tc))
+
         async def render(events: AsyncIterator[Event]) -> None:
-            # The reply widget appears with the first text, so a blocked message
-            # does not leave an empty "sensai" bubble behind.
+            label = RoleLabel("sensai", classes="assistant")
+            await history.mount(label)
+            history.scroll_end(animate=False)
             reply: AssistantMessage | None = None
             content = ""
-            async for chunk_event in events:
-                if isinstance(chunk_event, TextChunkEvent):
-                    if reply is None:
-                        await history.mount(RoleLabel("sensai", classes="assistant"))
-                        reply = AssistantMessage("")
-                        await history.mount(reply)
-                    content += chunk_event.content
-                    await reply.update(content)
-                    history.scroll_end(animate=False)
-                elif isinstance(chunk_event, GuardrailEvent):
-                    await history.mount(
-                        GuardrailNotice(f"⚠ {guardrail_notice(chunk_event)}")
-                    )
-                    history.scroll_end(animate=False)
+            try:
+                async for chunk_event in events:
+                    if isinstance(chunk_event, TextChunkEvent):
+                        if reply is None:
+                            reply = AssistantMessage("")
+                            await history.mount(reply)
+                        content += chunk_event.content
+                        await reply.update(content)
+                        history.scroll_end(animate=False)
+                    elif isinstance(chunk_event, GuardrailEvent):
+                        await history.mount(
+                            GuardrailNotice(f"⚠ {guardrail_notice(chunk_event)}")
+                        )
+                        history.scroll_end(animate=False)
+            finally:
+                if reply is None:
+                    await label.remove()
 
         try:
-            result = await self._process(text, render)
+            result = await self._process(text, render, confirm_tool)
         except (EmptyInputError, ProviderError) as exc:
             await history.mount(ErrorMessage(error_text(exc)))
             history.scroll_end(animate=False)

@@ -22,6 +22,7 @@ class BaseTool(Protocol):
     name: str
     description: str
     parameters_schema: dict[str, Any]
+    requires_confirmation: bool
 
     async def execute(self, **kwargs: Any) -> str: ...
 
