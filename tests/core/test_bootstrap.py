@@ -30,7 +30,7 @@ async def test_build_session_loads_config_tools_and_existing_session(
     assert resumed.engine.registry is resumed.tool_registry
     assert resumed.tool_registry.get("read_file") is not None
     assert resumed.tool_registry.get("list_dir") is not None
-    assert resumed.tool_registry_factory(None).get_tools_schema() == []
+    assert resumed.tool_registry_factory(None).get("web_search") is not None
 
 
 async def test_build_session_indexes_rag_documents(monkeypatch, tmp_path):

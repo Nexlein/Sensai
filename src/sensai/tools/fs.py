@@ -2,15 +2,15 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .base import Tool
+from .base import PermissionBoundary, Tool
 
 
-class ReadFileTool(Tool):
+class ReadFileTool(PermissionBoundary, Tool):
     name = "read_file"
     description = "Read the contents of a file"
 
     def __init__(self, allowed_root: str | Path) -> None:
-        self.allowed_root = Path(allowed_root).resolve()
+        super().__init__(allowed_root)
         self.parameters_schema = {
             "type": "object",
             "properties": {
@@ -21,12 +21,6 @@ class ReadFileTool(Tool):
             },
             "required": ["path"],
         }
-
-    def _validate_path(self, path: str) -> Path:
-        target_path = (self.allowed_root / path).resolve()
-        if not target_path.is_relative_to(self.allowed_root):
-            raise ValueError(f"Path traversal rejected: {path}")
-        return target_path
 
     async def execute(self, path: str, **kwargs: Any) -> str:
         try:
@@ -40,12 +34,12 @@ class ReadFileTool(Tool):
             return f"Error reading file: {e}"
 
 
-class ListDirTool(Tool):
+class ListDirTool(PermissionBoundary, Tool):
     name = "list_dir"
     description = "List the contents of a directory"
 
     def __init__(self, allowed_root: str | Path) -> None:
-        self.allowed_root = Path(allowed_root).resolve()
+        super().__init__(allowed_root)
         self.parameters_schema = {
             "type": "object",
             "properties": {
@@ -56,12 +50,6 @@ class ListDirTool(Tool):
             },
             "required": [],
         }
-
-    def _validate_path(self, path: str) -> Path:
-        target_path = (self.allowed_root / path).resolve()
-        if not target_path.is_relative_to(self.allowed_root):
-            raise ValueError(f"Path traversal rejected: {path}")
-        return target_path
 
     async def execute(self, path: str = ".", **kwargs: Any) -> str:
         try:

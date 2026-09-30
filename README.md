@@ -72,6 +72,27 @@ base_url = "http://localhost:11434"
 
 Run `sensai chat --ui tui` to use the Textual interface. The flag takes precedence over `interface` in `sensai.toml`. The web interface is planned but not available yet.
 
+### Local web search service
+
+The web search tool uses a local [SearXNG](https://docs.searxng.org/) service.
+Docker Compose starts the same configuration for every developer, with JSON
+results enabled:
+
+```bash
+cp .env.example .env
+# Generate a secret, then replace SEARXNG_SECRET in .env with its output.
+openssl rand -hex 32
+docker compose up -d searxng
+curl 'http://127.0.0.1:8888/search?q=sensai&format=json'
+uv run sensai chat
+```
+
+SearXNG is available at `http://127.0.0.1:8888` and bound to localhost.
+Sensai registers `web_search` automatically and calls this local service when
+its model requests a web search. Start SearXNG before using web search; stop it
+with `docker compose down`. The local `.env` is ignored by Git; commit only
+`.env.example` as the setup template.
+
 ### Ask questions about local documents (RAG)
 
 Start Ollama with an embedding model such as `nomic-embed-text`, then point Sensai

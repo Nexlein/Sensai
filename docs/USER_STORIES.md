@@ -49,6 +49,38 @@ Acceptance criteria:
 - CLI and TUI obtain their engine, session store, tools, and RAG from the same bootstrap.
 - TUI replies are saved to the existing session store.
 
+## Feature: Shared Tool Registry and Permission Boundary
+
+As a developer, I want CLI and TUI sessions to build tools through the same registry factory, so that a tool is available consistently in either interface.
+
+Acceptance criteria:
+
+- `build_default_registry()` constructs the default tools in one place.
+- The shared bootstrap passes that registry to the chat engine.
+
+As a user, I want every filesystem tool to enforce the same allowed directory, so that changing tools cannot expose files outside my project.
+
+Acceptance criteria:
+
+- Read and list tools reuse one path validation implementation.
+- Relative traversal, absolute paths outside the root, and symlinks escaping the root are rejected.
+
+## Feature: [T3] Web Search
+
+As a user, I want Sensai to search the web when I ask for current information, so that its answer can use recent sources instead of relying only on the model's memory.
+
+Acceptance criteria:
+
+- `web_search` is available in CLI and TUI sessions through the shared registry.
+- Search results include page titles, links, and excerpts in the conversation context.
+
+As a user, I want Sensai to tell me when a web search cannot be completed, so that I do not mistake an unavailable search service for a verified answer.
+
+Acceptance criteria:
+
+- Empty queries and search service failures return clear error messages.
+- Searches with no usable results are reported as such.
+
 ## Feature: [EV2] Content & Privacy Guardrails
 
 As a clinic receptionist drafting messages with the assistant, I want the personal data I type (email, phone number, IBAN, card number, social security number) masked before it reaches the model, so that patient data is neither processed by the model nor kept in clear text.
