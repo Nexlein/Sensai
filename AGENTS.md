@@ -57,6 +57,7 @@ Implemented:
 - `memory/`: SQLite session persistence (`--session`), RAG (`TextChunker`, `SQLiteVectorStore`, `RAGRetriever`, enabled with `--rag-dir`).
 - `eval/guardrails/` (EV2): regex + checksum PII detectors, heuristic injection rules, `RegexGuardrail`, `PiiOutputStream`. On by default; disable with `[guardrails] enabled = false`.
 - `eval/evaluator.py` + `eval/adversarial/` (EV4): attack corpus (`corpus.py`, `known_gap` marks what the heuristics miss) replayed at guardrail and engine level, with a report. Run with `python -m sensai.eval.adversarial`.
+- `eval/judge/` (EV1): `LLMJudge` grades a reply for relevance and coherence (1-5) and checks its claims against the RAG context, through an injected `LLMProvider`. Failures come back as a verdict with `error`, never an exception. Run with `python -m sensai.eval.judge replies.jsonl`. Not wired into the chat loop, and it does not use `TurnLogger`. Live test: `SENSAI_LIVE_JUDGE=1` (needs Ollama).
 - `interfaces/`: CLI (rich), TUI (textual, `--ui tui`), shared dispatcher and notice wording.
 
 Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`), `Persona` (`build_prompt` accepts one, nothing passes it).
