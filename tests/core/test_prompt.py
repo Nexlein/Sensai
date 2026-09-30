@@ -1,4 +1,4 @@
-from sensai.core.prompt import build_prompt
+from sensai.core.prompt import PRIVACY_NOTE, build_prompt
 from sensai.domain.models import Conversation, Persona
 
 
@@ -36,3 +36,40 @@ def test_message_order_preserved():
     messages = build_prompt(conversation, persona)
 
     assert [m.content for m in messages] == ["sys", "first", "second", "third"]
+
+
+def test_privacy_note_is_a_system_message_and_off_by_default():
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+
+    assert all(m.role != "system" for m in build_prompt(conversation))
+
+    messages = build_prompt(conversation, privacy_note=True)
+
+    assert [m.role for m in messages] == ["system", "user"]
+    assert messages[0].content == PRIVACY_NOTE
+    assert "placeholders" in PRIVACY_NOTE
+
+
+def test_privacy_note_goes_after_persona_and_before_retrieved_context():
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+    persona = Persona(id="p", name="Bot", description="d", system_instruction="sys")
+
+    messages = build_prompt(
+        conversation, persona, rag_context="a fact", privacy_note=True
+    )
+
+    assert [m.role for m in messages] == ["system", "system", "system", "user"]
+    assert messages[0].content == "sys"
+    assert messages[1].content == PRIVACY_NOTE
+    assert "a fact" in messages[2].content
+
+
+def test_privacy_note_is_not_added_to_the_conversation():
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+
+    build_prompt(conversation, privacy_note=True)
+
+    assert [m.role for m in conversation.messages] == ["user"]

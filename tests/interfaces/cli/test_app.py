@@ -132,8 +132,9 @@ async def test_chat_session_unknown_name_creates_new(monkeypatch, capsys, tmp_pa
     assert conversation.id == "brand-new"
 
 
-def test_build_tool_registry_is_empty_when_root_is_unset():
-    assert build_default_registry(None).get_tools_schema() == []
+def test_build_tool_registry_keeps_web_search_when_root_is_unset():
+    schemas = build_default_registry(None).get_tools_schema()
+    assert [schema["function"]["name"] for schema in schemas] == ["web_search"]
 
 
 def test_build_tool_registry_registers_file_tools(tmp_path):
@@ -142,6 +143,7 @@ def test_build_tool_registry_registers_file_tools(tmp_path):
     assert {schema["function"]["name"] for schema in schemas} == {
         "read_file",
         "list_dir",
+        "web_search",
     }
 
 

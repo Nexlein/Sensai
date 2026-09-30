@@ -5,9 +5,36 @@ import httpx
 from sensai.core.budget import ContextBudget
 from sensai.core.prompt import build_prompt
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import BudgetEvent, Event, TextChunkEvent, ToolCallEvent
-from sensai.domain.models import Conversation, ToolCall
-from sensai.domain.protocols import ContextRetriever, LLMProvider, ToolRegistry
+from sensai.domain.events import (
+    BudgetEvent,
+    Event,
+    GuardrailEvent,
+    TextChunkEvent,
+    ToolCallEvent,
+)
+from sensai.domain.models import Conversation, GuardrailFinding, ToolCall
+from sensai.domain.protocols import (
+    ContextRetriever,
+    Guardrail,
+    LLMProvider,
+    ToolRegistry,
+)
+
+TOOL_RESULT_WITHHELD = "[tool result withheld: it contained personal data]"
+
+
+def _reason(findings: list[GuardrailFinding]) -> str:
+    """Which rules fired, e.g. "injection: ignore_instructions; pii: email".
+
+    Rule names only: the matched text is never put in an event or a log.
+    """
+    rules_by_category: dict[str, list[str]] = {}
+    for finding in findings:
+        rules_by_category.setdefault(finding.category, []).append(finding.rule)
+    return "; ".join(
+        f"{category}: {', '.join(dict.fromkeys(rules))}"
+        for category, rules in rules_by_category.items()
+    )
 
 
 class ChatEngine:
@@ -18,16 +45,37 @@ class ChatEngine:
         registry: ToolRegistry | None = None,
         retriever: ContextRetriever | None = None,
         budget: ContextBudget | None = None,
+        guardrail: Guardrail | None = None,
     ) -> None:
         self.provider = provider
         self.conversation = conversation
         self.registry = registry
         self.retriever = retriever
         self.budget = budget
+        self.guardrail = guardrail
 
     async def send(self, user_text: str) -> AsyncGenerator[Event]:
         if not user_text.strip():
             raise EmptyInputError("user_text must not be empty")
+
+        # True once something the model will see was replaced by a placeholder this
+        # turn; the model is then told so, otherwise "[IBAN]" reads like a glitch.
+        masked = False
+
+        if self.guardrail is not None:
+            verdict = await self.guardrail.filter_input(user_text)
+            if verdict.action != "allow":
+                yield GuardrailEvent(
+                    stage="input",
+                    action=verdict.action,
+                    reason=_reason(verdict.findings),
+                )
+            if verdict.action == "block":
+                return
+            # From here on only the filtered text exists: it is what the retriever
+            # embeds, what the provider sees and what gets stored in the history.
+            user_text = verdict.text
+            masked = verdict.action == "redact"
 
         rag_context = ""
         if self.retriever is not None:
@@ -41,7 +89,9 @@ class ChatEngine:
         for _ in range(5):
             if self.budget is not None:
                 await self.budget.fit(self.conversation)
-            prompt = build_prompt(self.conversation, rag_context=rag_context)
+            prompt = build_prompt(
+                self.conversation, rag_context=rag_context, privacy_note=masked
+            )
             tracker = self.budget.tracker(prompt) if self.budget else None
             if tracker is not None:
                 yield BudgetEvent(
@@ -50,6 +100,7 @@ class ChatEngine:
 
             chunks: list[str] = []
             tool_calls: list[ToolCallEvent] = []
+            stream = self.guardrail.new_output_stream() if self.guardrail else None
 
             try:
                 tools_schema = (
@@ -59,6 +110,11 @@ class ChatEngine:
                     prompt, tools=tools_schema
                 ):
                     if isinstance(event, TextChunkEvent):
+                        if stream is not None:
+                            released = stream.feed(event.content)
+                            if not released:
+                                continue
+                            event = TextChunkEvent(content=released)
                         chunks.append(event.content)
                     elif isinstance(event, ToolCallEvent):
                         tool_calls.append(event)
@@ -70,7 +126,24 @@ class ChatEngine:
                 self.conversation.messages.pop()
                 raise ProviderError("provider request failed") from exc
 
-            if not tool_calls:
+            refused = False
+            if stream is not None:
+                # Text the filter was still holding back (it could have been the
+                # start of a PII value) is settled now that the stream is over.
+                tail = stream.flush()
+                if tail:
+                    chunks.append(tail)
+                    yield TextChunkEvent(content=tail)
+                refused = stream.refused
+                if stream.findings:
+                    yield GuardrailEvent(
+                        stage="output",
+                        action="block" if refused else "redact",
+                        reason=_reason(stream.findings),
+                    )
+
+            # A refused reply is final: its tool calls are dropped, not executed.
+            if not tool_calls or refused:
                 self.conversation.add_message(role="assistant", content="".join(chunks))
                 break
 
@@ -93,7 +166,20 @@ class ChatEngine:
                     except Exception as e:  # noqa: BLE001
                         result = str(e)
 
-                self.conversation.add_message(
-                    role="tool",
-                    content=str(result),
-                )
+                content = str(result)
+                if self.guardrail is not None:
+                    verdict = await self.guardrail.filter_output(content)
+                    if verdict.action != "allow":
+                        yield GuardrailEvent(
+                            stage="tool",
+                            action=verdict.action,
+                            reason=_reason(verdict.findings),
+                        )
+                    content = (
+                        TOOL_RESULT_WITHHELD
+                        if verdict.action == "block"
+                        else verdict.text
+                    )
+                    masked = masked or verdict.action == "redact"
+
+                self.conversation.add_message(role="tool", content=content)

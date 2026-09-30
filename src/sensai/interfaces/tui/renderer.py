@@ -7,7 +7,8 @@ from textual.widgets import Input, Markdown, Static
 
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import BudgetEvent, Event, TextChunkEvent
+from sensai.domain.events import BudgetEvent, Event, GuardrailEvent, TextChunkEvent
+from sensai.interfaces.notices import guardrail_notice
 from sensai.interfaces.usage import format_usage
 
 ProcessFn = Callable[[str, RenderFn], Awaitable[CommandResult]]
@@ -83,6 +84,15 @@ class ErrorMessage(Static):
     """
 
 
+class GuardrailNotice(Static):
+    DEFAULT_CSS = """
+    GuardrailNotice {
+        color: $text-warning;
+        margin: 0 0 0 2;
+    }
+    """
+
+
 class ChatApp(App[None]):
     CSS = """
     Input {
@@ -112,22 +122,39 @@ class ChatApp(App[None]):
         history.scroll_end(animate=False)
 
         async def render(events: AsyncIterator[Event]) -> None:
-            await history.mount(RoleLabel("sensai", classes="assistant"))
-            reply = AssistantMessage("")
-            await history.mount(reply)
-            history.scroll_end(animate=False)
-
+            # The reply widget appears with the first text, so a blocked message
+            # does not leave an empty "sensai" bubble behind.
+            reply: AssistantMessage | None = None
             content = ""
             usage: UsageLabel | None = None
+            usage_text = ""
+
+            async def show_usage() -> None:
+                nonlocal usage
+                if usage is None:
+                    usage = UsageLabel()
+                    await history.mount(usage)
+                usage.update(usage_text)
+
             async for streamed in events:
                 if isinstance(streamed, TextChunkEvent):
+                    if reply is None:
+                        await history.mount(RoleLabel("sensai", classes="assistant"))
+                        reply = AssistantMessage("")
+                        await history.mount(reply)
                     content += streamed.content
                     await reply.update(content)
+                    if usage_text:
+                        await show_usage()
                 elif isinstance(streamed, BudgetEvent):
-                    if usage is None:
-                        usage = UsageLabel()
-                        await history.mount(usage)
-                    usage.update(format_usage(streamed))
+                    usage_text = format_usage(streamed)
+                    # Usage sits under the reply, so wait until the reply exists.
+                    if reply is not None:
+                        await show_usage()
+                elif isinstance(streamed, GuardrailEvent):
+                    await history.mount(
+                        GuardrailNotice(f"⚠ {guardrail_notice(streamed)}")
+                    )
                 history.scroll_end(animate=False)
 
         try:

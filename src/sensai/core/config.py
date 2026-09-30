@@ -22,6 +22,14 @@ class ToolsConfig(BaseModel):
     fs_allowed_root: str | None = None
 
 
+class GuardrailsConfig(BaseModel):
+    """Privacy/content guardrails (EV2). On by default; `enabled = false` opts out."""
+
+    enabled: bool = True
+    injection: Literal["block", "flag"] = "block"
+    pii: Literal["redact", "block"] = "redact"
+
+
 class AppConfig(BaseModel):
     interface: Literal["cli", "tui", "web"] = DEFAULT_INTERFACE
     provider: str = DEFAULT_PROVIDER
@@ -29,6 +37,7 @@ class AppConfig(BaseModel):
     base_url: str = DEFAULT_BASE_URL
     tools: ToolsConfig = ToolsConfig()
     budget: BudgetConfig = BudgetConfig()
+    guardrails: GuardrailsConfig = GuardrailsConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -106,6 +115,17 @@ def save_config(
                 f"max_tokens = {config.budget.max_tokens}",
                 f"threshold = {config.budget.threshold}",
                 f"keep_recent_turns = {config.budget.keep_recent_turns}",
+            ]
+        )
+
+    if config.guardrails != GuardrailsConfig():
+        lines.extend(
+            [
+                "",
+                "[guardrails]",
+                f"enabled = {json.dumps(config.guardrails.enabled)}",
+                f"injection = {json.dumps(config.guardrails.injection)}",
+                f"pii = {json.dumps(config.guardrails.pii)}",
             ]
         )
 

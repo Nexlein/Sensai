@@ -5,9 +5,11 @@ import httpx
 
 from sensai.core.budget import ContextBudget, LLMSummarizer
 from sensai.core.commands import CommandContext
-from sensai.core.config import DEFAULT_CONFIG_PATH, load_config
+from sensai.core.config import DEFAULT_CONFIG_PATH, GuardrailsConfig, load_config
 from sensai.core.engine import ChatEngine
 from sensai.domain.models import Conversation
+from sensai.domain.protocols import Guardrail
+from sensai.eval.guardrails import RegexGuardrail
 from sensai.memory.rag.retriever import RAGRetriever
 from sensai.memory.rag.store import SQLiteVectorStore
 from sensai.memory.session import SqliteMemoryStore
@@ -18,6 +20,12 @@ from sensai.tools.registry import build_default_registry
 
 class BootstrapError(Exception):
     """Raised when optional session components cannot be initialized."""
+
+
+def _build_guardrail(config: GuardrailsConfig) -> Guardrail | None:
+    if not config.enabled:
+        return None
+    return RegexGuardrail(injection_action=config.injection, pii_action=config.pii)
 
 
 async def build_session(
@@ -69,7 +77,13 @@ async def build_session(
         ) as exc:
             raise BootstrapError(f"RAG indexing failed: {exc}") from exc
 
-    engine = ChatEngine(provider, conversation, tool_registry, retriever)
+    engine = ChatEngine(
+        provider,
+        conversation,
+        tool_registry,
+        retriever,
+        guardrail=_build_guardrail(config.guardrails),
+    )
     engine.budget = ContextBudget(config.budget, LLMSummarizer(lambda: engine.provider))
     return CommandContext(
         config=config,
