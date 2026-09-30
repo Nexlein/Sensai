@@ -97,3 +97,23 @@ async def test_list_dir_rejects_symlink_escape(fs_sandbox):
     content = await tool.execute("link")
 
     assert "Path traversal rejected" in content
+
+
+async def test_read_file_resolves_unique_filename_case(fs_sandbox):
+    (fs_sandbox / "AGENTS.md").write_text("real instructions", encoding="utf-8")
+    tool = ReadFileTool(fs_sandbox)
+    assert await tool.execute("agents.md") == "real instructions"
+
+
+async def test_read_file_refuses_ambiguous_case_match(fs_sandbox):
+    (fs_sandbox / "NOTE.md").write_text("first", encoding="utf-8")
+    (fs_sandbox / "Note.md").write_text("second", encoding="utf-8")
+    tool = ReadFileTool(fs_sandbox)
+    assert await tool.execute("note.md") == "Error: Ambiguous file name: note.md"
+
+
+async def test_case_corrected_symlink_still_cannot_escape_root(fs_sandbox):
+    outside_file = fs_sandbox.parent / "outside" / "secret.txt"
+    (fs_sandbox / "SECRET.TXT").symlink_to(outside_file)
+    tool = ReadFileTool(fs_sandbox)
+    assert "Path traversal rejected" in await tool.execute("secret.txt")

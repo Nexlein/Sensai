@@ -39,8 +39,25 @@ make setup
 Start a chat session against a local [Ollama](https://ollama.com/) instance:
 
 ```bash
-sensai chat --model llama3.2
+ollama pull qwen3.5:4b
+uv run sensai chat
 ```
+
+Qwen3.5 4B is the default because it can answer ordinary messages directly and
+use tools for file and web requests. Sensai asks for confirmation before running
+tools that require it. The optional `ollama/Modelfile` supports Llama 3.2, but
+the smaller Llama model may invent content after reading a tool result.
+
+To verify a model's tool selection against a running local Ollama server:
+
+```bash
+SENSAI_OLLAMA_TEST_MODEL=qwen3.5:4b uv run pytest tests/providers/test_ollama.py -k live
+```
+
+These optional tests cover greetings, explanations, file reads, web requests,
+and approval or refusal followed by another message. Search results are
+simulated; the tests do not query the web. Without the environment variable,
+the normal test suite skips them. Other models remain selectable with `--model`.
 
 Type a message and press enter; the reply streams in as `sensai: ...`. Type `/exit` or press `Ctrl+C` to leave.
 
@@ -66,9 +83,16 @@ Instead of CLI flags, you can set defaults in a `sensai.toml` file:
 ```toml
 interface = "cli"
 provider = "ollama"
-model = "llama3.2"
+model = "qwen3.5:4b"
 base_url = "http://localhost:11434"
+
+[tools]
+fs_allowed_root = "."
 ```
+
+`sensai.toml` is local configuration and is ignored by Git. With the configuration
+above, CLI and TUI both use Qwen3.5 and can read or list files under the current
+project root. Omit `[tools]` to keep filesystem tools unavailable.
 
 Run `sensai chat --ui tui` to use the Textual interface. The flag takes precedence over `interface` in `sensai.toml`. The web interface is planned but not available yet.
 
