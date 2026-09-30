@@ -56,11 +56,12 @@ Implemented:
 - `tools/`: `ToolRegistry`, `ReadFileTool`, `ListDirTool` (confined to `fs_allowed_root`).
 - `memory/`: SQLite session persistence (`--session`), RAG (`TextChunker`, `SQLiteVectorStore`, `RAGRetriever`, enabled with `--rag-dir`).
 - `eval/guardrails/` (EV2): regex + checksum PII detectors, heuristic injection rules, `RegexGuardrail`, `PiiOutputStream`. On by default; disable with `[guardrails] enabled = false`.
+- `eval/evaluator.py` + `eval/adversarial/` (EV4): attack corpus (`corpus.py`, `known_gap` marks what the heuristics miss) replayed at guardrail and engine level, with a report. Run with `python -m sensai.eval.adversarial`.
 - `interfaces/`: CLI (rich), TUI (textual, `--ui tui`), shared dispatcher and notice wording.
 
 Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`), `Persona` (`build_prompt` accepts one, nothing passes it).
 
-Empty stubs, not yet built: `core/budget.py`, `eval/evaluator.py`, `memory/manager.py`, `memory/artifact.py`, `tools/mcp.py`, `tools/sandbox.py`, `tools/web.py`, `interfaces/web/*`.
+Empty stubs, not yet built: `core/budget.py`, `memory/manager.py`, `memory/artifact.py`, `tools/mcp.py`, `tools/sandbox.py`, `tools/web.py`, `interfaces/web/*`.
 
 Guardrail scope and known limits: input, model output and tool results are filtered. Not covered: PII inside tool-call arguments written by the model, the RAG context injected into the prompt, names and postal addresses. Reference design: [docs/elevenlabs-guardrails.md](docs/elevenlabs-guardrails.md).
 
