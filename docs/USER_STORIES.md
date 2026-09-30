@@ -153,3 +153,25 @@ Acceptance criteria:
 - `[guardrails]` accepts `enabled`, `injection` (`block` or `flag`) and `pii` (`redact` or `block`) in `sensai.toml`.
 - Any other value is rejected with a clear config error.
 - `/config save` writes the section only when it differs from the defaults, and a disabled configuration is preserved when saved.
+
+## Feature: [EV4] Adversarial Testing
+
+As a developer tightening the guardrails, I want to replay a corpus of jailbreaks, prompt injections, PII leaks and malformed inputs against the agent with one command, so that I see what still gets through before a user does.
+
+Acceptance criteria:
+
+- `python -m sensai.eval.adversarial` prints, per category, how many attacks were caught, missed or are known gaps, plus a detection rate and a false-positive rate.
+- Each attack runs against the filters alone and through a real `ChatEngine`, where a blocked message must never reach the provider or the stored history, and a masked value must never appear in either.
+- Streamed replies are fed in small chunks, so a value split across chunks is checked too.
+- The command exits with a non-zero status when an attack is missed without being listed as a known gap.
+- Malformed inputs (empty, null bytes, a million characters, backtracking bait) never crash the guardrail.
+
+As a maintainer changing a detection rule, I want a regression suite that fails when a rule stops catching an attack or starts blocking harmless prompts, so that a fix for one phrasing cannot silently break another.
+
+Acceptance criteria:
+
+- Every case states the expected verdict (`block`, `redact` or `allow`), and optionally the rule that must fire and the value that must not survive.
+- Benign near-misses ("how do I ignore whitespace in a regex?", an order number that fails its checksum) are part of the corpus and must stay untouched.
+- Attacks the heuristics cannot catch today (obfuscated text, paraphrases, spelled-out emails) are kept as `known_gap` cases with a reason, so the limits are documented and not dropped.
+- A `known_gap` case that starts passing is reported as stale, so a fixed gap is promoted to a regular case.
+- Running the suite against a guardrail that lets everything through fails.
