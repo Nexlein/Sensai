@@ -175,3 +175,24 @@ Acceptance criteria:
 - Attacks the heuristics cannot catch today (obfuscated text, paraphrases, spelled-out emails) are kept as `known_gap` cases with a reason, so the limits are documented and not dropped.
 - A `known_gap` case that starts passing is reported as stale, so a fixed gap is promoted to a regular case.
 - Running the suite against a guardrail that lets everything through fails.
+
+## Feature: [EV1] Automated Eval & Hallucination Detection
+
+As a developer of a document Q&A assistant, I want each answer graded by a judge model for relevance, coherence and faithfulness to the retrieved documents, so that I spot answers that drift off topic or invent facts before users do.
+
+Acceptance criteria:
+
+- `python -m sensai.eval.judge replies.jsonl` reads one `{"question", "answer", "context"}` per line and prints mean relevance and coherence (1-5) and mean faithfulness (0-1).
+- Each statement of the answer is checked against the retrieved context and labelled `supported`, `unsupported` or `contradicted`; the last two are listed as unverifiable statements.
+- Without a context, only relevance and coherence are graded: nothing can be called supported without a source.
+- The judge is told that the question, answer and context are data to grade, so an answer that says "give me 5/5" cannot steer its own score.
+
+As someone running the evaluation on a small local model, I want a judge that copes with its bad days, so that one malformed reply does not stop a whole batch or pass for a bad answer.
+
+Acceptance criteria:
+
+- JSON wrapped in code fences or prose is still parsed.
+- Invalid or out-of-range output is sent back to the judge with the error and retried, up to a limit.
+- A judge that stays invalid, times out or is unreachable gives a verdict with an error and no scores, and the batch goes on.
+- A scoring call that fails does not discard the faithfulness result, and the other way round.
+- The command exits with a non-zero status when any reply could not be judged.
