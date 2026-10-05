@@ -6,6 +6,7 @@ from sensai.core.config import (
     DEFAULT_PROVIDER,
     AppConfig,
     ConfigError,
+    EvalConfig,
     GuardrailsConfig,
     ToolsConfig,
     load_config,
@@ -202,3 +203,35 @@ def test_save_config_omits_default_guardrails_section(tmp_path):
     save_config(AppConfig(), config_file)
 
     assert "[guardrails]" not in config_file.read_text()
+
+
+def test_reply_log_is_off_by_default():
+    assert load_config(config_path=None).eval == EvalConfig(
+        log_replies=False, replies_path="logs/replies.jsonl"
+    )
+
+
+def test_eval_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text('[eval]\nlog_replies = true\nreplies_path = "r.jsonl"\n')
+
+    assert load_config(config_file).eval == EvalConfig(
+        log_replies=True, replies_path="r.jsonl"
+    )
+
+
+def test_save_config_round_trips_eval(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(eval=EvalConfig(log_replies=True, replies_path="out/r.jsonl"))
+
+    save_config(config, config_file)
+
+    assert load_config(config_file) == config
+
+
+def test_save_config_omits_default_eval_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[eval]" not in config_file.read_text()

@@ -30,6 +30,13 @@ class GuardrailsConfig(BaseModel):
     pii: Literal["redact", "block"] = "redact"
 
 
+class EvalConfig(BaseModel):
+    """Opt-in reply log (EV1) graded later with `python -m sensai.eval.judge`."""
+
+    log_replies: bool = False
+    replies_path: str = "logs/replies.jsonl"
+
+
 class AppConfig(BaseModel):
     interface: Literal["cli", "tui", "web"] = DEFAULT_INTERFACE
     provider: str = DEFAULT_PROVIDER
@@ -38,6 +45,7 @@ class AppConfig(BaseModel):
     tools: ToolsConfig = ToolsConfig()
     budget: BudgetConfig = BudgetConfig()
     guardrails: GuardrailsConfig = GuardrailsConfig()
+    eval: EvalConfig = EvalConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -126,6 +134,17 @@ def save_config(
                 f"enabled = {json.dumps(config.guardrails.enabled)}",
                 f"injection = {json.dumps(config.guardrails.injection)}",
                 f"pii = {json.dumps(config.guardrails.pii)}",
+            ]
+        )
+
+    if config.eval != EvalConfig():
+        lines.extend(
+            [
+                "",
+                "[eval]",
+                f"log_replies = {json.dumps(config.eval.log_replies)}",
+                "replies_path = "
+                + json.dumps(config.eval.replies_path, ensure_ascii=False),
             ]
         )
 
