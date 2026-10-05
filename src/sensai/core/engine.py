@@ -17,6 +17,7 @@ from sensai.domain.protocols import (
     ContextRetriever,
     Guardrail,
     LLMProvider,
+    ReplyRecorder,
     ToolRegistry,
 )
 
@@ -46,6 +47,7 @@ class ChatEngine:
         retriever: ContextRetriever | None = None,
         budget: ContextBudget | None = None,
         guardrail: Guardrail | None = None,
+        recorder: ReplyRecorder | None = None,
     ) -> None:
         self.provider = provider
         self.conversation = conversation
@@ -53,6 +55,7 @@ class ChatEngine:
         self.retriever = retriever
         self.budget = budget
         self.guardrail = guardrail
+        self.recorder = recorder
 
     async def send(self, user_text: str) -> AsyncGenerator[Event]:
         if not user_text.strip():
@@ -144,7 +147,11 @@ class ChatEngine:
 
             # A refused reply is final: its tool calls are dropped, not executed.
             if not tool_calls or refused:
-                self.conversation.add_message(role="assistant", content="".join(chunks))
+                answer = "".join(chunks)
+                self.conversation.add_message(role="assistant", content=answer)
+                # A guardrail refusal is not the model's answer: nothing to grade.
+                if self.recorder is not None and not refused and answer.strip():
+                    self.recorder.record(user_text, answer, rag_context)
                 break
 
             tcs = [
