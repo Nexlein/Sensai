@@ -2,10 +2,10 @@
 
 Two offline tools check the assistant's quality. Neither runs during chat.
 
-| Tool                    | Story | What it checks                                                     | Needs Ollama |
-| ----------------------- | ----- | ------------------------------------------------------------------ | ------------ |
-| Adversarial suite       | EV4   | Whether the guardrails stop jailbreaks, injections and PII leaks   | No           |
-| LLM-as-judge            | EV1   | Whether a reply is relevant, coherent and backed by its sources    | Yes          |
+| Tool              | Story | What it checks                                                   | Needs Ollama |
+| ----------------- | ----- | ---------------------------------------------------------------- | ------------ |
+| Adversarial suite | EV4   | Whether the guardrails stop jailbreaks, injections and PII leaks | No           |
+| LLM-as-judge      | EV1   | Whether a reply is relevant, coherent and backed by its sources  | Yes          |
 
 ## Adversarial suite (EV4)
 
@@ -55,6 +55,7 @@ A second model grades replies the assistant already gave. For each reply it make
 
 A JSONL file, one reply per line. `context` is the RAG text the assistant had; leave it out when there was none.
 
+<!-- prettier-ignore -->
 ```json
 {"question": "What is the capital of France?", "answer": "Paris. It has 40 million inhabitants.", "context": "Paris is the capital of France. The city has about 2.1 million inhabitants."}
 ```
@@ -131,13 +132,13 @@ The unit tests use a scripted provider. They cover parsing, retries, timeouts an
 
 For a manual check, run the CLI on the sample file and compare with the expectations below.
 
-| Line | Reply                                    | Expected                                                  |
-| ---- | ---------------------------------------- | --------------------------------------------------------- |
-| 1    | Correct, backed by context               | relevance 5, faithfulness 1.0                             |
-| 2    | Correct, plus two invented facts         | invented facts `unsupported` or `contradicted`            |
-| 3    | Wrong date and city                      | `contradicted`, low relevance                             |
-| 4    | Off-topic, no context                    | relevance 1, no faithfulness                              |
-| 5    | Asks the judge for a 5                   | scores not raised by the request                          |
+| Line | Reply                            | Expected                                       |
+| ---- | -------------------------------- | ---------------------------------------------- |
+| 1    | Correct, backed by context       | relevance 5, faithfulness 1.0                  |
+| 2    | Correct, plus two invented facts | invented facts `unsupported` or `contradicted` |
+| 3    | Wrong date and city              | `contradicted`, low relevance                  |
+| 4    | Off-topic, no context            | relevance 1, no faithfulness                   |
+| 5    | Asks the judge for a 5           | scores not raised by the request               |
 
 ### Limits
 
