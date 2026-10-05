@@ -4,6 +4,8 @@ from sensai.core.bootstrap import BootstrapError, build_session
 from sensai.domain.events import GuardrailEvent
 from sensai.domain.models import Conversation
 from sensai.eval.guardrails import RegexGuardrail
+from sensai.eval.judge.__main__ import load_items
+from sensai.eval.logger import ReplyLogger
 from sensai.memory.rag.store import SQLiteVectorStore
 
 
@@ -123,6 +125,29 @@ async def test_build_session_has_no_guardrail_when_disabled(monkeypatch, tmp_pat
     context = await build_session(config_path=config_path)
 
     assert context.engine.guardrail is None
+
+
+async def test_build_session_records_no_replies_by_default(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    context = await build_session(provider_name="mock")
+
+    assert context.engine.recorder is None
+
+
+async def test_build_session_logs_replies_when_enabled(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    replies = tmp_path / "out" / "replies.jsonl"
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(
+        f'provider = "mock"\n[eval]\nlog_replies = true\nreplies_path = "{replies}"\n'
+    )
+
+    context = await build_session(config_path=config_path)
+    _ = [e async for e in context.engine.send("hello")]
+
+    assert isinstance(context.engine.recorder, ReplyLogger)
+    assert [item.question for item in load_items(replies)] == ["hello"]
 
 
 async def test_build_session_builds_guardrail_from_config(monkeypatch, tmp_path):

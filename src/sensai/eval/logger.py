@@ -7,6 +7,16 @@ from pathlib import Path
 from sensai.domain.models import now_utc
 
 DEFAULT_LOG_PATH = Path("logs/turns.jsonl")
+DEFAULT_REPLIES_PATH = Path("logs/replies.jsonl")
+
+
+def _append(path: Path, entry: dict[str, object]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
 
 
 class TurnLogger:
@@ -37,12 +47,7 @@ class TurnLogger:
         if error is not None:
             entry["error"] = error
 
-        try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a") as f:
-                f.write(json.dumps(entry) + "\n")
-        except OSError:
-            pass
+        _append(self.path, entry)
 
     @contextmanager
     def track(self, model: str) -> Iterator[dict[str, int]]:
@@ -60,3 +65,20 @@ class TurnLogger:
                 usage.get("prompt_tokens"),
                 usage.get("completion_tokens"),
             )
+
+
+class ReplyLogger:
+    """Appends each final reply as a line `python -m sensai.eval.judge` can read."""
+
+    def __init__(self, path: str | Path = DEFAULT_REPLIES_PATH) -> None:
+        self.path = Path(path)
+
+    def record(self, question: str, answer: str, context: str) -> None:
+        entry: dict[str, object] = {
+            "timestamp": now_utc().isoformat(),
+            "question": question,
+            "answer": answer,
+        }
+        if context:
+            entry["context"] = context
+        _append(self.path, entry)
