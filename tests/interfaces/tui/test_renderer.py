@@ -208,20 +208,23 @@ def test_error_text_handles_unknown_exception():
 
 
 @pytest.mark.parametrize(
-    "choice, approved",
+    "keys, approved",
     [
-        ("yes", True),
-        ("enter", True),
-        ("no", False),
-        ("escape", False),
-        ("no_enter", False),
+        (["enter"], True),
+        (["1"], True),
+        (["2"], False),
+        (["down", "enter"], False),
+        (["down", "down", "enter"], True),
+        (["up", "enter"], False),
+        (["escape"], False),
     ],
 )
-async def test_tool_confirmation_returns_choice_and_chat_resumes(choice, approved):
+async def test_tool_confirmation_prompt_replaces_input_and_chat_resumes(keys, approved):
     from textual.widgets import Input
 
     from sensai.domain.models import ToolCall
-    from sensai.interfaces.tui.renderer import ConfirmToolScreen
+    from sensai.interfaces.tui.question import QuestionPrompt
+    from sensai.interfaces.tui.renderer import ToolDecisionNotice
 
     decisions = []
 
@@ -239,16 +242,48 @@ async def test_tool_confirmation_returns_choice_and_chat_resumes(choice, approve
         input_widget = app.query_one(Input)
         await pilot.press("enter")
         await pilot.pause()
-        assert isinstance(app.screen, ConfirmToolScreen)
-        assert input_widget.disabled
-        if choice in {"escape", "enter"}:
-            await pilot.press(choice)
-        elif choice == "no_enter":
-            app.screen.query_one("#no").focus()
-            await pilot.press("enter")
-        else:
-            await pilot.click(f"#{choice}")
+        prompt = app.query_one(QuestionPrompt)
+        assert app.focused is prompt
+        assert not input_widget.display
+        for key in keys:
+            await pilot.press(key)
         await pilot.pause()
         assert decisions == [approved]
+        assert not app.query(QuestionPrompt)
+        assert input_widget.display
+        notice = app.query_one(ToolDecisionNotice)
+        assert notice.has_class("approved" if approved else "declined")
+        expected = "✓ allowed web_search" if approved else "✗ declined web_search"
+        assert str(notice.render()) == expected
         assert app.query(AssistantMessage).first().source == "Terminé"
         assert not input_widget.disabled
+
+
+async def test_question_prompt_shows_title_details_and_options():
+    from sensai.domain.models import ToolCall
+    from sensai.interfaces.prompts import tool_confirmation
+    from sensai.interfaces.tui.question import QuestionPrompt
+
+    async def process(text, render, confirm_tool):
+        await confirm_tool(
+            ToolCall(name="web_search", arguments={"query": "café", "limit": 3})
+        )
+        return CommandResult()
+
+    app = ChatApp(process)
+    async with app.run_test() as pilot:
+        await pilot.press("enter")
+        await pilot.pause()
+        prompt = app.query_one(QuestionPrompt)
+        assert prompt.question == tool_confirmation(
+            ToolCall(name="web_search", arguments={"query": "café", "limit": 3})
+        )
+        lines = prompt.render().plain.splitlines()
+        assert lines[:3] == ["Allow web_search?", "  query  café", "  limit  3"]
+        assert "❯ 1. Yes" in lines
+        assert "  2. No" in lines
+        await pilot.press("down")
+        lines = prompt.render().plain.splitlines()
+        assert "  1. Yes" in lines
+        assert "❯ 2. No" in lines
+        await pilot.press("escape")
