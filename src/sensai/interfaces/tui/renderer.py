@@ -1,13 +1,11 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import ClassVar
+from typing import TypeVar
 
 import httpx
 from textual import work
 from textual.app import App, ComposeResult
-from textual.binding import BindingType
 from textual.containers import VerticalScroll
-from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Markdown, Static
+from textual.widgets import Input, Markdown, Static
 
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.core.engine import ConfirmTool
@@ -15,6 +13,10 @@ from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent
 from sensai.domain.models import ToolCall
 from sensai.interfaces.notices import guardrail_notice
+from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
+from sensai.interfaces.tui.question import QuestionPrompt
+
+T = TypeVar("T")
 
 ProcessFn = Callable[[str, RenderFn, ConfirmTool], Awaitable[CommandResult]]
 
@@ -89,28 +91,19 @@ class GuardrailNotice(Static):
     """
 
 
-class ConfirmToolScreen(ModalScreen[bool]):
-    BINDINGS: ClassVar[list[BindingType]] = [("escape", "deny", "Refuser")]
-
-    def __init__(self, tc: ToolCall) -> None:
-        super().__init__()
-        self.tc = tc
-
-    def compose(self) -> ComposeResult:
-        yield Static(
-            f"Autoriser l'outil {self.tc.name} ?\n{self.tc.arguments}", markup=False
-        )
-        yield Button("Oui", id="yes")
-        yield Button("Non", id="no")
-
-    def on_mount(self) -> None:
-        self.query_one("#yes", Button).focus()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        self.dismiss(event.button.id == "yes")
-
-    def action_deny(self) -> None:
-        self.dismiss(False)
+class ToolDecisionNotice(Static):
+    DEFAULT_CSS = """
+    ToolDecisionNotice {
+        margin: 0 0 0 2;
+        color: $text-muted;
+    }
+    ToolDecisionNotice.approved {
+        color: $text-success;
+    }
+    ToolDecisionNotice.declined {
+        color: $text-error;
+    }
+    """
 
 
 class ChatApp(App[None]):
@@ -130,6 +123,18 @@ class ChatApp(App[None]):
 
     def on_mount(self) -> None:
         self.query_one(Input).focus()
+
+    async def ask(self, question: Question[T]) -> T:
+        input_widget = self.query_one(Input)
+        prompt: QuestionPrompt[T] = QuestionPrompt(question)
+        input_widget.display = False
+        await self.mount(prompt)
+        prompt.focus()
+        try:
+            return await prompt.answer
+        finally:
+            await prompt.remove()
+            input_widget.display = True
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         input_widget = self.query_one(Input)
@@ -154,7 +159,15 @@ class ChatApp(App[None]):
         history.scroll_end(animate=False)
 
         async def confirm_tool(tc: ToolCall) -> bool:
-            return await self.push_screen_wait(ConfirmToolScreen(tc))
+            approved = await self.ask(tool_confirmation(tc))
+            await history.mount(
+                ToolDecisionNotice(
+                    tool_decision(tc, approved),
+                    classes="approved" if approved else "declined",
+                )
+            )
+            history.scroll_end(animate=False)
+            return approved
 
         async def render(events: AsyncIterator[Event]) -> None:
             label = RoleLabel("sensai", classes="assistant")
