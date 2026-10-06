@@ -1,11 +1,12 @@
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import ClassVar
 
 from rich.console import Console
 
 from sensai.core.commands import CommandContext
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event
+from sensai.domain.events import Event, TextChunkEvent
 from sensai.interfaces.cli.app import run_repl
 from sensai.interfaces.dispatcher import dispatch as _run
 from sensai.interfaces.dispatcher import resolve_config_path, resolve_session
@@ -204,7 +205,11 @@ async def test_run_repl_sends_each_line_until_eof():
             raise EOFError from exc
 
     async def render(events: AsyncIterator[Event]) -> None:
-        sent.append("".join(e.content for e in await _drain(events)))
+        sent.append(
+            "".join(
+                e.content for e in await _drain(events) if isinstance(e, TextChunkEvent)
+            )
+        )
 
     errors: list[Exception] = []
 
@@ -224,7 +229,11 @@ async def test_run_repl_treats_bare_exit_as_chat_message():
         return next(inputs)
 
     async def render(events: AsyncIterator[Event]) -> None:
-        rendered.append("".join(e.content for e in await _drain(events)))
+        rendered.append(
+            "".join(
+                e.content for e in await _drain(events) if isinstance(e, TextChunkEvent)
+            )
+        )
 
     await run_repl(
         _context(),
@@ -380,3 +389,53 @@ async def test_web_ui_reports_not_implemented(monkeypatch, tmp_path, capsys):
 
     assert code == 1
     assert "not implemented" in capsys.readouterr().out
+
+
+async def test_cli_confirmation_then_followup_keeps_chat_working(monkeypatch):
+    from io import StringIO
+
+    from sensai.domain.events import TextChunkEvent, ToolCallEvent
+    from sensai.interfaces.cli.app import run_cli
+    from sensai.tools.base import Tool
+
+    executed = []
+
+    class SearchTool(Tool):
+        name = "web_search"
+        description = "Search"
+        parameters_schema: ClassVar[dict] = {}
+        requires_confirmation = True
+
+        async def execute(self, **kwargs):
+            executed.append(kwargs)
+            return "Result"
+
+    class Provider:
+        async def chat_stream(self, messages, tools=None):
+            if messages[-1].role == "user" and messages[-1].content == "cherche":
+                yield TextChunkEvent(content="Je vais chercher.")
+                yield ToolCallEvent(
+                    tool_name="web_search", arguments={"query": "Sensai"}
+                )
+            else:
+                yield TextChunkEvent(content="Réponse terminée.")
+
+    for answer, expected_executions in [("y", 1), ("", 1), ("n", 0)]:
+        executed.clear()
+        context = _context()
+        context.engine.provider = Provider()
+        registry = ToolRegistry()
+        registry.register(SearchTool())
+        context.engine.registry = registry
+        inputs = iter(["cherche", answer, "bonjour", "/exit"])
+        monkeypatch.setattr("builtins.input", lambda values=inputs: next(values))
+        output = StringIO()
+        await run_cli(context, Console(file=output, force_terminal=False))
+        assert len(executed) == expected_executions
+        rendered = output.getvalue()
+        assert rendered.count("  Allow web_search?\n") == 1
+        assert rendered.count("Réponse terminée.") == (2 if expected_executions else 1)
+        assert "you: \nsensai:" in rendered
+        assert "Réponse terminée.\n\nyou:" in rendered
+        assert len(context.memory_store.saved) == 2
+        assert context.engine.conversation.messages[-2].content == "bonjour"

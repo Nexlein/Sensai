@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 import pytest
 
 from sensai.domain.models import GuardrailVerdict
@@ -22,7 +24,7 @@ class AllowAllGuardrail:
 
     def new_output_stream(self):
         class _Stream:
-            findings: list = []
+            findings: ClassVar[list] = []
             refused = False
 
             def feed(self, chunk: str) -> str:

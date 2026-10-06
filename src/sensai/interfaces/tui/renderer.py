@@ -1,17 +1,25 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import TypeVar
 
 import httpx
+from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Input, Markdown, Static
 
 from sensai.core.commands import CommandResult, RenderFn
+from sensai.core.engine import ConfirmTool
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import BudgetEvent, Event, GuardrailEvent, TextChunkEvent
+from sensai.domain.models import ToolCall
 from sensai.interfaces.notices import guardrail_notice
+from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
+from sensai.interfaces.tui.question import QuestionPrompt
 from sensai.interfaces.usage import format_usage
 
-ProcessFn = Callable[[str, RenderFn], Awaitable[CommandResult]]
+T = TypeVar("T")
+
+ProcessFn = Callable[[str, RenderFn, ConfirmTool], Awaitable[CommandResult]]
 
 
 def error_text(exc: Exception) -> str:
@@ -56,7 +64,7 @@ class UserMessage(Markdown):
 class AssistantMessage(Markdown):
     DEFAULT_CSS = """
     AssistantMessage {
-        margin: 0 0 0 2;
+        margin: 0 0 1 2;
         padding: 0 0 0 0;
     }
     AssistantMessage > MarkdownParagraph {
@@ -93,6 +101,21 @@ class GuardrailNotice(Static):
     """
 
 
+class ToolDecisionNotice(Static):
+    DEFAULT_CSS = """
+    ToolDecisionNotice {
+        margin: 0 0 0 2;
+        color: $text-muted;
+    }
+    ToolDecisionNotice.approved {
+        color: $text-success;
+    }
+    ToolDecisionNotice.declined {
+        color: $text-error;
+    }
+    """
+
+
 class ChatApp(App[None]):
     CSS = """
     Input {
@@ -111,19 +134,55 @@ class ChatApp(App[None]):
     def on_mount(self) -> None:
         self.query_one(Input).focus()
 
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
-        text = event.value
+    async def ask(self, question: Question[T]) -> T:
         input_widget = self.query_one(Input)
-        input_widget.value = ""
+        prompt: QuestionPrompt[T] = QuestionPrompt(question)
+        input_widget.display = False
+        await self.mount(prompt)
+        prompt.focus()
+        try:
+            return await prompt.answer
+        finally:
+            await prompt.remove()
+            input_widget.display = True
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        input_widget = self.query_one(Input)
+        if input_widget.disabled:
+            return
+        input_widget.disabled = True
+        input_widget.value = ""
+        self._respond(event.value, input_widget)
+
+    @work
+    async def _respond(self, text: str, input_widget: Input) -> None:
+        try:
+            await self._process_turn(text)
+        finally:
+            input_widget.disabled = False
+            input_widget.focus()
+
+    async def _process_turn(self, text: str) -> None:
         history = self.query_one("#history", VerticalScroll)
         await history.mount(RoleLabel("you", classes="user"))
         await history.mount(UserMessage(text))
         history.scroll_end(animate=False)
 
+        async def confirm_tool(tc: ToolCall) -> bool:
+            approved = await self.ask(tool_confirmation(tc))
+            await history.mount(
+                ToolDecisionNotice(
+                    tool_decision(tc, approved),
+                    classes="approved" if approved else "declined",
+                )
+            )
+            history.scroll_end(animate=False)
+            return approved
+
         async def render(events: AsyncIterator[Event]) -> None:
-            # The reply widget appears with the first text, so a blocked message
-            # does not leave an empty "sensai" bubble behind.
+            label = RoleLabel("sensai", classes="assistant")
+            await history.mount(label)
+            history.scroll_end(animate=False)
             reply: AssistantMessage | None = None
             content = ""
             usage: UsageLabel | None = None
@@ -136,29 +195,31 @@ class ChatApp(App[None]):
                     await history.mount(usage)
                 usage.update(usage_text)
 
-            async for streamed in events:
-                if isinstance(streamed, TextChunkEvent):
-                    if reply is None:
-                        await history.mount(RoleLabel("sensai", classes="assistant"))
-                        reply = AssistantMessage("")
-                        await history.mount(reply)
-                    content += streamed.content
-                    await reply.update(content)
-                    if usage_text:
-                        await show_usage()
-                elif isinstance(streamed, BudgetEvent):
-                    usage_text = format_usage(streamed)
-                    # Usage sits under the reply, so wait until the reply exists.
-                    if reply is not None:
-                        await show_usage()
-                elif isinstance(streamed, GuardrailEvent):
-                    await history.mount(
-                        GuardrailNotice(f"⚠ {guardrail_notice(streamed)}")
-                    )
-                history.scroll_end(animate=False)
+            try:
+                async for streamed in events:
+                    if isinstance(streamed, TextChunkEvent):
+                        if reply is None:
+                            reply = AssistantMessage("")
+                            await history.mount(reply)
+                        content += streamed.content
+                        await reply.update(content)
+                        if usage_text:
+                            await show_usage()
+                    elif isinstance(streamed, BudgetEvent):
+                        usage_text = format_usage(streamed)
+                        if reply is not None:
+                            await show_usage()
+                    elif isinstance(streamed, GuardrailEvent):
+                        await history.mount(
+                            GuardrailNotice(f"⚠ {guardrail_notice(streamed)}")
+                        )
+                    history.scroll_end(animate=False)
+            finally:
+                if reply is None:
+                    await label.remove()
 
         try:
-            result = await self._process(text, render)
+            result = await self._process(text, render, confirm_tool)
         except (EmptyInputError, ProviderError) as exc:
             await history.mount(ErrorMessage(error_text(exc)))
             history.scroll_end(animate=False)

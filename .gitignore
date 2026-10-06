@@ -41,3 +41,6 @@ wheels/
 
 # Ruff
 .ruff_cache/
+
+# Local runtime configuration (model, server, paths)
+sensai.toml

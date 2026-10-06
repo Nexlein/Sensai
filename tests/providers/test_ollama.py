@@ -1,4 +1,5 @@
 import json
+import os
 
 import httpx
 import pytest
@@ -43,6 +44,36 @@ def test_format_message_with_tool_calls():
     assert payload["tool_calls"] == [
         {"function": {"name": "search", "arguments": {"q": "x"}}}
     ]
+
+
+def test_format_messages_names_tool_results_in_call_order():
+    provider = OllamaLLMProvider()
+    messages = [
+        Message(role="user", content="inspect"),
+        Message(
+            role="assistant",
+            content="",
+            tool_calls=[
+                ToolCall(name="list_dir", arguments={"path": "."}),
+                ToolCall(name="read_file", arguments={"path": "AGENTS.md"}),
+            ],
+        ),
+        Message(role="tool", content="AGENTS.md"),
+        Message(role="tool", content="# AGENTS"),
+        Message(role="assistant", content="done"),
+    ]
+    payloads = provider._format_messages(messages)
+    assert payloads[2] == {
+        "role": "tool",
+        "content": "AGENTS.md",
+        "tool_name": "list_dir",
+    }
+    assert payloads[3] == {
+        "role": "tool",
+        "content": "# AGENTS",
+        "tool_name": "read_file",
+    }
+    assert "tool_name" not in payloads[4]
 
 
 def test_parse_line_text_content():
@@ -184,3 +215,121 @@ async def test_embedding_provider_calls_embed_endpoint():
         "input": ["first", "second"],
     }
     assert vectors == [[1.0, 0.0], [0.0, 1.0]]
+
+
+@pytest.fixture
+def live_ollama_provider():
+    """Opt-in model/template checks; normal unit tests require no Ollama server."""
+    model = os.environ.get("SENSAI_OLLAMA_TEST_MODEL")
+    if not model:
+        pytest.skip("Set SENSAI_OLLAMA_TEST_MODEL to test a real local model")
+    return OllamaLLMProvider(model=model)
+
+
+@pytest.mark.parametrize(
+    "prompt, expects_tool",
+    [
+        ("bonjour", False),
+        ("hey", False),
+        ("Explique-moi une boucle for en Python.", False),
+        ("Recherche sur le web les dernières actualités de Python.", True),
+        ("Cherche la météo actuelle à Paris sur internet.", True),
+    ],
+)
+async def test_live_tool_selection(live_ollama_provider, prompt, expects_tool):
+    from sensai.tools.registry import build_default_registry
+
+    tools = build_default_registry(None).get_tools_schema()
+    events = [
+        event
+        async for event in live_ollama_provider.chat_stream(
+            [Message(role="user", content=prompt)], tools=tools
+        )
+    ]
+    calls = [event for event in events if isinstance(event, ToolCallEvent)]
+    text = "".join(
+        event.content for event in events if isinstance(event, TextChunkEvent)
+    )
+    if expects_tool:
+        assert len(calls) == 1
+        assert calls[0].tool_name == "web_search"
+        assert isinstance(calls[0].arguments.get("query"), str)
+        assert calls[0].arguments["query"].strip()
+    else:
+        assert not calls
+        assert text.strip()
+        assert '"name"' not in text  # No unparsed/invented function call.
+
+
+@pytest.mark.parametrize("approved", [True, False])
+async def test_live_confirmation_round_trip(live_ollama_provider, approved):
+    from sensai.core.engine import ChatEngine
+    from sensai.domain.models import Conversation
+    from sensai.tools.registry import ToolRegistry
+    from sensai.tools.web import WebSearch
+
+    executions = []
+    confirmations = []
+
+    class SearchFixture(WebSearch):
+        requires_confirmation = True
+
+        async def execute(self, **kwargs):
+            executions.append(kwargs)
+            return "Résultat de test : Python propose une documentation officielle sur https://docs.python.org/3/."
+
+    registry = ToolRegistry()
+    registry.register(SearchFixture("http://localhost:8888"))
+    engine = ChatEngine(live_ollama_provider, Conversation(), registry)
+
+    async def confirm(tc):
+        confirmations.append(tc)
+        return approved
+
+    events = [
+        event
+        async for event in engine.send(
+            "Recherche sur le web les dernières actualités de Python.",
+            confirm_tool=confirm,
+        )
+    ]
+    assert confirmations
+    assert len(executions) == (len(confirmations) if approved else 0)
+    assert any(isinstance(event, TextChunkEvent) for event in events)
+    assert engine.conversation.messages[-1].role == "assistant"
+    if not approved:
+        assert engine.conversation.messages[-1].content == (
+            "I didn't run the requested tool: web_search."
+        )
+
+    events = [event async for event in engine.send("bonjour", confirm_tool=confirm)]
+    assert len(confirmations) == (len(executions) if approved else 1)
+    assert not any(isinstance(event, ToolCallEvent) for event in events)
+    assert any(isinstance(event, TextChunkEvent) for event in events)
+
+
+async def test_live_file_read_uses_listing_then_exact_case(
+    live_ollama_provider, tmp_path
+):
+    from sensai.core.engine import ChatEngine
+    from sensai.domain.models import Conversation
+    from sensai.tools.registry import build_default_registry
+
+    sentinel = "SENSAI_FILE_CONTENT_4729"
+    (tmp_path / "NOTES.md").write_text(sentinel, encoding="utf-8")
+    registry = build_default_registry(str(tmp_path))
+    engine = ChatEngine(live_ollama_provider, Conversation(), registry)
+    events = [
+        event
+        async for event in engine.send(
+            "Lis le fichier notes.md dans le dossier racine."
+        )
+    ]
+    calls = [event for event in events if isinstance(event, ToolCallEvent)]
+    assert calls
+    assert calls[-1].tool_name == "read_file"
+    assert calls[-1].arguments["path"].casefold() == "notes.md"
+    if any(call.tool_name == "list_dir" for call in calls):
+        assert calls[0].tool_name == "list_dir"
+        assert calls[0].arguments["path"] == "."
+    assert sentinel in engine.conversation.messages[-1].content

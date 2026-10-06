@@ -2,10 +2,10 @@ from typing import Any
 
 import httpx
 
-from .base import Tool
+from .base import SensitiveTool
 
 
-class WebSearch(Tool):
+class WebSearch(SensitiveTool):
     name = "web_search"
     description = (
         "Search the web for information or pages requested by the user, especially "

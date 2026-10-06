@@ -8,7 +8,7 @@ from sensai.core.commands import (
     dispatch_command,
     parse_commands,
 )
-from sensai.core.config import AppConfig, load_config
+from sensai.core.config import DEFAULT_MODEL, AppConfig, load_config
 from sensai.core.engine import ChatEngine
 from sensai.domain.events import Event
 from sensai.domain.models import Conversation
@@ -222,7 +222,7 @@ async def test_dispatch_provider_switches_provider_and_preserves_conversation():
         (
             "mock",
             {
-                "model": "llama3.2",
+                "model": DEFAULT_MODEL,
                 "base_url": "http://localhost:11434",
             },
         )
@@ -231,7 +231,7 @@ async def test_dispatch_provider_switches_provider_and_preserves_conversation():
     assert context.engine.conversation is conversation
     assert context.engine.conversation.messages == messages
     assert context.config.provider == "mock"
-    assert context.config.model == "llama3.2"
+    assert context.config.model == DEFAULT_MODEL
     assert result.message == "Provider switched to mock."
 
 
@@ -276,7 +276,7 @@ async def test_dispatch_config_gets_one_value():
     )
 
     assert not result.should_exit
-    assert result.message == "model = llama3.2"
+    assert result.message == f"model = {DEFAULT_MODEL}"
 
 
 async def test_dispatch_config_rejects_unknown_key():
@@ -349,7 +349,7 @@ async def test_dispatch_config_set_base_url_rebuilds_provider():
         (
             "ollama",
             {
-                "model": "llama3.2",
+                "model": DEFAULT_MODEL,
                 "base_url": "http://ollama.example:11434",
             },
         )

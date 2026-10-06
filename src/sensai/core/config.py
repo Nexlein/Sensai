@@ -9,7 +9,7 @@ from sensai.core.budget import BudgetConfig
 
 DEFAULT_INTERFACE = "cli"
 DEFAULT_PROVIDER = "ollama"
-DEFAULT_MODEL = "llama3.2"
+DEFAULT_MODEL = "qwen3.5:4b"
 DEFAULT_BASE_URL = "http://localhost:11434"
 DEFAULT_CONFIG_PATH = Path("sensai.toml")
 

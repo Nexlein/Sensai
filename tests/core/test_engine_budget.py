@@ -82,7 +82,7 @@ async def test_budget_event_follows_its_text_chunk():
 
     kinds = [e.type async for e in engine.send("hello")]
 
-    assert kinds == ["budget", "text_chunk", "budget"]
+    assert kinds == ["assistant_start", "budget", "text_chunk", "budget"]
 
 
 async def test_history_compressed_before_the_model_call():
