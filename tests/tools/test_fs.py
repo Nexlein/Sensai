@@ -78,3 +78,22 @@ async def test_read_file_traversal_symlink(fs_sandbox):
     content = await tool.execute("link/secret.txt")
     assert "Error" in content
     assert "Path traversal rejected" in content
+
+
+@pytest.mark.asyncio
+async def test_list_dir_rejects_relative_traversal(fs_sandbox):
+    tool = ListDirTool(fs_sandbox)
+    content = await tool.execute("../outside")
+
+    assert "Path traversal rejected" in content
+
+
+@pytest.mark.asyncio
+async def test_list_dir_rejects_symlink_escape(fs_sandbox):
+    if not (fs_sandbox / "link").exists():
+        pytest.skip("Symlink creation not supported on this OS")
+
+    tool = ListDirTool(fs_sandbox)
+    content = await tool.execute("link")
+
+    assert "Path traversal rejected" in content

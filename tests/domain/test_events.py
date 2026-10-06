@@ -1,4 +1,13 @@
-from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
+import pytest
+from pydantic import ValidationError
+
+from sensai.domain.events import (
+    BudgetEvent,
+    Event,
+    GuardrailEvent,
+    TextChunkEvent,
+    ToolCallEvent,
+)
 
 
 def test_text_chunk_event_type_and_content():
@@ -15,6 +24,28 @@ def test_tool_call_event_type_and_fields():
     assert event.arguments == {"q": "x"}
 
 
+def test_budget_event_type_and_fields():
+    event = BudgetEvent(used=10, max_tokens=100)
+    assert event.type == "budget"
+    assert (event.used, event.max_tokens) == (10, 100)
+
+
 def test_events_are_event_instances():
     assert isinstance(TextChunkEvent(content="hi"), Event)
     assert isinstance(ToolCallEvent(tool_name="x", arguments={}), Event)
+
+
+def test_guardrail_event_type_and_fields():
+    event = GuardrailEvent(stage="input", action="block", reason="prompt injection")
+    assert event.type == "guardrail"
+    assert event.stage == "input"
+    assert event.action == "block"
+    assert event.reason == "prompt injection"
+    assert isinstance(event, Event)
+
+
+def test_guardrail_event_rejects_unknown_stage_or_action():
+    with pytest.raises(ValidationError):
+        GuardrailEvent(stage="somewhere", action="block", reason="x")
+    with pytest.raises(ValidationError):
+        GuardrailEvent(stage="input", action="explode", reason="x")

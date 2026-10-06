@@ -1,0 +1,10 @@
+services:
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    ports:
+      - "127.0.0.1:8888:8080"
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?Set SEARXNG_SECRET in .env}
+      FORCE_OWNERSHIP: "false"
+    volumes:
+      - ./docker/searxng/settings.yml:/etc/searxng/settings.yml:ro

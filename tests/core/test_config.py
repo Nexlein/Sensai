@@ -6,6 +6,8 @@ from sensai.core.config import (
     DEFAULT_PROVIDER,
     AppConfig,
     ConfigError,
+    EvalConfig,
+    GuardrailsConfig,
     ToolsConfig,
     load_config,
     save_config,
@@ -35,13 +37,13 @@ def test_cli_arg_overrides_config_file(tmp_path):
     config_file = tmp_path / "sensai.toml"
     config_file.write_text('model = "mistral"\n')
 
-    config = load_config(config_file, cli_model="llama3.2")
+    config = load_config(config_file, model="llama3.2")
 
     assert config.model == "llama3.2"
 
 
 def test_cli_arg_overrides_default_when_no_config_file(tmp_path):
-    config = load_config(tmp_path / "missing.toml", cli_model="phi3")
+    config = load_config(tmp_path / "missing.toml", model="phi3")
 
     assert config.model == "phi3"
 
@@ -97,3 +99,139 @@ def test_save_config_omits_unset_tools_section(tmp_path):
 
     assert "[tools]" not in config_file.read_text()
     assert load_config(config_file) == AppConfig()
+
+
+def test_interface_cli_override_takes_precedence_over_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text('interface = "tui"\n', encoding="utf-8")
+
+    assert load_config(config_file).interface == "tui"
+    assert load_config(config_file, interface="cli").interface == "cli"
+
+
+def test_invalid_interface_is_rejected(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text('interface = "unknown"\n', encoding="utf-8")
+
+    with pytest.raises(ConfigError, match="Invalid config values"):
+        load_config(config_file)
+
+
+def test_save_config_preserves_interface(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    save_config(AppConfig(interface="tui"), config_file)
+
+    assert load_config(config_file).interface == "tui"
+
+
+def test_guardrails_are_on_by_default_with_safe_actions():
+    guardrails = load_config(config_path=None).guardrails
+
+    assert guardrails.enabled is True
+    assert guardrails.injection == "block"
+    assert guardrails.pii == "redact"
+
+
+def test_guardrails_can_be_disabled_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text("[guardrails]\nenabled = false\n")
+
+    assert load_config(config_file).guardrails.enabled is False
+
+
+def test_save_config_keeps_guardrails_disabled(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(guardrails=GuardrailsConfig(enabled=False))
+
+    save_config(config, config_file)
+
+    assert "enabled = false" in config_file.read_text()
+    assert load_config(config_file).guardrails.enabled is False
+
+
+def test_guardrails_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(
+        '[guardrails]\nenabled = true\ninjection = "flag"\npii = "block"\n'
+    )
+
+    guardrails = load_config(config_file).guardrails
+
+    assert guardrails == GuardrailsConfig(enabled=True, injection="flag", pii="block")
+
+
+def test_guardrails_partial_section_keeps_other_defaults(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text("[guardrails]\nenabled = true\n")
+
+    guardrails = load_config(config_file).guardrails
+
+    assert guardrails == GuardrailsConfig(enabled=True)
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        '[guardrails]\ninjection = "redact"\n',
+        '[guardrails]\npii = "flag"\n',
+        '[guardrails]\nenabled = "maybe"\n',
+    ],
+)
+def test_invalid_guardrails_values_are_rejected(tmp_path, section):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(section)
+
+    with pytest.raises(ConfigError, match="Invalid config values"):
+        load_config(config_file)
+
+
+def test_save_config_round_trips_guardrails(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(
+        tools=ToolsConfig(fs_allowed_root="/tmp/project"),
+        guardrails=GuardrailsConfig(enabled=True, injection="flag", pii="block"),
+    )
+
+    save_config(config, config_file)
+
+    assert load_config(config_file) == config
+
+
+def test_save_config_omits_default_guardrails_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[guardrails]" not in config_file.read_text()
+
+
+def test_reply_log_is_off_by_default():
+    assert load_config(config_path=None).eval == EvalConfig(
+        log_replies=False, replies_path="logs/replies.jsonl"
+    )
+
+
+def test_eval_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text('[eval]\nlog_replies = true\nreplies_path = "r.jsonl"\n')
+
+    assert load_config(config_file).eval == EvalConfig(
+        log_replies=True, replies_path="r.jsonl"
+    )
+
+
+def test_save_config_round_trips_eval(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(eval=EvalConfig(log_replies=True, replies_path="out/r.jsonl"))
+
+    save_config(config, config_file)
+
+    assert load_config(config_file) == config
+
+
+def test_save_config_omits_default_eval_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[eval]" not in config_file.read_text()

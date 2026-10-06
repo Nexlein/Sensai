@@ -49,3 +49,24 @@ def test_registry_get_tools_schema():
             "parameters": {"type": "object", "properties": {}},
         },
     }
+
+
+def test_build_default_registry_always_registers_web_search(tmp_path):
+    from sensai.tools.registry import SEARXNG_URL, build_default_registry
+
+    registry = build_default_registry(None)
+    web_tool = registry.get("web_search")
+    assert web_tool is not None
+    assert web_tool.base_url == SEARXNG_URL
+    assert {tool.name for tool in registry.list_tools()} == {"web_search"}
+
+    with_files = build_default_registry(str(tmp_path))
+    assert {tool.name for tool in with_files.list_tools()} == {
+        "read_file",
+        "list_dir",
+        "web_search",
+    }
+    assert any(
+        item["function"]["name"] == "web_search"
+        for item in with_files.get_tools_schema()
+    )

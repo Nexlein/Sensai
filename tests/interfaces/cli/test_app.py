@@ -6,15 +6,12 @@ from rich.console import Console
 from sensai.core.commands import CommandContext
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event
-from sensai.interfaces.cli.app import (
-    _build_tool_registry,
-    _run,
-    resolve_config_path,
-    resolve_session,
-    run_repl,
-)
+from sensai.interfaces.cli.app import run_repl
+from sensai.interfaces.dispatcher import dispatch as _run
+from sensai.interfaces.dispatcher import resolve_config_path, resolve_session
 from sensai.providers import get_provider
 from sensai.providers.mock import MockLLMProvider
+from sensai.tools.registry import build_default_registry
 
 
 async def _drain(events: AsyncIterator[Event]) -> list[Event]:
@@ -135,16 +132,18 @@ async def test_chat_session_unknown_name_creates_new(monkeypatch, capsys, tmp_pa
     assert conversation.id == "brand-new"
 
 
-def test_build_tool_registry_is_empty_when_root_is_unset():
-    assert _build_tool_registry(None).get_tools_schema() == []
+def test_build_tool_registry_keeps_web_search_when_root_is_unset():
+    schemas = build_default_registry(None).get_tools_schema()
+    assert [schema["function"]["name"] for schema in schemas] == ["web_search"]
 
 
 def test_build_tool_registry_registers_file_tools(tmp_path):
-    schemas = _build_tool_registry(str(tmp_path)).get_tools_schema()
+    schemas = build_default_registry(str(tmp_path)).get_tools_schema()
 
     assert {schema["function"]["name"] for schema in schemas} == {
         "read_file",
         "list_dir",
+        "web_search",
     }
 
 
@@ -317,3 +316,67 @@ async def test_run_repl_reports_provider_error_and_continues():
 
     assert len(errors) == 1
     assert isinstance(errors[0], ProviderError)
+
+
+async def test_chat_rag_option_indexes_local_documents(monkeypatch, tmp_path):
+    from sensai.memory.rag.store import SQLiteVectorStore
+
+    class FakeEmbeddingProvider:
+        def __init__(self, base_url: str, model: str):
+            self.base_url = base_url
+            self.model = model
+
+        async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            return [[1.0, 0.0] for _ in texts]
+
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "guide.md").write_text("project guide", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "sensai.core.bootstrap.OllamaEmbeddingProvider", FakeEmbeddingProvider
+    )
+    _script_stdin(monkeypatch, ["/exit"])
+
+    code = await _run(
+        ["chat", "--provider", "mock", "--rag-dir", str(docs), "--rag-db", "rag.db"]
+    )
+
+    assert code == 0
+    results = SQLiteVectorStore("rag.db").search([1.0, 0.0])
+    assert [chunk.text for chunk in results] == ["project guide"]
+
+
+async def test_ui_flag_dispatches_to_tui(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    selected = []
+
+    async def fake_run_tui(context):
+        selected.append(context.config.interface)
+
+    monkeypatch.setattr("sensai.interfaces.dispatcher.run_tui", fake_run_tui)
+
+    code = await _run(["chat", "--provider", "mock", "--ui", "tui"])
+
+    assert code == 0
+    assert selected == ["tui"]
+
+
+async def test_ui_flag_overrides_config_file(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text('interface = "tui"\nprovider = "mock"\n')
+    _script_stdin(monkeypatch, ["/exit"])
+
+    code = await _run(["chat", "--config", str(config_path), "--ui", "cli"])
+
+    assert code == 0
+
+
+async def test_web_ui_reports_not_implemented(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    code = await _run(["chat", "--provider", "mock", "--ui", "web"])
+
+    assert code == 1
+    assert "not implemented" in capsys.readouterr().out

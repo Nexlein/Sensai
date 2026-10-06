@@ -1,6 +1,10 @@
 from typing import Any
 
 from sensai.domain.protocols import BaseTool
+from sensai.tools.fs import ListDirTool, ReadFileTool
+from sensai.tools.web import WebSearch
+
+SEARXNG_URL = "http://127.0.0.1:8888"
 
 
 class ToolRegistry:
@@ -28,3 +32,12 @@ class ToolRegistry:
             }
             for t in self._tools.values()
         ]
+
+
+def build_default_registry(allowed_root: str | None) -> ToolRegistry:
+    registry = ToolRegistry()
+    if allowed_root is not None:
+        registry.register(ReadFileTool(allowed_root))
+        registry.register(ListDirTool(allowed_root))
+    registry.register(WebSearch(SEARXNG_URL))
+    return registry

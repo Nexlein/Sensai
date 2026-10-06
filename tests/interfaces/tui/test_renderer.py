@@ -3,12 +3,21 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 
+from sensai.core.commands import CommandResult, RenderFn
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import (
+    BudgetEvent,
+    Event,
+    GuardrailEvent,
+    TextChunkEvent,
+    ToolCallEvent,
+)
 from sensai.interfaces.tui.renderer import (
     AssistantMessage,
     ChatApp,
     ErrorMessage,
+    GuardrailNotice,
+    UsageLabel,
     UserMessage,
     error_text,
 )
@@ -24,12 +33,18 @@ async def _raising(exc: Exception) -> AsyncIterator[Event]:
     yield  # pragma: no cover
 
 
+def _process_events(*items: Event):
+    async def process(text: str, render: RenderFn) -> CommandResult:
+        await render(_events(*items))
+        return CommandResult()
+
+    return process
+
+
 @pytest.mark.asyncio
 async def test_submitting_input_mounts_user_message_and_streamed_reply():
     app = ChatApp(
-        lambda text: _events(
-            TextChunkEvent(content="hel"), TextChunkEvent(content="lo")
-        )
+        _process_events(TextChunkEvent(content="hel"), TextChunkEvent(content="lo"))
     )
 
     async with app.run_test() as pilot:
@@ -45,13 +60,15 @@ async def test_submitting_input_mounts_user_message_and_streamed_reply():
 
         assistant_messages = app.query(AssistantMessage)
         assert len(assistant_messages) == 1
+        assert assistant_messages.first().source == "hello"
 
 
 @pytest.mark.asyncio
 async def test_submitting_input_ignores_non_text_events():
     app = ChatApp(
-        lambda text: _events(
-            ToolCallEvent(tool_name="fs", arguments={}), TextChunkEvent(content="hi")
+        _process_events(
+            ToolCallEvent(tool_name="fs", arguments={}),
+            TextChunkEvent(content="hi"),
         )
     )
 
@@ -60,15 +77,94 @@ async def test_submitting_input_ignores_non_text_events():
         await pilot.press("enter")
         await pilot.pause()
 
-        assert len(app.query(AssistantMessage)) == 1
+        assert app.query(AssistantMessage).first().source == "hi"
+
+
+@pytest.mark.asyncio
+async def test_blocked_input_mounts_notice_and_no_empty_reply():
+    app = ChatApp(
+        _process_events(
+            GuardrailEvent(
+                stage="input", action="block", reason="injection: ignore_instructions"
+            )
+        )
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        notices = app.query(GuardrailNotice)
+        assert len(notices) == 1
+        assert "Message blocked" in str(notices.first().content)
+        assert "injection: ignore_instructions" in str(notices.first().content)
+        assert len(app.query(AssistantMessage)) == 0
+
+
+@pytest.mark.asyncio
+async def test_masked_reply_shows_text_then_notice():
+    app = ChatApp(
+        _process_events(
+            TextChunkEvent(content="Write to [EMAIL]"),
+            GuardrailEvent(stage="output", action="redact", reason="pii: email"),
+        )
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert app.query(AssistantMessage).first().source == "Write to [EMAIL]"
+        notices = app.query(GuardrailNotice)
+        assert len(notices) == 1
+        assert "masked" in str(notices.first().content)
+
+
+@pytest.mark.asyncio
+async def test_budget_events_update_a_single_usage_label():
+    app = ChatApp(
+        _process_events(
+            BudgetEvent(used=100, max_tokens=1000),
+            TextChunkEvent(content="hi"),
+            BudgetEvent(used=101, max_tokens=1000),
+        )
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        labels = app.query(UsageLabel)
+        assert len(labels) == 1
+        assert "101 / 1.0k tokens (10%)" in str(labels.first().content)
+        assert app.query(AssistantMessage).first().source == "hi"
+
+
+@pytest.mark.asyncio
+async def test_no_usage_label_without_budget_events():
+    app = ChatApp(_process_events(TextChunkEvent(content="hi")))
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert len(app.query(UsageLabel)) == 0
 
 
 @pytest.mark.asyncio
 async def test_provider_error_mounts_error_message():
     exc = ProviderError("provider request failed")
     exc.__cause__ = httpx.ConnectError("connection refused")
-    app = ChatApp(lambda text: _raising(exc))
 
+    async def process(text: str, render: RenderFn) -> CommandResult:
+        await render(_raising(exc))
+        return CommandResult()
+
+    app = ChatApp(process)
     async with app.run_test() as pilot:
         await pilot.click("Input")
         await pilot.press("enter")
@@ -77,6 +173,25 @@ async def test_provider_error_mounts_error_message():
         error_messages = app.query(ErrorMessage)
         assert len(error_messages) == 1
         assert "Connection failed" in str(error_messages.first().content)
+
+
+@pytest.mark.asyncio
+async def test_command_result_is_shown_without_empty_streamed_reply():
+    async def process(text: str, render: RenderFn) -> CommandResult:
+        assert text == "/clear"
+        return CommandResult(message="Conversation cleared.")
+
+    app = ChatApp(process)
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        for char in "/clear":
+            await pilot.press(char)
+        await pilot.press("enter")
+        await pilot.pause()
+
+        replies = app.query(AssistantMessage)
+        assert len(replies) == 1
+        assert replies.first().source == "Conversation cleared."
 
 
 def test_error_text_reports_empty_input():
