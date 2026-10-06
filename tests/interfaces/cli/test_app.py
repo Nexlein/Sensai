@@ -420,7 +420,7 @@ async def test_cli_confirmation_then_followup_keeps_chat_working(monkeypatch):
             else:
                 yield TextChunkEvent(content="Réponse terminée.")
 
-    for answer, expected_executions in [("oui", 1), ("", 1), ("non", 0)]:
+    for answer, expected_executions in [("y", 1), ("", 1), ("n", 0)]:
         executed.clear()
         context = _context()
         context.engine.provider = Provider()
@@ -433,7 +433,7 @@ async def test_cli_confirmation_then_followup_keeps_chat_working(monkeypatch):
         await run_cli(context, Console(file=output, force_terminal=False))
         assert len(executed) == expected_executions
         rendered = output.getvalue()
-        assert rendered.count("Autoriser web_search ? [O/n]") == 1
+        assert rendered.count("  Allow web_search?\n") == 1
         assert rendered.count("Réponse terminée.") == (2 if expected_executions else 1)
         assert "you: \nsensai:" in rendered
         assert "Réponse terminée.\n\nyou:" in rendered

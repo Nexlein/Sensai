@@ -140,9 +140,12 @@ def test_error_text_handles_unknown_exception():
 @pytest.mark.parametrize(
     "answer, approved",
     [
-        ("oui", True),
+        ("y", True),
         ("yes", True),
-        ("non", False),
+        ("1", True),
+        ("no", False),
+        ("2", False),
+        ("maybe", False),
         ("", True),
         (EOFError(), False),
         (KeyboardInterrupt(), False),
@@ -180,7 +183,33 @@ async def test_confirmation_keeps_streamed_text_and_resumes_reply(
 
     await renderer.render(events())
     rendered = output.getvalue()
-    assert "Autoriser web_search ? [O/n]" in rendered
-    assert "[test]" in rendered
+    assert "  Allow web_search?\n    query  [test]\n  [Yes/No] " in rendered
+    decision = "✓ allowed web_search" if approved else "✗ declined web_search"
+    assert f"  {decision}\n" in rendered
     assert rendered.count("Avant la recherche.") == 1
     assert rendered.count("Après la décision.") == 1
+
+
+async def test_interactive_confirmation_uses_selector(monkeypatch):
+    from io import StringIO
+
+    from sensai.domain.models import ToolCall
+    from sensai.interfaces.cli import renderer as renderer_module
+    from sensai.interfaces.cli.renderer import CliRenderer
+    from sensai.interfaces.prompts import tool_confirmation
+
+    asked = []
+
+    async def fake_select(question):
+        asked.append(question)
+        return True
+
+    monkeypatch.setattr(renderer_module, "select", fake_select)
+    monkeypatch.setattr(CliRenderer, "_interactive", lambda self: True)
+    output = StringIO()
+    renderer = CliRenderer(Console(file=output, force_terminal=False))
+    tc = ToolCall(name="web_search", arguments={"query": "Sensai"})
+
+    assert await renderer.confirm_tool(tc) is True
+    assert asked == [tool_confirmation(tc)]
+    assert output.getvalue() == "  ✓ allowed web_search\n"
