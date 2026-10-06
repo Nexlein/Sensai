@@ -2,10 +2,10 @@ from typing import Any
 
 import httpx
 
-from .base import Tool
+from .base import SensitiveTool
 
 
-class WebSearch(Tool):
+class WebSearch(SensitiveTool):
     name = "web_search"
     description = (
         "Search the web for information or pages requested by the user, especially "
@@ -14,7 +14,6 @@ class WebSearch(Tool):
         "the results justify one. Returns page titles, URLs, and excerpts. Use the "
         "results as evidence and include relevant source links in the answer."
     )
-    requires_confirmation = True
 
     def __init__(self, base_url: str) -> None:
         if not base_url.strip():

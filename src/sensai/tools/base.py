@@ -16,6 +16,10 @@ class Tool(BaseTool, abc.ABC):
         pass
 
 
+class SensitiveTool(Tool, abc.ABC):
+    requires_confirmation: bool = True
+
+
 class PermissionBoundary:
     """Resolve tool paths while keeping them inside an allowed directory."""
 
