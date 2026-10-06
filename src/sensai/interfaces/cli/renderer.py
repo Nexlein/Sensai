@@ -1,5 +1,6 @@
-import json
+import sys
 from collections.abc import AsyncIterator
+from typing import TypeVar
 
 import httpx
 from rich.console import Console
@@ -13,7 +14,11 @@ from sensai.domain.events import (
     TextChunkEvent,
 )
 from sensai.domain.models import Conversation, ToolCall
+from sensai.interfaces.cli.select import select
 from sensai.interfaces.notices import guardrail_notice
+from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
+
+T = TypeVar("T")
 
 _ROLE_LABELS = {
     "user": ("you: ", "bold blue"),
@@ -43,8 +48,6 @@ def render_history(console: Console, conversation: Conversation) -> None:
 
 
 class CliRenderer:
-    """Write chunks as they arrive and keep tool prompts on separate lines."""
-
     def __init__(self, console: Console) -> None:
         self.console = console
         self._line_open = False
@@ -59,15 +62,33 @@ class CliRenderer:
             self.console.print()
             self._line_open = False
 
-    async def confirm_tool(self, tc: ToolCall) -> bool:
-        self._finish_line()
-        self.console.print(Text(json.dumps(tc.arguments, ensure_ascii=False)))
+    def _interactive(self) -> bool:
+        return self.console.is_terminal and sys.stdin.isatty()
+
+    def _ask_text(self, question: Question[T]) -> T:
+        self.console.print(Text(f"  {question.title}", style="bold"))
+        width = max((len(key) for key, _ in question.details), default=0)
+        for key, value in question.details:
+            self.console.print(Text(f"    {key.ljust(width)}  ", style="dim") + value)
+        labels = "/".join(option.label for option in question.options)
         try:
-            answer = self.console.input(Text(f"Autoriser {tc.name} ? [O/n] "))
-            return answer.strip().lower() in {"", "o", "oui", "y", "yes"}
+            answer = self.console.input(Text(f"  [{labels}] ", style="dim"))
         except (EOFError, KeyboardInterrupt):
             self.console.print()
-            return False
+            return question.cancel_value
+        return question.resolve(answer)
+
+    async def ask(self, question: Question[T]) -> T:
+        self._finish_line()
+        if self._interactive():
+            return await select(question)
+        return self._ask_text(question)
+
+    async def confirm_tool(self, tc: ToolCall) -> bool:
+        approved = await self.ask(tool_confirmation(tc))
+        style = "green" if approved else "red"
+        self.console.print(Text(f"  {tool_decision(tc, approved)}", style=style))
+        return approved
 
     async def render(self, events: AsyncIterator[Event]) -> None:
         self._line_open = False
