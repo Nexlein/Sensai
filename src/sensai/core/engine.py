@@ -2,10 +2,12 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import httpx
 
+from sensai.core.budget import ContextBudget
 from sensai.core.prompt import build_prompt
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import (
     AssistantStartEvent,
+    BudgetEvent,
     Event,
     GuardrailEvent,
     TextChunkEvent,
@@ -16,6 +18,7 @@ from sensai.domain.protocols import (
     ContextRetriever,
     Guardrail,
     LLMProvider,
+    ReplyRecorder,
     ToolRegistry,
 )
 
@@ -53,13 +56,17 @@ class ChatEngine:
         conversation: Conversation,
         registry: ToolRegistry | None = None,
         retriever: ContextRetriever | None = None,
+        budget: ContextBudget | None = None,
         guardrail: Guardrail | None = None,
+        recorder: ReplyRecorder | None = None,
     ) -> None:
         self.provider = provider
         self.conversation = conversation
         self.registry = registry
         self.retriever = retriever
+        self.budget = budget
         self.guardrail = guardrail
+        self.recorder = recorder
 
     async def send(
         self, user_text: str, confirm_tool: ConfirmTool | None = None
@@ -98,11 +105,18 @@ class ChatEngine:
         tools_schema = self.registry.get_tools_schema() if self.registry else None
         yield AssistantStartEvent()
         for _ in range(5):
+            if self.budget is not None:
+                await self.budget.fit(self.conversation)
             prompt = build_prompt(
                 self.conversation, rag_context=rag_context, privacy_note=masked
             )
             if tools_schema:
                 prompt.insert(0, Message(role="system", content=TOOL_USE_GUIDANCE))
+            tracker = self.budget.tracker(prompt) if self.budget else None
+            if tracker is not None:
+                yield BudgetEvent(
+                    used=tracker.usage.used, max_tokens=tracker.max_tokens
+                )
 
             chunks: list[str] = []
             tool_calls: list[ToolCallEvent] = []
@@ -122,6 +136,9 @@ class ChatEngine:
                     elif isinstance(event, ToolCallEvent):
                         tool_calls.append(event)
                     yield event
+                    if tracker is not None and isinstance(event, TextChunkEvent):
+                        usage = tracker.add(event.content)
+                        yield BudgetEvent(used=usage.used, max_tokens=usage.max_tokens)
             except (RuntimeError, httpx.ConnectError) as exc:
                 self.conversation.messages.pop()
                 raise ProviderError("provider request failed") from exc
@@ -144,7 +161,11 @@ class ChatEngine:
 
             # A refused reply is final: its tool calls are dropped, not executed.
             if not tool_calls or refused:
-                self.conversation.add_message(role="assistant", content="".join(chunks))
+                answer = "".join(chunks)
+                self.conversation.add_message(role="assistant", content=answer)
+                # A guardrail refusal is not the model's answer: nothing to grade.
+                if self.recorder is not None and not refused and answer.strip():
+                    self.recorder.record(user_text, answer, rag_context)
                 break
 
             tcs = [

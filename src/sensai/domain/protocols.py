@@ -57,6 +57,10 @@ class Guardrail(Protocol):
     def new_output_stream(self) -> OutputStream: ...
 
 
+class Summarizer(Protocol):
+    async def summarize(self, messages: list[Message]) -> str: ...
+
+
 class ToolRegistry(Protocol):
     def get(self, name: str) -> BaseTool | None: ...
 
@@ -79,3 +83,9 @@ class VectorStore(Protocol):
 
 class ContextRetriever(Protocol):
     async def retrieve_context(self, query: str, top_k: int = 5) -> str: ...
+
+
+class ReplyRecorder(Protocol):
+    """Keeps each final reply with its question and RAG context, for later grading."""
+
+    def record(self, question: str, answer: str, context: str) -> None: ...

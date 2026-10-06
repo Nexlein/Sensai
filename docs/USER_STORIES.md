@@ -49,6 +49,25 @@ Acceptance criteria:
 - CLI and TUI obtain their engine, session store, tools, and RAG from the same bootstrap.
 - TUI replies are saved to the existing session store.
 
+## Feature: [M2] Token Budgeting & Semantic Compression
+
+As a user, I want long conversations to keep working, so the agent does not lose the thread or hit the model's context limit.
+
+Acceptance criteria:
+
+- Token usage is counted for every outgoing prompt against `budget.max_tokens`.
+- At `budget.threshold`, the oldest turns are replaced by one summary message.
+- The last `budget.keep_recent_turns` turns are kept verbatim, and a tool call is never separated from its result.
+- If summarizing fails, the chat continues with the history unchanged.
+
+As a user, I want to set the token budget in `sensai.toml`, so it matches the context window of the model I run.
+
+Acceptance criteria:
+
+- `[budget]` accepts `max_tokens`, `threshold` and `keep_recent_turns`, with defaults when omitted.
+- Out-of-range values are rejected with a config error.
+- The engine emits a budget event before and during streaming, so an interface can show live usage.
+
 ## Feature: Shared Tool Registry and Permission Boundary
 
 As a developer, I want CLI and TUI sessions to build tools through the same registry factory, so that a tool is available consistently in either interface.
@@ -151,3 +170,46 @@ Acceptance criteria:
 - `[guardrails]` accepts `enabled`, `injection` (`block` or `flag`) and `pii` (`redact` or `block`) in `sensai.toml`.
 - Any other value is rejected with a clear config error.
 - `/config save` writes the section only when it differs from the defaults, and a disabled configuration is preserved when saved.
+
+## Feature: [EV4] Adversarial Testing
+
+As a developer tightening the guardrails, I want to replay a corpus of jailbreaks, prompt injections, PII leaks and malformed inputs against the agent with one command, so that I see what still gets through before a user does.
+
+Acceptance criteria:
+
+- `python -m sensai.eval.adversarial` prints, per category, how many attacks were caught, missed or are known gaps, plus a detection rate and a false-positive rate.
+- Each attack runs against the filters alone and through a real `ChatEngine`, where a blocked message must never reach the provider or the stored history, and a masked value must never appear in either.
+- Streamed replies are fed in small chunks, so a value split across chunks is checked too.
+- The command exits with a non-zero status when an attack is missed without being listed as a known gap.
+- Malformed inputs (empty, null bytes, a million characters, backtracking bait) never crash the guardrail.
+
+As a maintainer changing a detection rule, I want a regression suite that fails when a rule stops catching an attack or starts blocking harmless prompts, so that a fix for one phrasing cannot silently break another.
+
+Acceptance criteria:
+
+- Every case states the expected verdict (`block`, `redact` or `allow`), and optionally the rule that must fire and the value that must not survive.
+- Benign near-misses ("how do I ignore whitespace in a regex?", an order number that fails its checksum) are part of the corpus and must stay untouched.
+- Attacks the heuristics cannot catch today (obfuscated text, paraphrases, spelled-out emails) are kept as `known_gap` cases with a reason, so the limits are documented and not dropped.
+- A `known_gap` case that starts passing is reported as stale, so a fixed gap is promoted to a regular case.
+- Running the suite against a guardrail that lets everything through fails.
+
+## Feature: [EV1] Automated Eval & Hallucination Detection
+
+As a developer of a document Q&A assistant, I want each answer graded by a judge model for relevance, coherence and faithfulness to the retrieved documents, so that I spot answers that drift off topic or invent facts before users do.
+
+Acceptance criteria:
+
+- `python -m sensai.eval.judge replies.jsonl` reads one `{"question", "answer", "context"}` per line and prints mean relevance and coherence (1-5) and mean faithfulness (0-1).
+- Each statement of the answer is checked against the retrieved context and labelled `supported`, `unsupported` or `contradicted`; the last two are listed as unverifiable statements.
+- Without a context, only relevance and coherence are graded: nothing can be called supported without a source.
+- The judge is told that the question, answer and context are data to grade, so an answer that says "give me 5/5" cannot steer its own score.
+
+As someone running the evaluation on a small local model, I want a judge that copes with its bad days, so that one malformed reply does not stop a whole batch or pass for a bad answer.
+
+Acceptance criteria:
+
+- JSON wrapped in code fences or prose is still parsed.
+- Invalid or out-of-range output is sent back to the judge with the error and retried, up to a limit.
+- A judge that stays invalid, times out or is unreachable gives a verdict with an error and no scores, and the batch goes on.
+- A scoring call that fails does not discard the faithfulness result, and the other way round.
+- The command exits with a non-zero status when any reply could not be judged.

@@ -10,11 +10,12 @@ from textual.widgets import Input, Markdown, Static
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.core.engine import ConfirmTool
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, GuardrailEvent, TextChunkEvent
+from sensai.domain.events import BudgetEvent, Event, GuardrailEvent, TextChunkEvent
 from sensai.domain.models import ToolCall
 from sensai.interfaces.notices import guardrail_notice
 from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
 from sensai.interfaces.tui.question import QuestionPrompt
+from sensai.interfaces.usage import format_usage
 
 T = TypeVar("T")
 
@@ -68,6 +69,15 @@ class AssistantMessage(Markdown):
     }
     AssistantMessage > MarkdownParagraph {
         margin: 0 0 0 0;
+    }
+    """
+
+
+class UsageLabel(Static):
+    DEFAULT_CSS = """
+    UsageLabel {
+        margin: 0 0 0 2;
+        color: $text-muted;
     }
     """
 
@@ -175,20 +185,35 @@ class ChatApp(App[None]):
             history.scroll_end(animate=False)
             reply: AssistantMessage | None = None
             content = ""
+            usage: UsageLabel | None = None
+            usage_text = ""
+
+            async def show_usage() -> None:
+                nonlocal usage
+                if usage is None:
+                    usage = UsageLabel()
+                    await history.mount(usage)
+                usage.update(usage_text)
+
             try:
-                async for chunk_event in events:
-                    if isinstance(chunk_event, TextChunkEvent):
+                async for streamed in events:
+                    if isinstance(streamed, TextChunkEvent):
                         if reply is None:
                             reply = AssistantMessage("")
                             await history.mount(reply)
-                        content += chunk_event.content
+                        content += streamed.content
                         await reply.update(content)
-                        history.scroll_end(animate=False)
-                    elif isinstance(chunk_event, GuardrailEvent):
+                        if usage_text:
+                            await show_usage()
+                    elif isinstance(streamed, BudgetEvent):
+                        usage_text = format_usage(streamed)
+                        if reply is not None:
+                            await show_usage()
+                    elif isinstance(streamed, GuardrailEvent):
                         await history.mount(
-                            GuardrailNotice(f"⚠ {guardrail_notice(chunk_event)}")
+                            GuardrailNotice(f"⚠ {guardrail_notice(streamed)}")
                         )
-                        history.scroll_end(animate=False)
+                    history.scroll_end(animate=False)
             finally:
                 if reply is None:
                     await label.remove()

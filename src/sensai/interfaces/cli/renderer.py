@@ -9,6 +9,7 @@ from rich.text import Text
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import (
     AssistantStartEvent,
+    BudgetEvent,
     Event,
     GuardrailEvent,
     TextChunkEvent,
@@ -17,6 +18,7 @@ from sensai.domain.models import Conversation, ToolCall
 from sensai.interfaces.cli.select import select
 from sensai.interfaces.notices import guardrail_notice
 from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
+from sensai.interfaces.usage import format_usage
 
 T = TypeVar("T")
 
@@ -92,6 +94,7 @@ class CliRenderer:
 
     async def render(self, events: AsyncIterator[Event]) -> None:
         self._line_open = False
+        usage: BudgetEvent | None = None
         try:
             async for event in events:
                 if isinstance(event, AssistantStartEvent):
@@ -99,6 +102,8 @@ class CliRenderer:
                 elif isinstance(event, TextChunkEvent):
                     self._start_reply()
                     self.console.print(Text(event.content), end="", soft_wrap=True)
+                elif isinstance(event, BudgetEvent):
+                    usage = event
                 elif isinstance(event, GuardrailEvent):
                     self._finish_line()
                     self.console.print(
@@ -106,6 +111,8 @@ class CliRenderer:
                     )
         finally:
             self._finish_line()
+            if usage is not None:
+                self.console.print(Text(format_usage(usage), style="dim"))
 
 
 async def render_stream(console: Console, events: AsyncIterator[Event]) -> None:

@@ -6,6 +6,7 @@
 
 - [Project Subject & Constraints](docs/SUBJECT.md)
 - [Features Catalog](docs/CATALOGUE.md)
+- [Evaluation (adversarial suite, LLM-as-judge)](docs/evaluation.md)
 
 ## 🚀 Getting Started for Developers
 

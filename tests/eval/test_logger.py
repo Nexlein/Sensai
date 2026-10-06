@@ -3,7 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from sensai.eval.logger import TurnLogger
+from sensai.eval.judge.__main__ import load_items
+from sensai.eval.judge.models import JudgeInput
+from sensai.eval.logger import ReplyLogger, TurnLogger
 
 
 def _read_lines(path):
@@ -78,3 +80,34 @@ def test_track_failure_logs_error_and_reraises(tmp_path):
     entry = _read_lines(logger.path)[0]
     assert entry["error"] == "turn failed"
     assert entry["prompt_tokens"] is None
+
+
+def test_reply_logger_appends_lines_the_judge_can_load(tmp_path):
+    logger = ReplyLogger(path=tmp_path / "logs" / "replies.jsonl")
+
+    logger.record("Capitale ?", "Paris, évidemment.", "Paris est la capitale.")
+    logger.record("Hi?", "Hello.", "")
+
+    items = load_items(logger.path)
+    assert items == [
+        JudgeInput(
+            question="Capitale ?",
+            answer="Paris, évidemment.",
+            context="Paris est la capitale.",
+        ),
+        JudgeInput(question="Hi?", answer="Hello."),
+    ]
+    first, second = _read_lines(logger.path)
+    assert "timestamp" in first
+    assert "context" not in second
+
+
+def test_reply_logger_failure_never_raises(tmp_path, monkeypatch):
+    logger = ReplyLogger(path=tmp_path / "missing" / "replies.jsonl")
+
+    def _raise(*a, **k):
+        raise OSError("nope")
+
+    monkeypatch.setattr(Path, "mkdir", _raise)
+
+    logger.record("q", "a", "")

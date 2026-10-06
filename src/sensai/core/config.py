@@ -5,6 +5,8 @@ from typing import Any, Literal
 import tomllib
 from pydantic import BaseModel, ValidationError
 
+from sensai.core.budget import BudgetConfig
+
 DEFAULT_INTERFACE = "cli"
 DEFAULT_PROVIDER = "ollama"
 DEFAULT_MODEL = "qwen3.5:4b"
@@ -28,13 +30,22 @@ class GuardrailsConfig(BaseModel):
     pii: Literal["redact", "block"] = "redact"
 
 
+class EvalConfig(BaseModel):
+    """Opt-in reply log (EV1) graded later with `python -m sensai.eval.judge`."""
+
+    log_replies: bool = False
+    replies_path: str = "logs/replies.jsonl"
+
+
 class AppConfig(BaseModel):
     interface: Literal["cli", "tui", "web"] = DEFAULT_INTERFACE
     provider: str = DEFAULT_PROVIDER
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_BASE_URL
     tools: ToolsConfig = ToolsConfig()
+    budget: BudgetConfig = BudgetConfig()
     guardrails: GuardrailsConfig = GuardrailsConfig()
+    eval: EvalConfig = EvalConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -104,6 +115,17 @@ def save_config(
             ]
         )
 
+    if config.budget != BudgetConfig():
+        lines.extend(
+            [
+                "",
+                "[budget]",
+                f"max_tokens = {config.budget.max_tokens}",
+                f"threshold = {config.budget.threshold}",
+                f"keep_recent_turns = {config.budget.keep_recent_turns}",
+            ]
+        )
+
     if config.guardrails != GuardrailsConfig():
         lines.extend(
             [
@@ -112,6 +134,17 @@ def save_config(
                 f"enabled = {json.dumps(config.guardrails.enabled)}",
                 f"injection = {json.dumps(config.guardrails.injection)}",
                 f"pii = {json.dumps(config.guardrails.pii)}",
+            ]
+        )
+
+    if config.eval != EvalConfig():
+        lines.extend(
+            [
+                "",
+                "[eval]",
+                f"log_replies = {json.dumps(config.eval.log_replies)}",
+                "replies_path = "
+                + json.dumps(config.eval.replies_path, ensure_ascii=False),
             ]
         )
 

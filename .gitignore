@@ -19,6 +19,9 @@ coverage.xml
 # Local session database
 *.db
 
+# Turn and reply logs (may contain user data)
+logs/
+
 # Distribution / packaging
 build/
 dist/
