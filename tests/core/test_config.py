@@ -66,7 +66,7 @@ def test_no_config_path_uses_defaults():
 
 def test_tools_config_defaults():
     config = load_config(config_path=None)
-    assert config.tools.fs_allowed_root is None
+    assert config.tools.fs_allowed_root == "."
 
 
 def test_tools_config_from_file(tmp_path):
@@ -99,6 +99,23 @@ def test_save_config_omits_unset_tools_section(tmp_path):
 
     assert "[tools]" not in config_file.read_text()
     assert load_config(config_file) == AppConfig()
+
+
+def test_fs_tools_disabled_with_false(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text("[tools]\nfs_allowed_root = false\n")
+
+    assert load_config(config_file).tools.fs_allowed_root is None
+
+
+def test_save_config_round_trips_disabled_fs_tools(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(tools=ToolsConfig(fs_allowed_root=None))
+
+    save_config(config, config_file)
+
+    assert "fs_allowed_root = false" in config_file.read_text()
+    assert load_config(config_file) == config
 
 
 def test_interface_cli_override_takes_precedence_over_file(tmp_path):
