@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import tomllib
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, field_validator
 
 from sensai.core.budget import BudgetConfig
 
@@ -19,7 +19,14 @@ class ConfigError(Exception):
 
 
 class ToolsConfig(BaseModel):
-    fs_allowed_root: str | None = None
+    # "." is resolved against the directory Sensai is launched from.
+    fs_allowed_root: str | None = "."
+
+    @field_validator("fs_allowed_root", mode="before")
+    @classmethod
+    def _false_disables_fs_tools(cls, value: Any) -> Any:
+        # TOML has no null: `fs_allowed_root = false` turns the fs tools off.
+        return None if value is False else value
 
 
 class GuardrailsConfig(BaseModel):
@@ -105,13 +112,14 @@ def save_config(
         f"base_url = {json.dumps(config.base_url, ensure_ascii=False)}",
     ]
 
-    if config.tools.fs_allowed_root is not None:
+    if config.tools != ToolsConfig():
+        # json.dumps(False) is "false", which loads back as None.
+        fs_allowed_root = config.tools.fs_allowed_root or False
         lines.extend(
             [
                 "",
                 "[tools]",
-                "fs_allowed_root = "
-                + json.dumps(config.tools.fs_allowed_root, ensure_ascii=False),
+                "fs_allowed_root = " + json.dumps(fs_allowed_root, ensure_ascii=False),
             ]
         )
 
