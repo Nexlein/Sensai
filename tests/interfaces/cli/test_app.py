@@ -144,6 +144,7 @@ def test_build_tool_registry_registers_file_tools(tmp_path):
     assert {schema["function"]["name"] for schema in schemas} == {
         "read_file",
         "list_dir",
+        "write_file",
         "web_search",
     }
 
