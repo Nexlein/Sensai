@@ -7,7 +7,7 @@ As a user, I want the agent restricted to a project subdirectory, so that it can
 Acceptance criteria:
 
 - Path traversal outside the root (relative, absolute, symlink) is rejected.
-- `AppConfig.tools.fs_allowed_root` defaults to `None`; fs tool is not registered when unset.
+- `AppConfig.tools.fs_allowed_root` defaults to `"."`, the directory Sensai is launched from; `fs_allowed_root = false` unregisters the fs tools.
 
 As a developer, I want the agent to list and read files in my project, so that it can answer questions grounded in my actual code.
 
@@ -15,6 +15,21 @@ Acceptance criteria:
 
 - ReadFile/ListDir succeed for paths inside the allowed root.
 - Nonexistent file returns a clean error string, no raw exception leak.
+
+As a developer, I want the agent to create or update files in my project, so that it can apply the changes it suggests instead of only describing them.
+
+Acceptance criteria:
+
+- `write_file` creates a new file or replaces an existing one, creating missing parent directories inside the allowed root.
+- Writing to a directory, or to a path outside the root (relative, absolute, symlink), returns a clean error and changes nothing on disk.
+- The tool is available as soon as Sensai starts, rooted at the launch directory, like read/list.
+
+As a user, I want to approve every file write before it happens, so that the agent cannot silently overwrite or create files on my machine.
+
+Acceptance criteria:
+
+- `write_file` is flagged `requires_confirmation = True` and goes through the human-in-the-loop prompt in the CLI and TUI.
+- Declining the prompt leaves the file untouched and tells the agent the write was refused.
 
 ## Feature: [R1] Basic RAG
 
