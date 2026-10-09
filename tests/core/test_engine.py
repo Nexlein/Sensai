@@ -603,6 +603,31 @@ async def test_tool_confirmation_controls_execution(
         assert conversation.messages[-1].content == "final answer"
 
 
+@pytest.mark.parametrize(
+    ("preview", "expected"),
+    [
+        (lambda **kwargs: "a diff", "a diff"),
+        (lambda **kwargs: 1 / 0, None),
+    ],
+)
+async def test_confirmation_receives_tool_preview(preview, expected):
+    seen = []
+    tool = DummyTool()
+    tool.requires_confirmation = True
+    tool.preview = preview
+    registry = ToolRegistry()
+    registry.register(tool)
+    engine = ChatEngine(MockRoundTripProvider(), Conversation(), registry)
+
+    async def confirm(tc):
+        seen.append(tc.preview)
+        return False
+
+    _ = [e async for e in engine.send("do it", confirm_tool=confirm)]
+
+    assert seen == [expected]
+
+
 async def test_multiple_tool_calls_confirm_each_sensitive_tool_before_execution():
     executed = []
     confirmations = []
