@@ -64,3 +64,15 @@ def test_tool_decision_text():
 
     assert tool_decision(tc, True) == "✓ allowed web_search"
     assert tool_decision(tc, False) == "✗ declined web_search"
+
+
+def test_tool_confirmation_hides_content_shown_by_the_diff():
+    arguments = {"path": "a.txt", "content": "new"}
+
+    with_diff = tool_confirmation(
+        ToolCall(name="write_file", arguments=arguments, preview="+new")
+    )
+    without_diff = tool_confirmation(ToolCall(name="write_file", arguments=arguments))
+
+    assert with_diff.details == (("path", "a.txt"),)
+    assert without_diff.details == (("path", "a.txt"), ("content", "new"))

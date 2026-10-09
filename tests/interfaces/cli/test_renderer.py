@@ -244,3 +244,29 @@ async def test_interactive_confirmation_uses_selector(monkeypatch):
     assert await renderer.confirm_tool(tc) is True
     assert asked == [tool_confirmation(tc)]
     assert output.getvalue() == "  ✓ allowed web_search\n"
+
+
+async def test_confirmation_prints_diff_before_asking(monkeypatch):
+    from io import StringIO
+
+    from sensai.domain.models import ToolCall
+    from sensai.interfaces.cli import renderer as renderer_module
+    from sensai.interfaces.cli.renderer import CliRenderer
+
+    output = StringIO()
+
+    async def fake_select(question):
+        assert "+ hello" in output.getvalue()
+        return False
+
+    monkeypatch.setattr(renderer_module, "select", fake_select)
+    monkeypatch.setattr(CliRenderer, "_interactive", lambda self: True)
+    renderer = CliRenderer(Console(file=output, force_terminal=False))
+    tc = ToolCall(
+        name="write_file",
+        arguments={"path": "a.txt", "content": "hello"},
+        preview="@@ -0,0 +1 @@\n+hello",
+    )
+
+    assert await renderer.confirm_tool(tc) is False
+    assert output.getvalue().startswith("● write_file(a.txt)\n  ⎿  +1 -0\n")

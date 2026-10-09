@@ -1,8 +1,9 @@
+import difflib
 import os
 from pathlib import Path
 from typing import Any
 
-from .base import PermissionBoundary, Tool
+from .base import PermissionBoundary, SensitiveTool, Tool
 
 
 class ReadFileTool(PermissionBoundary, Tool):
@@ -81,3 +82,63 @@ class ListDirTool(PermissionBoundary, Tool):
             return f"Error: {e}"
         except OSError as e:
             return f"Error listing directory: {e}"
+
+
+class WriteFileTool(PermissionBoundary, SensitiveTool):
+    name = "write_file"
+    description = (
+        "Write text content to a local file inside the allowed root, creating it or "
+        "replacing its contents. Missing parent directories are created. "
+        "The user must confirm every write before it happens."
+    )
+
+    def __init__(self, allowed_root: str | Path) -> None:
+        super().__init__(allowed_root)
+        self.parameters_schema = {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "File path relative to the allowed root, for example notes/todo.md. Do not pass a directory.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Full text content to write. Existing content is replaced.",
+                },
+            },
+            "required": ["path", "content"],
+        }
+
+    def preview(self, path: str, content: str, **kwargs: Any) -> str | None:
+        """Unified diff of the write, or None when execute would refuse it."""
+        try:
+            target_path = self._validate_path(path)
+            if target_path.is_dir():
+                return None
+            old = (
+                target_path.read_text(encoding="utf-8") if target_path.is_file() else ""
+            )
+        except (ValueError, OSError, UnicodeDecodeError):
+            return None
+        return "\n".join(
+            difflib.unified_diff(
+                old.splitlines(),
+                content.splitlines(),
+                fromfile=f"a/{path}",
+                tofile=f"b/{path}",
+                lineterm="",
+            )
+        )
+
+    async def execute(self, path: str, content: str, **kwargs: Any) -> str:
+        try:
+            target_path = self._validate_path(path)
+            if target_path.is_dir():
+                return f"Error: Path is a directory: {path}"
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(content, encoding="utf-8")
+            return f"Wrote {len(content)} characters to {path}"
+        except ValueError as e:
+            return f"Error: {e}"
+        except OSError as e:
+            return f"Error writing file: {e}"

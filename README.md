@@ -92,8 +92,10 @@ fs_allowed_root = "."
 ```
 
 `sensai.toml` is local configuration and is ignored by Git. With the configuration
-above, CLI and TUI both use Qwen3.5 and can read or list files under the current
-project root. Omit `[tools]` to keep filesystem tools unavailable.
+above, CLI and TUI both use Qwen3.5 and can read, list and write files under the
+directory Sensai is launched from. This is also the default without `[tools]`.
+Every write asks for your confirmation first. Set `fs_allowed_root = false` to
+turn the filesystem tools off.
 
 Run `sensai chat --ui tui` to use the Textual interface. The flag takes precedence over `interface` in `sensai.toml`. The web interface is planned but not available yet.
 

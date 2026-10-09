@@ -21,6 +21,8 @@ class ToolCall(BaseModel):
     id: ID
     name: str
     arguments: dict[str, Any]
+    # Unified diff shown before confirmation; display-only, never persisted.
+    preview: str | None = Field(default=None, exclude=True)
 
 
 class Message(BaseModel):

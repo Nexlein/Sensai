@@ -12,6 +12,7 @@ from sensai.core.engine import ConfirmTool
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import BudgetEvent, Event, GuardrailEvent, TextChunkEvent
 from sensai.domain.models import ToolCall
+from sensai.interfaces.diff import diff_text
 from sensai.interfaces.notices import guardrail_notice
 from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
 from sensai.interfaces.tui.question import QuestionPrompt
@@ -101,6 +102,14 @@ class GuardrailNotice(Static):
     """
 
 
+class ToolDiff(Static):
+    DEFAULT_CSS = """
+    ToolDiff {
+        margin: 0 0 0 2;
+    }
+    """
+
+
 class ToolDecisionNotice(Static):
     DEFAULT_CSS = """
     ToolDecisionNotice {
@@ -169,6 +178,10 @@ class ChatApp(App[None]):
         history.scroll_end(animate=False)
 
         async def confirm_tool(tc: ToolCall) -> bool:
+            diff = diff_text(tc)
+            if diff is not None:
+                await history.mount(ToolDiff(diff))
+                history.scroll_end(animate=False)
             approved = await self.ask(tool_confirmation(tc))
             await history.mount(
                 ToolDecisionNotice(

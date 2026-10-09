@@ -64,6 +64,7 @@ def test_build_default_registry_always_registers_web_search(tmp_path):
     assert {tool.name for tool in with_files.list_tools()} == {
         "read_file",
         "list_dir",
+        "write_file",
         "web_search",
     }
     assert any(
