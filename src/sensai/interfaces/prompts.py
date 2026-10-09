@@ -48,11 +48,15 @@ def _detail_value(value: Any) -> str:
 
 
 def tool_confirmation(tc: ToolCall) -> Question[bool]:
+    arguments = list(tc.arguments.items())
+    if tc.preview is not None:
+        # The diff already shows the new content above the prompt.
+        arguments = [(key, v) for key, v in arguments if key != "content"]
     return Question(
         title=f"Allow {tc.name}?",
         options=(Option("Yes", True), Option("No", False)),
         cancel_value=False,
-        details=tuple((key, _detail_value(v)) for key, v in tc.arguments.items()),
+        details=tuple((key, _detail_value(v)) for key, v in arguments),
     )
 
 

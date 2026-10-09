@@ -16,6 +16,7 @@ from sensai.domain.events import (
 )
 from sensai.domain.models import Conversation, ToolCall
 from sensai.interfaces.cli.select import select
+from sensai.interfaces.diff import diff_text
 from sensai.interfaces.notices import guardrail_notice
 from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
 from sensai.interfaces.usage import format_usage
@@ -87,6 +88,10 @@ class CliRenderer:
         return self._ask_text(question)
 
     async def confirm_tool(self, tc: ToolCall) -> bool:
+        diff = diff_text(tc)
+        if diff is not None:
+            self._finish_line()
+            self.console.print(diff, end="")
         approved = await self.ask(tool_confirmation(tc))
         style = "green" if approved else "red"
         self.console.print(Text(f"  {tool_decision(tc, approved)}", style=style))

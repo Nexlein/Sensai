@@ -15,6 +15,7 @@ from sensai.domain.events import (
 )
 from sensai.domain.models import Conversation, GuardrailFinding, Message, ToolCall
 from sensai.domain.protocols import (
+    BaseTool,
     ContextRetriever,
     Guardrail,
     LLMProvider,
@@ -33,6 +34,18 @@ TOOL_USE_GUIDANCE = (
 )
 
 ConfirmTool = Callable[[ToolCall], Awaitable[bool]]
+
+
+def _preview(tool: BaseTool, tc: ToolCall) -> str | None:
+    """What the tool would change, for the confirmation prompt; None if unknown."""
+    preview = getattr(tool, "preview", None)
+    if not callable(preview):
+        return None
+    try:
+        return preview(**tc.arguments)
+    except Exception:  # noqa: BLE001
+        # A preview is a convenience: failing to build it must not block the prompt.
+        return None
 
 
 def _reason(findings: list[GuardrailFinding]) -> str:
@@ -185,6 +198,7 @@ class ChatEngine:
                 else:
                     try:
                         if tool.requires_confirmation:
+                            tc.preview = _preview(tool, tc)
                             confirmation_failed = False
                             try:
                                 approved = (
