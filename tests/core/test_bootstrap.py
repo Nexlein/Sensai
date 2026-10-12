@@ -33,9 +33,14 @@ async def test_build_session_loads_config_tools_and_existing_session(
     assert resumed.engine.conversation.id == "saved"
     assert resumed.engine.conversation.messages[0].content == "previous question"
     assert resumed.engine.registry is resumed.tool_registry
+    assert resumed.structured_memory is not None
     assert resumed.tool_registry.get("read_file") is not None
     assert resumed.tool_registry.get("list_dir") is not None
+    assert resumed.tool_registry.get("remember_fact") is not None
+    assert resumed.tool_registry.get("recall_memory") is not None
+    assert resumed.tool_registry.get("forget_fact") is not None
     assert resumed.tool_registry_factory(None).get("web_search") is not None
+    assert resumed.tool_registry_factory(None).get("remember_fact") is not None
 
 
 def _mcp_config(tmp_path, *, working="demo", broken=None):

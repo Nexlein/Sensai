@@ -10,6 +10,7 @@ from sensai.core.config import (
     GuardrailsConfig,
     McpConfig,
     McpServerConfig,
+    MemoryConfig,
     ToolsConfig,
     load_config,
     save_config,
@@ -324,3 +325,27 @@ def test_save_config_omits_mcp_when_unset(tmp_path):
     save_config(AppConfig(), config_file)
 
     assert "mcp" not in config_file.read_text()
+
+
+def test_memory_config_defaults():
+    assert load_config(config_path=None).memory == MemoryConfig(
+        enabled=True, auto_inject=True
+    )
+
+
+def test_memory_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text("[memory]\nenabled = false\nauto_inject = false\n")
+
+    assert load_config(config_file).memory == MemoryConfig(
+        enabled=False, auto_inject=False
+    )
+
+
+def test_save_config_round_trips_memory(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(memory=MemoryConfig(enabled=False, auto_inject=False))
+
+    save_config(config, config_file)
+
+    assert load_config(config_file).memory == config.memory

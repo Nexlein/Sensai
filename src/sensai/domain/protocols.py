@@ -5,6 +5,7 @@ from sensai.domain.events import Event
 from sensai.domain.models import (
     Chunk,
     Conversation,
+    Fact,
     GuardrailFinding,
     GuardrailVerdict,
     Message,
@@ -89,3 +90,33 @@ class ReplyRecorder(Protocol):
     """Keeps each final reply with its question and RAG context, for later grading."""
 
     def record(self, question: str, answer: str, context: str) -> None: ...
+
+
+class StructuredMemory(Protocol):
+    """External structured memory (M3): CRUD over entities and facts across sessions."""
+
+    def store_fact(
+        self,
+        entity: str,
+        key: str,
+        value: str,
+        confidence: float = 1.0,
+        tags: list[str] | None = None,
+        entity_type: str = "generic",
+    ) -> Fact: ...
+
+    def get_fact(self, entity: str, key: str) -> Fact | None: ...
+
+    def list_facts(
+        self, entity: str | None = None, tag: str | None = None
+    ) -> list[Fact]: ...
+
+    def search_facts(self, query: str) -> list[Fact]: ...
+
+    def delete_fact(self, entity: str, key: str) -> bool: ...
+
+    def delete_entity(self, entity: str) -> bool: ...
+
+    def clear(self) -> None: ...
+
+    def format_context(self, entity: str | None = None, max_facts: int = 20) -> str: ...

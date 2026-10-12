@@ -91,3 +91,15 @@ def test_build_default_registry_always_registers_web_search(tmp_path):
         item["function"]["name"] == "web_search"
         for item in with_files.get_tools_schema()
     )
+
+
+def test_build_default_registry_with_memory(tmp_path):
+    from sensai.memory.manager import SqliteMemoryManager
+    from sensai.tools.registry import build_default_registry
+
+    memory = SqliteMemoryManager(tmp_path / "mem.db")
+    registry = build_default_registry(str(tmp_path), memory=memory)
+    names = {tool.name for tool in registry.list_tools()}
+    assert "remember_fact" in names
+    assert "recall_memory" in names
+    assert "forget_fact" in names

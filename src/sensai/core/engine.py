@@ -23,6 +23,7 @@ from sensai.domain.protocols import (
     Guardrail,
     LLMProvider,
     ReplyRecorder,
+    StructuredMemory,
     ToolRegistry,
 )
 
@@ -97,6 +98,8 @@ class ChatEngine:
         budget: ContextBudget | None = None,
         guardrail: Guardrail | None = None,
         recorder: ReplyRecorder | None = None,
+        memory: StructuredMemory | None = None,
+        memory_auto_inject: bool = True,
     ) -> None:
         self.provider = provider
         self.conversation = conversation
@@ -105,6 +108,8 @@ class ChatEngine:
         self.budget = budget
         self.guardrail = guardrail
         self.recorder = recorder
+        self.memory = memory
+        self.memory_auto_inject = memory_auto_inject
 
     async def send(
         self, user_text: str, confirm_tool: ConfirmTool | None = None
@@ -196,8 +201,16 @@ class ChatEngine:
     ) -> list[Message]:
         if self.budget is not None:
             await self.budget.fit(self.conversation)
+        memory_context = (
+            self.memory.format_context()
+            if self.memory is not None and self.memory_auto_inject
+            else ""
+        )
         prompt = build_prompt(
-            self.conversation, rag_context=rag_context, privacy_note=masked
+            self.conversation,
+            rag_context=rag_context,
+            memory_context=memory_context,
+            privacy_note=masked,
         )
         if with_tools:
             prompt.insert(0, Message(role="system", content=TOOL_USE_GUIDANCE))

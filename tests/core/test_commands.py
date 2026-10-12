@@ -123,6 +123,7 @@ async def test_dispatch_help_lists_commands():
 /help - Show available commands
 /clear - Clear the current conversation history
 /new - Start and persist a new conversation
+/memory - Inspect or manage long-term structured memory
 /model - Switch model for subsequent turns
 /provider - Switch LLM provider
 /config - View or update runtime configuration"""
@@ -522,3 +523,135 @@ async def test_dispatch_new_rejects_arguments():
     assert context.engine.conversation is previous
     assert store.saved == []
     assert result.message == "Usage: /new"
+
+
+async def test_dispatch_memory_unavailable():
+    context = _context()
+    context.structured_memory = None
+    context.engine.memory = None
+
+    result = await dispatch_command(
+        ParsedCommand(name="memory", arguments=()),
+        context,
+    )
+    assert result.message == "Structured memory is not available."
+
+
+async def test_dispatch_memory_crud(tmp_path):
+    from sensai.memory.manager import SqliteMemoryManager
+
+    context = _context()
+    mem = SqliteMemoryManager(tmp_path / "cmd_mem.db")
+    context.structured_memory = mem
+
+    # Empty list
+    res = await dispatch_command(ParsedCommand(name="memory", arguments=()), context)
+    assert res.message == "No memories stored."
+
+    # Set fact
+    res_set = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("set", "user", "lang", "Python 3.11")),
+        context,
+    )
+    assert "Saved: user.lang = Python 3.11" in (res_set.message or "")
+
+    # Get fact
+    res_get = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("get", "user", "lang")),
+        context,
+    )
+    assert res_get.message == "user.lang = Python 3.11"
+
+    # List facts
+    res_list = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("list",)),
+        context,
+    )
+    assert "• user.lang = Python 3.11" in (res_list.message or "")
+
+    # Search facts
+    res_search = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("search", "python")),
+        context,
+    )
+    assert "• user.lang = Python 3.11" in (res_search.message or "")
+
+    # Delete fact
+    res_del = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("delete", "user", "lang")),
+        context,
+    )
+    assert "Deleted memory: user.lang" in (res_del.message or "")
+
+    # Clear facts
+    mem.store_fact("e", "k", "v")
+    res_clear = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("clear",)),
+        context,
+    )
+    assert res_clear.message == "All structured memories cleared."
+    assert mem.list_facts() == []
+
+
+async def test_dispatch_memory_usage_and_errors(tmp_path):
+    from sensai.memory.manager import SqliteMemoryManager
+
+    context = _context()
+    mem = SqliteMemoryManager(tmp_path / "cmd_mem_err.db")
+    context.structured_memory = mem
+
+    # Unknown subcommand
+    res_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("unknown",)),
+        context,
+    )
+    assert "Usage: /memory [list" in (res_bad.message or "")
+
+    # Get bad arity
+    res_get_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("get", "user")),
+        context,
+    )
+    assert res_get_bad.message == "Usage: /memory get <entity> <key>"
+
+    # Get not found
+    res_get_miss = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("get", "user", "editor")),
+        context,
+    )
+    assert res_get_miss.message == "Memory not found: user.editor"
+
+    # Set bad arity
+    res_set_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("set", "user")),
+        context,
+    )
+    assert res_set_bad.message == "Usage: /memory set <entity> <key> <value>"
+
+    # Delete bad arity
+    res_del_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("delete", "user")),
+        context,
+    )
+    assert res_del_bad.message == "Usage: /memory delete <entity> <key>"
+
+    # Delete not found
+    res_del_miss = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("delete", "user", "editor")),
+        context,
+    )
+    assert res_del_miss.message == "Memory not found: user.editor"
+
+    # Search bad arity
+    res_search_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("search",)),
+        context,
+    )
+    assert res_search_bad.message == "Usage: /memory search <query>"
+
+    # Search no match
+    res_search_none = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("search", "nonexistent")),
+        context,
+    )
+    assert res_search_none.message == "No memories matching 'nonexistent'."

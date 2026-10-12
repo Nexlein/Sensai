@@ -104,3 +104,26 @@ class ScoredChunk(Chunk):
     """A retrieved Chunk augmented with a similarity score."""
 
     score: float
+
+
+class Entity(BaseModel):
+    """An entity stored in long-term memory (e.g. 'user', 'project')."""
+
+    id: ID
+    name: str
+    entity_type: str = "generic"
+    created_at: Now
+    updated_at: Now
+
+
+class Fact(BaseModel):
+    """A structured fact about an entity stored across sessions."""
+
+    id: ID
+    entity_name: str
+    key: str
+    value: str
+    confidence: float = 1.0
+    tags: list[str] = Field(default_factory=list)
+    created_at: Now
+    updated_at: Now

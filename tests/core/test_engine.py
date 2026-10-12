@@ -895,3 +895,41 @@ async def test_empty_reply_is_not_recorded():
     _ = [e async for e in engine.send("hi")]
 
     assert recorder.replies == []
+
+
+@pytest.mark.asyncio
+async def test_engine_injects_structured_memory_into_prompt(tmp_path):
+    from sensai.memory.manager import SqliteMemoryManager
+
+    mem = SqliteMemoryManager(tmp_path / "eng_mem.db")
+    mem.store_fact("user", "preferred_language", "Rust")
+
+    provider = RecordingLLMProvider()
+    engine = ChatEngine(provider, Conversation(), memory=mem)
+
+    _ = [e async for e in engine.send("hello")]
+
+    (prompt,) = provider.prompts
+    system_contents = [m.content for m in prompt if m.role == "system"]
+    assert any(
+        "- user.preferred_language: Rust" in content for content in system_contents
+    )
+
+
+@pytest.mark.asyncio
+async def test_engine_respects_memory_auto_inject_false(tmp_path):
+    from sensai.memory.manager import SqliteMemoryManager
+
+    mem = SqliteMemoryManager(tmp_path / "eng_mem.db")
+    mem.store_fact("user", "preferred_language", "Rust")
+
+    provider = RecordingLLMProvider()
+    engine = ChatEngine(provider, Conversation(), memory=mem, memory_auto_inject=False)
+
+    _ = [e async for e in engine.send("hello")]
+
+    (prompt,) = provider.prompts
+    system_contents = [m.content for m in prompt if m.role == "system"]
+    assert not any(
+        "- user.preferred_language: Rust" in content for content in system_contents
+    )

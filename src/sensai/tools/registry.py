@@ -1,8 +1,9 @@
 from collections.abc import Iterable
 from typing import Any
 
-from sensai.domain.protocols import BaseTool
+from sensai.domain.protocols import BaseTool, StructuredMemory
 from sensai.tools.fs import ListDirTool, ReadFileTool, WriteFileTool
+from sensai.tools.memory import ForgetFactTool, RecallMemoryTool, RememberFactTool
 from sensai.tools.sandbox import RunCodeTool
 from sensai.tools.web import WebSearch
 
@@ -37,7 +38,9 @@ class ToolRegistry:
 
 
 def build_default_registry(
-    allowed_root: str | None, extra_tools: Iterable[BaseTool] = ()
+    allowed_root: str | None,
+    extra_tools: Iterable[BaseTool] = (),
+    memory: StructuredMemory | None = None,
 ) -> ToolRegistry:
     """Built-in tools plus `extra_tools` (the MCP ones, which live outside this list)."""
     registry = ToolRegistry()
@@ -48,5 +51,9 @@ def build_default_registry(
         registry.register(ListDirTool(allowed_root))
         registry.register(WriteFileTool(allowed_root))
     registry.register(WebSearch(SEARXNG_URL))
+    if memory is not None:
+        registry.register(RememberFactTool(memory))
+        registry.register(RecallMemoryTool(memory))
+        registry.register(ForgetFactTool(memory))
     registry.register(RunCodeTool())
     return registry

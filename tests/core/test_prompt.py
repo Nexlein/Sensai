@@ -73,3 +73,42 @@ def test_privacy_note_is_not_added_to_the_conversation():
     build_prompt(conversation, privacy_note=True)
 
     assert [m.role for m in conversation.messages] == ["user"]
+
+
+def test_memory_context_injected_as_system_message():
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+
+    messages = build_prompt(conversation, memory_context="- user.lang: Python")
+
+    assert len(messages) == 2
+    assert messages[0].role == "system"
+    assert "- user.lang: Python" in messages[0].content
+    assert "structured facts" in messages[0].content
+    assert messages[1].content == "hello"
+
+
+def test_memory_context_order_with_rag_and_privacy():
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+    persona = Persona(id="p", name="Bot", description="d", system_instruction="sys")
+
+    messages = build_prompt(
+        conversation,
+        persona=persona,
+        rag_context="doc context",
+        memory_context="- user.editor: neovim",
+        privacy_note=True,
+    )
+
+    assert [m.role for m in messages] == [
+        "system",
+        "system",
+        "system",
+        "system",
+        "user",
+    ]
+    assert messages[0].content == "sys"
+    assert messages[1].content == PRIVACY_NOTE
+    assert "- user.editor: neovim" in messages[2].content
+    assert "doc context" in messages[3].content
