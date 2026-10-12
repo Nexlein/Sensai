@@ -41,6 +41,7 @@ Run a single test: `uv run pytest tests/path/to/test_file.py::test_name`
 - Package manager is `uv`. Never call `pip` directly.
 - Every new file under `src/sensai/` needs a matching test file under `tests/` in the same change — not a follow-up. See open issues for the current sprint plan.
 - `tests/` mirrors `src/sensai/` layout 1:1.
+- Every feature PR adds at least two user stories (role/action/outcome plus acceptance criteria) to `docs/USER_STORIES.md`, as SUBJECT.md requires.
 - Ruff handles both lint and format; run `make format` before committing.
 - Pre-commit hooks are installed by `make setup` — don't bypass with `--no-verify` unless explicitly told to.
 - Domain models (`domain/models.py`, `domain/events.py`) are pydantic `BaseModel`. Extend via new fields/subclasses, don't bypass validation.

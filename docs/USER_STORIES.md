@@ -301,3 +301,95 @@ Acceptance criteria:
 - A failing script returns a non-zero exit code and its traceback on stderr, as a normal tool result, so the model can correct the code and run it again.
 - A missing Docker binary, a stopped daemon or a missing image come back as `Error: sandbox unavailable…`, never as a script failure the model would try to fix.
 - Empty code, a non-numeric or non-positive timeout are rejected before any container starts.
+
+## Feature: Session Persistence
+
+As a user working on a task over several days, I want to resume a named conversation, so that I do not have to explain the context again each time I start Sensai.
+
+Acceptance criteria:
+
+- `--session <name>` loads the conversation saved under that name, or starts an empty one with that id if none exists.
+- The conversation is saved to the local SQLite database after each turn, including tool calls and tool results.
+- Messages come back in the order they were sent, with their roles and tool calls intact.
+
+As a user, I want to clear or restart a conversation from inside the chat, so that I can drop a context that no longer helps without leaving Sensai.
+
+Acceptance criteria:
+
+- `/clear` empties the current conversation and saves the empty state.
+- `/new` starts and persists a fresh conversation with its own id and reports that id.
+- Neither command sends anything to the model.
+
+## Feature: Tool-Calling Loop
+
+As a user asking a question that needs a tool (reading a file, searching the web), I want the assistant to call the tool and answer from its result in the same turn, so that I get one grounded reply instead of having to relay results by hand.
+
+Acceptance criteria:
+
+- When the model replies with tool calls, the engine runs each one, stores the result in the conversation and asks the model again.
+- The loop ends as soon as the model replies without tool calls, and that reply is the final answer.
+- Each tool call is sent to the interface as an event while the answer streams.
+
+As a user, I want a model that keeps calling tools to be stopped, and a refused tool to end the turn cleanly, so that Sensai never loops forever or runs something I turned down.
+
+Acceptance criteria:
+
+- A turn makes at most 5 model rounds (`MAX_TOOL_ROUNDS`).
+- If I decline a tool call, the engine does not call the model again; it adds a message naming the tool that was not run and ends the turn.
+- A tool that fails returns an error string to the model, which can correct its call or explain the failure.
+
+## Feature: Slash Commands
+
+As a user in a chat session, I want to manage my session with slash commands, so that I can change settings without restarting Sensai.
+
+Acceptance criteria:
+
+- `/help` lists every command with its description; `/exit` leaves the session.
+- `/model <name>` and `/provider <name>` take effect from the next turn and report what changed.
+- Missing or extra arguments print the command's usage instead of failing.
+- A line that does not start with `/` is a normal message to the assistant.
+
+As a user who found settings that work, I want to read, change and save the configuration from the chat, so that the next launch starts with them.
+
+Acceptance criteria:
+
+- `/config` and `/config get [key]` show the current values; `get` accepts dotted keys such as `tools.fs_allowed_root`.
+- `/config set <key> <value>` changes `model`, `provider`, `base_url` or `tools.fs_allowed_root` for the running session.
+- `/config save` writes the settings to `sensai.toml`.
+- An unknown key is reported as such and changes nothing.
+
+## Feature: Groq Provider (opt-in)
+
+As a user whose machine is too slow for a local model, I want to use a hosted Groq model instead of Ollama, so that I get fast answers without running a model locally.
+
+Acceptance criteria:
+
+- Ollama stays the default; Groq is used only after `provider = "groq"` in `sensai.toml` or `/provider groq`.
+- The API key comes from `api_key` in `sensai.toml` or the `GROQ_API_KEY` environment variable.
+- Replies stream and tool calls work as with Ollama.
+
+As a user who pastes an API key into the configuration, I want it kept out of the screen and clear errors when it is missing, so that I do not leak it or wonder why Groq does not answer.
+
+Acceptance criteria:
+
+- `/config` shows the key as `***`, never its value.
+- Switching provider or model keeps the configured `api_key`.
+- Starting or switching to Groq without a key fails with a message naming `GROQ_API_KEY` and `api_key`, and the current provider stays active.
+
+## Feature: Provider Errors and Thinking Time
+
+As a user on a slow CPU model, I want to see that Sensai is still working and to stop a turn that takes too long, so that I can tell a slow model from a frozen program.
+
+Acceptance criteria:
+
+- After a 1 second grace, the interface shows "thinking… N s" while it waits for the model, and pauses it during a confirmation prompt.
+- The local Ollama provider has no read timeout, so a slow model is never cut off.
+- `Ctrl+C` in the CLI and `Esc` in the TUI cancel only the current turn, not the session.
+- A cancelled turn leaves no unanswered user message in the history.
+
+As a user whose model server is down or misconfigured, I want a one-line explanation of what failed, so that I know what to fix instead of reading a traceback.
+
+Acceptance criteria:
+
+- Any HTTP failure or runtime error from the provider is reported as a single line that gives the reason.
+- The session stays open after the error, and I can fix the setting (for example with `/provider` or `/config set base_url`) and send the message again.
