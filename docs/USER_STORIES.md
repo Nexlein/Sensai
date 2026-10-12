@@ -282,6 +282,7 @@ Acceptance criteria:
 - `/memory delete <entity> <key>` removes a fact.
 - `/memory search <query>` finds facts matching a keyword.
 - `/memory clear` wipes all structured memories.
+
 ## Feature: [T2] Sandboxed Code Execution
 
 As a user asking the assistant to compute something or check a snippet, I want it to run Python in an isolated container and read the real output, so that I get a verified answer instead of a guess, without my machine being exposed to the code.
