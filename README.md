@@ -29,7 +29,7 @@ make setup
 ## ✨ Features (WIP)
 
 - Interactive CLI chat REPL streaming responses from an LLM provider
-- Pluggable provider registry (currently: [Ollama](https://ollama.com/), and a `mock` provider for testing/demos)
+- Pluggable provider registry (currently: [Ollama](https://ollama.com/), opt-in [Groq](https://groq.com/), and a `mock` provider for testing/demos)
 - Config resolved from CLI args > `sensai.toml` > built-in defaults, no source changes needed to switch model/provider
 - Secure filesystem tools (read/list) strictly bounded to an allowed root directory (T4 feature)
 - Tool-calling engine that seamlessly orchestrates tool dispatch, handles recursion limits, and gracefully recovers from unexpected errors
@@ -96,6 +96,22 @@ above, CLI and TUI both use Qwen3.5 and can read, list and write files under the
 directory Sensai is launched from. This is also the default without `[tools]`.
 Every write asks for your confirmation first. Set `fs_allowed_root = false` to
 turn the filesystem tools off.
+
+### Groq (optional)
+
+Ollama stays the default. To use [Groq](https://groq.com/) instead, which is a hosted
+service and not local, opt in explicitly. Groq needs an API key and a Groq model
+name; the Ollama `model` and `base_url` do not apply:
+
+```toml
+provider = "groq"
+model = "openai/gpt-oss-120b"
+# api_key = "gsk_..."   # or export GROQ_API_KEY
+```
+
+Prefer the `GROQ_API_KEY` environment variable: a key in `sensai.toml` is stored in
+clear text (the file is ignored by Git). `/config` hides the key. Switch at runtime
+with `/provider groq` then `/model <groq-model>`. RAG embeddings still use Ollama.
 
 ### Code execution
 

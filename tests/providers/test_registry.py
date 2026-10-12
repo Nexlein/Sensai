@@ -2,6 +2,7 @@ import pytest
 
 from sensai.domain.errors import ProviderError
 from sensai.providers import get_provider
+from sensai.providers.groq import GroqLLMProvider
 from sensai.providers.mock import MockLLMProvider
 from sensai.providers.ollama import OllamaLLMProvider
 
@@ -11,6 +12,21 @@ def test_get_provider_ollama_returns_configured_instance():
     assert isinstance(provider, OllamaLLMProvider)
     assert provider.base_url == "http://example:1234"
     assert provider.model == "llama3.2"
+
+
+def test_get_provider_groq_ignores_ollama_base_url():
+    provider = get_provider(
+        "groq", base_url="http://localhost:11434", model="m", api_key="k"
+    )
+    assert isinstance(provider, GroqLLMProvider)
+    assert provider.model == "m"
+    assert provider.base_url == "https://api.groq.com/openai/v1"
+
+
+def test_get_provider_groq_without_key_raises_provider_error(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    with pytest.raises(ProviderError):
+        get_provider("groq")
 
 
 def test_get_provider_mock_returns_configured_instance():

@@ -95,6 +95,23 @@ def test_save_config_round_trips_all_values(tmp_path):
     assert loaded == config
 
 
+def test_save_config_round_trips_api_key(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(provider="groq", model="m", api_key="gsk_secret")
+
+    save_config(config, config_file)
+
+    assert load_config(config_file) == config
+
+
+def test_save_config_omits_unset_api_key(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "api_key" not in config_file.read_text()
+
+
 def test_save_config_omits_unset_tools_section(tmp_path):
     config_file = tmp_path / "sensai.toml"
 
