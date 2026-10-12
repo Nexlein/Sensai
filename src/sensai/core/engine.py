@@ -236,6 +236,10 @@ class ChatEngine:
                 if tracker is not None:
                     usage = tracker.add(event.content)
                     yield BudgetEvent(used=usage.used, max_tokens=usage.max_tokens)
+        except ProviderError:
+            # Already readable (e.g. Groq); only undo the history entry.
+            self.conversation.messages.pop()
+            raise
         except (RuntimeError, httpx.HTTPError) as exc:
             self.conversation.messages.pop()
             raise ProviderError("provider request failed") from exc

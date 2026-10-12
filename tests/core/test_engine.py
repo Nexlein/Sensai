@@ -66,6 +66,20 @@ async def test_send_wraps_provider_runtime_error_and_leaves_conversation_unchang
 
 
 @pytest.mark.asyncio
+async def test_send_keeps_a_provider_error_message_and_leaves_conversation_unchanged():
+    conversation = Conversation()
+    original = ProviderError("Groq error [400]: bad tool message")
+    engine = ChatEngine(FailingLLMProvider(original), conversation)
+
+    with pytest.raises(ProviderError) as raised:
+        async for _ in engine.send("hi"):
+            pass
+
+    assert raised.value is original
+    assert conversation.messages == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "exc",
     [

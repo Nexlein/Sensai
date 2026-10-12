@@ -31,6 +31,18 @@ def test_error_text_names_the_failure_in_one_line(cause, expected):
     assert "Traceback" not in text
 
 
+def test_error_text_shows_the_reason_a_provider_raised_itself():
+    text = error_text(ProviderError("Groq error [400]: bad tool message"))
+
+    assert text == "Model unavailable — Groq error [400]: bad tool message"
+
+
+def test_error_text_hides_the_engine_wrapper_message():
+    text = error_text(ProviderError("provider request failed"))
+
+    assert "provider request failed" not in text
+
+
 @pytest.mark.parametrize("stage", ["input", "output", "tool"])
 @pytest.mark.parametrize("action", ["block", "redact", "flag", "allow"])
 def test_every_stage_and_action_produces_a_notice_with_the_reason(stage, action):

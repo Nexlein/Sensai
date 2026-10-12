@@ -5,6 +5,8 @@ import httpx
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import GuardrailEvent
 
+ENGINE_WRAPPER_MESSAGE = "provider request failed"
+
 _NOTICES = {
     ("input", "block"): "Message blocked ({reason}). Nothing was sent to the model.",
     ("input", "redact"): "Personal data in your message was masked ({reason}).",
@@ -37,5 +39,9 @@ def error_text(exc: Exception) -> str:
             return "Model server timed out — it did not accept the request in time."
         if isinstance(cause, httpx.TransportError):
             return "Connection lost — the model server closed the connection."
+        # Providers that raise ProviderError themselves (Groq) already wrote a
+        # readable reason; the engine's wrapper message carries none.
+        if not cause and (detail := str(exc)) and detail != ENGINE_WRAPPER_MESSAGE:
+            return f"Model unavailable — {detail}"
         return "Model unavailable — the model is unavailable or returned an error."
     return f"Unexpected error — {exc}"
