@@ -21,6 +21,29 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+
+CREATE TABLE IF NOT EXISTS entities (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    entity_type TEXT NOT NULL DEFAULT 'generic',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS facts (
+    id TEXT PRIMARY KEY,
+    entity_name TEXT NOT NULL REFERENCES entities(name) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 1.0,
+    tags TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(entity_name, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_facts_entity_name ON facts(entity_name);
+CREATE INDEX IF NOT EXISTS idx_facts_key ON facts(key);
 """
 
 
