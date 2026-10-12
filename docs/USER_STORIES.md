@@ -31,6 +31,32 @@ Acceptance criteria:
 - `write_file` is flagged `requires_confirmation = True` and goes through the human-in-the-loop prompt in the CLI and TUI.
 - Declining the prompt leaves the file untouched and tells the agent the write was refused.
 
+## Feature: [T1] MCP Tool Integration
+
+As a developer, I want to plug an existing MCP server into Sensai through `sensai.toml`, so that the assistant can use tools I did not have to write (for example GitHub issues).
+
+Acceptance criteria:
+
+- Each `[mcp.servers.<name>]` table (`command`, `args`, `env`, `timeout`) starts one server at launch, and its tools appear to the model as `<name>__<tool>`.
+- The model can call such a tool mid-answer and use the result, like a built-in tool.
+- Tested against a self-built server (`tests/tools/mcp_test_server.py`) and the official GitHub server (`tests/tools/test_mcp_live.py`, opt-in).
+- Changing settings with `/config` or `/model` keeps the MCP servers in `sensai.toml` and their tools in the session.
+
+As a user, I want to approve every MCP tool call, so that code I did not vet cannot act on my behalf unnoticed.
+
+Acceptance criteria:
+
+- MCP tools are `requires_confirmation = True` and go through the human-in-the-loop prompt in the CLI and TUI.
+- Declining the prompt means the server is never called, and the agent is told the call was refused.
+
+As a user, I want a broken MCP server to stay out of my way, so that a typo in one server entry does not stop me from chatting.
+
+Acceptance criteria:
+
+- A server that cannot start, times out or fails the handshake is skipped with a warning at launch; the other servers and the built-in tools still work.
+- A server that crashes or hangs during a call returns an error string to the model instead of freezing Sensai.
+- MCP server processes are stopped when Sensai exits, including after a crash of the interface.
+
 ## Feature: [R1] Basic RAG
 
 As a user, I want the agent to ingest my local project documentation, so I can ask questions about my codebase.

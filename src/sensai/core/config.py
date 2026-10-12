@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -12,6 +13,7 @@ DEFAULT_PROVIDER = "ollama"
 DEFAULT_MODEL = "qwen3.5:4b"
 DEFAULT_BASE_URL = "http://localhost:11434"
 DEFAULT_CONFIG_PATH = Path("sensai.toml")
+_SERVER_NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 
 class ConfigError(Exception):
@@ -44,6 +46,48 @@ class EvalConfig(BaseModel):
     replies_path: str = "logs/replies.jsonl"
 
 
+class McpServerConfig(BaseModel):
+    """One MCP server Sensai launches as a child process (stdio transport)."""
+
+    command: str
+    args: list[str] = []
+    env: dict[str, str] = {}
+    timeout: float = 30.0
+
+    @field_validator("command")
+    @classmethod
+    def _command_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("command must not be empty")
+        return value
+
+    @field_validator("timeout")
+    @classmethod
+    def _timeout_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("timeout must be positive")
+        return value
+
+
+class McpConfig(BaseModel):
+    """`[mcp.servers.<name>]` tables. The name prefixes the server's tool names."""
+
+    servers: dict[str, McpServerConfig] = {}
+
+    @field_validator("servers")
+    @classmethod
+    def _names_are_identifiers(
+        cls, servers: dict[str, McpServerConfig]
+    ) -> dict[str, McpServerConfig]:
+        # Tool names reach the model as `<name>__<tool>`; keep them function-safe.
+        for name in servers:
+            if not _SERVER_NAME.fullmatch(name):
+                raise ValueError(
+                    f"invalid MCP server name {name!r}: use letters, digits, '-', '_'"
+                )
+        return servers
+
+
 class AppConfig(BaseModel):
     interface: Literal["cli", "tui", "web"] = DEFAULT_INTERFACE
     provider: str = DEFAULT_PROVIDER
@@ -53,6 +97,7 @@ class AppConfig(BaseModel):
     budget: BudgetConfig = BudgetConfig()
     guardrails: GuardrailsConfig = GuardrailsConfig()
     eval: EvalConfig = EvalConfig()
+    mcp: McpConfig = McpConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -155,6 +200,26 @@ def save_config(
                 + json.dumps(config.eval.replies_path, ensure_ascii=False),
             ]
         )
+
+    # save_config rewrites the whole file, so every section must be written back or
+    # a runtime /model would silently delete the user's MCP servers.
+    for name, server in config.mcp.servers.items():
+        lines.extend(
+            [
+                "",
+                f"[mcp.servers.{name}]",
+                f"command = {json.dumps(server.command, ensure_ascii=False)}",
+                f"args = {json.dumps(server.args, ensure_ascii=False)}",
+                f"timeout = {server.timeout}",
+            ]
+        )
+        if server.env:
+            lines.append(f"[mcp.servers.{name}.env]")
+            lines.extend(
+                f"{json.dumps(key, ensure_ascii=False)} = "
+                f"{json.dumps(value, ensure_ascii=False)}"
+                for key, value in server.env.items()
+            )
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

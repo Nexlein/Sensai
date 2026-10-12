@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from typing import Any
 
 from sensai.domain.protocols import BaseTool
@@ -34,8 +35,13 @@ class ToolRegistry:
         ]
 
 
-def build_default_registry(allowed_root: str | None) -> ToolRegistry:
+def build_default_registry(
+    allowed_root: str | None, extra_tools: Iterable[BaseTool] = ()
+) -> ToolRegistry:
+    """Built-in tools plus `extra_tools` (the MCP ones, which live outside this list)."""
     registry = ToolRegistry()
+    for tool in extra_tools:
+        registry.register(tool)
     if allowed_root is not None:
         registry.register(ReadFileTool(allowed_root))
         registry.register(ListDirTool(allowed_root))

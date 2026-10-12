@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
+from rich.markup import escape
 
 from sensai.core.bootstrap import BootstrapError, build_session
 from sensai.core.config import DEFAULT_CONFIG_PATH, ConfigError
@@ -62,15 +63,20 @@ async def dispatch(argv: list[str]) -> int:
         console.print(f"[bold red]✗ {exc}[/]")
         return 1
 
-    if context.config.interface == "cli":
-        await run_cli(context, console)
-        return 0
-    if context.config.interface == "tui":
-        await run_tui(context)
-        return 0
+    try:
+        for warning in context.startup_warnings:
+            console.print(f"[yellow]⚠ {escape(warning)}[/]")
+        if context.config.interface == "cli":
+            await run_cli(context, console)
+            return 0
+        if context.config.interface == "tui":
+            await run_tui(context)
+            return 0
 
-    console.print("[bold red]✗ Web interface is not implemented yet.[/]")
-    return 1
+        console.print("[bold red]✗ Web interface is not implemented yet.[/]")
+        return 1
+    finally:
+        await context.aclose()
 
 
 def main() -> None:

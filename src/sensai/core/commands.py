@@ -1,5 +1,6 @@
+import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from sensai.core.config import (
@@ -42,6 +43,13 @@ class CommandContext:
     tool_registry_factory: ToolRegistryFactory
     memory_store: MemoryStore
     config_path: Path = DEFAULT_CONFIG_PATH
+    # Non-fatal problems found while building the session, shown once at startup.
+    startup_warnings: list[str] = field(default_factory=list)
+    # Awaited when the session ends, e.g. to stop MCP server processes.
+    closers: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
+
+    async def aclose(self) -> None:
+        await asyncio.gather(*(close() for close in self.closers))
 
 
 CommandHandler = Callable[[CommandContext, tuple[str, ...]], Awaitable[CommandResult]]

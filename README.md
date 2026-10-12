@@ -97,6 +97,27 @@ directory Sensai is launched from. This is also the default without `[tools]`.
 Every write asks for your confirmation first. Set `fs_allowed_root = false` to
 turn the filesystem tools off.
 
+### MCP servers
+
+Sensai can use tools from [MCP](https://modelcontextprotocol.io) servers that run
+as a local command (stdio transport; HTTP servers are not supported). Declare
+them in `sensai.toml`; the table name prefixes the tool names (`github__list_issues`):
+
+```toml
+[mcp.servers.github]
+command = "docker"
+args = ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server", "stdio", "--read-only", "--toolsets", "issues"]
+
+[mcp.servers.github.env]
+GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_..."
+```
+
+Every MCP call asks for your confirmation first. A server that fails to start is
+skipped with a warning. `timeout` (seconds, default 30) bounds each request. Keep
+tokens out of Git: `sensai.toml` is ignored, but do not paste it elsewhere.
+How it works end to end: [docs/mcp.md](docs/mcp.md).
+
 Run `sensai chat --ui tui` to use the Textual interface. The flag takes precedence over `interface` in `sensai.toml`. The web interface is planned but not available yet.
 
 ### Local web search service
