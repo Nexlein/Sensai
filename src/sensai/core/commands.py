@@ -75,6 +75,7 @@ async def handle_provider(
             provider_name,
             model=context.config.model,
             base_url=context.config.base_url,
+            api_key=context.config.api_key,
         )
     except ProviderError as exc:
         return CommandResult(message=str(exc))
@@ -97,6 +98,7 @@ async def handle_model(
             context.config.provider,
             model=model_name,
             base_url=context.config.base_url,
+            api_key=context.config.api_key,
         )
     except ProviderError as exc:
         return CommandResult(message=f"Could not switch model: {exc}")
@@ -118,6 +120,7 @@ async def handle_base_url(
             context.config.provider,
             model=context.config.model,
             base_url=base_url,
+            api_key=context.config.api_key,
         )
     except ProviderError as exc:
         return CommandResult(message=f"Could not update base_url: {exc}")
@@ -159,6 +162,8 @@ async def handle_config(
     arguments: tuple[str, ...],
 ) -> CommandResult:
     values = context.config.model_dump()
+    if values["api_key"]:
+        values["api_key"] = "***"
 
     if not arguments:
         return CommandResult(message=str(values))

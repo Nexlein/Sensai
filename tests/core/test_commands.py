@@ -171,6 +171,7 @@ async def test_dispatch_model_switches_provider_and_preserves_conversation():
             {
                 "model": "llama3.2:latest",
                 "base_url": "http://localhost:11434",
+                "api_key": None,
             },
         )
     ]
@@ -224,6 +225,7 @@ async def test_dispatch_provider_switches_provider_and_preserves_conversation():
             {
                 "model": DEFAULT_MODEL,
                 "base_url": "http://localhost:11434",
+                "api_key": None,
             },
         )
     ]
@@ -250,7 +252,7 @@ async def test_dispatch_unknown_provider_preserves_current_provider():
     assert context.config.provider == "ollama"
     assert (
         result.message
-        == "Unknown provider 'missing'. Available providers: ['mock', 'ollama']"
+        == "Unknown provider 'missing'. Available providers: ['groq', 'mock', 'ollama']"
     )
 
 
@@ -265,6 +267,34 @@ async def test_dispatch_config_gets_all_values():
 
     assert not result.should_exit
     assert result.message == str(context.config.model_dump())
+
+
+async def test_dispatch_config_masks_api_key():
+    context = _context()
+    context.config.api_key = "gsk_secret"
+
+    for arguments in (("get",), (), ("get", "api_key")):
+        result = await dispatch_command(
+            ParsedCommand(name="config", arguments=arguments), context
+        )
+        assert "gsk_secret" not in result.message
+        assert "***" in result.message
+
+
+async def test_dispatch_provider_passes_api_key_to_factory():
+    calls: list[tuple[str, dict[str, str | None]]] = []
+
+    def provider_factory(name: str, **config: str | None) -> LLMProvider:
+        calls.append((name, config))
+        return MockLLMProvider()
+
+    context = _context()
+    context.provider_factory = provider_factory
+    context.config.api_key = "gsk_secret"
+
+    await dispatch_command(ParsedCommand(name="provider", arguments=("groq",)), context)
+
+    assert calls[0][1]["api_key"] == "gsk_secret"
 
 
 async def test_dispatch_config_gets_one_value():
@@ -315,6 +345,7 @@ async def test_dispatch_config_set_model_reuses_model_handler():
             {
                 "model": "mistral",
                 "base_url": "http://localhost:11434",
+                "api_key": None,
             },
         )
     ]
@@ -351,6 +382,7 @@ async def test_dispatch_config_set_base_url_rebuilds_provider():
             {
                 "model": DEFAULT_MODEL,
                 "base_url": "http://ollama.example:11434",
+                "api_key": None,
             },
         )
     ]
