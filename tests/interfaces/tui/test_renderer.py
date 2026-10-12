@@ -327,3 +327,83 @@ async def test_question_prompt_shows_title_details_and_options():
         assert "  1. Yes" in lines
         assert "❯ 2. No" in lines
         await pilot.press("escape")
+
+
+@pytest.mark.asyncio
+async def test_thinking_time_shows_while_waiting_and_goes_when_the_reply_starts(
+    monkeypatch,
+):
+    from sensai.interfaces import thinking
+    from sensai.interfaces.tui.renderer import ThinkingLabel
+
+    monkeypatch.setattr(thinking, "GRACE_SECONDS", 0.05)
+    monkeypatch.setattr(thinking, "TICK_SECONDS", 0.05)
+    release = asyncio.Event()
+
+    async def events() -> AsyncIterator[Event]:
+        await release.wait()
+        yield TextChunkEvent(content="Bonjour")
+
+    async def process(text: str, render: RenderFn, confirm_tool) -> CommandResult:
+        await render(events())
+        return CommandResult()
+
+    app = ChatApp(process)
+    async with app.run_test() as pilot:
+        await pilot.press("enter")
+        await asyncio.sleep(0.3)
+        await pilot.pause()
+        labels = app.query(ThinkingLabel)
+        assert len(labels) == 1
+        assert "thinking…" in str(labels.first().render())
+        assert "Esc to stop" in str(labels.first().render())
+
+        release.set()
+        await pilot.pause()
+        await pilot.pause()
+        assert len(app.query(ThinkingLabel)) == 0
+        assert app.query(AssistantMessage).first().source == "Bonjour"
+
+
+@pytest.mark.asyncio
+async def test_escape_stops_the_turn_and_gives_the_prompt_back():
+    from textual.widgets import Input
+
+    from sensai.interfaces.tui.renderer import StoppedNotice
+
+    started = asyncio.Event()
+
+    async def events() -> AsyncIterator[Event]:
+        started.set()
+        await asyncio.sleep(60)
+        yield TextChunkEvent(content="never")
+
+    async def process(text: str, render: RenderFn, confirm_tool) -> CommandResult:
+        await render(events())
+        return CommandResult()
+
+    app = ChatApp(process)
+    async with app.run_test() as pilot:
+        await pilot.press("enter")
+        await asyncio.wait_for(started.wait(), timeout=2)
+        assert app.query_one(Input).disabled
+
+        await pilot.press("escape")
+        await pilot.pause()
+        await pilot.pause()
+
+        assert len(app.query(StoppedNotice)) == 1
+        assert not app.query_one(Input).disabled
+        assert len(app.query(AssistantMessage)) == 0
+        assert len(app.query(ErrorMessage)) == 0
+
+
+@pytest.mark.asyncio
+async def test_escape_with_no_turn_running_does_nothing():
+    app = ChatApp(_process_events())
+
+    async with app.run_test() as pilot:
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert app.is_running
