@@ -1,3 +1,4 @@
+import difflib
 import sqlite3
 from typing import Any
 
@@ -132,8 +133,18 @@ class ForgetFactTool(SensitiveTool):
     def preview(self, entity: str, key: str, **kwargs: Any) -> str | None:
         fact = self.memory.get_fact(entity, key)
         if fact is None:
-            return f"Forget fact: {entity}.{key} (fact does not exist)"
-        return f"Forget fact: {entity}.{key} = {fact.value}"
+            return None
+        tags_str = f" [{', '.join(fact.tags)}]" if fact.tags else ""
+        line = f"{entity}.{key} = {fact.value}{tags_str}"
+        return "\n".join(
+            difflib.unified_diff(
+                [line],
+                [],
+                fromfile=f"memory/{entity}.{key}",
+                tofile="/dev/null",
+                lineterm="",
+            )
+        )
 
     async def execute(self, entity: str, key: str, **kwargs: Any) -> str:
         try:

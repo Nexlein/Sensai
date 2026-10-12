@@ -69,14 +69,17 @@ def test_forget_fact_tool(memory_manager: SqliteMemoryManager) -> None:
     assert tool.requires_confirmation is True
 
     # Preview when not existing
-    assert "does not exist" in (tool.preview("user", "token") or "")
+    assert tool.preview("user", "token") is None
 
     # Add fact
     memory_manager.store_fact("user", "token", "abc123xyz")
 
-    # Preview when existing
+    # Preview when existing (unified diff)
     preview = tool.preview("user", "token")
-    assert preview == "Forget fact: user.token = abc123xyz"
+    assert preview is not None
+    assert "--- memory/user.token" in preview
+    assert "+++ /dev/null" in preview
+    assert "-user.token = abc123xyz" in preview
 
     # Execute deletion
     res = asyncio.run(tool.execute(entity="user", key="token"))

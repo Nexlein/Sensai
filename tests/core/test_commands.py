@@ -591,3 +591,67 @@ async def test_dispatch_memory_crud(tmp_path):
     )
     assert res_clear.message == "All structured memories cleared."
     assert mem.list_facts() == []
+
+
+async def test_dispatch_memory_usage_and_errors(tmp_path):
+    from sensai.memory.manager import SqliteMemoryManager
+
+    context = _context()
+    mem = SqliteMemoryManager(tmp_path / "cmd_mem_err.db")
+    context.structured_memory = mem
+
+    # Unknown subcommand
+    res_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("unknown",)),
+        context,
+    )
+    assert "Usage: /memory [list" in (res_bad.message or "")
+
+    # Get bad arity
+    res_get_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("get", "user")),
+        context,
+    )
+    assert res_get_bad.message == "Usage: /memory get <entity> <key>"
+
+    # Get not found
+    res_get_miss = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("get", "user", "editor")),
+        context,
+    )
+    assert res_get_miss.message == "Memory not found: user.editor"
+
+    # Set bad arity
+    res_set_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("set", "user")),
+        context,
+    )
+    assert res_set_bad.message == "Usage: /memory set <entity> <key> <value>"
+
+    # Delete bad arity
+    res_del_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("delete", "user")),
+        context,
+    )
+    assert res_del_bad.message == "Usage: /memory delete <entity> <key>"
+
+    # Delete not found
+    res_del_miss = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("delete", "user", "editor")),
+        context,
+    )
+    assert res_del_miss.message == "Memory not found: user.editor"
+
+    # Search bad arity
+    res_search_bad = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("search",)),
+        context,
+    )
+    assert res_search_bad.message == "Usage: /memory search <query>"
+
+    # Search no match
+    res_search_none = await dispatch_command(
+        ParsedCommand(name="memory", arguments=("search", "nonexistent")),
+        context,
+    )
+    assert res_search_none.message == "No memories matching 'nonexistent'."
