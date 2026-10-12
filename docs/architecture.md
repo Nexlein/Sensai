@@ -84,7 +84,8 @@ Design choices and the reference design they were compared against are in [eleve
 | Content & privacy guardrails (EV2)           | Done, on by default              |
 | Turn logger (EV3)                            | Built, not wired into the engine |
 | Token budget (M2), artifact (M4), manager    | Stubs                            |
-| MCP (T1), sandbox exec (T2), web search (T3) | Stubs                            |
+| MCP tools (T1), stdio client                 | Done, `[mcp.servers.*]` config   |
+| Sandbox exec (T2), web search (T3)           | Stubs                            |
 | Evaluator (EV1)                              | Stub                             |
 | Web interface (FastAPI SSE)                  | Stub                             |
 
