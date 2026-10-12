@@ -71,23 +71,23 @@ Design choices and the reference design they were compared against are in [eleve
 
 ## 6. Module Status
 
-| Area                                         | Status                           |
-| -------------------------------------------- | -------------------------------- |
-| Domain models / events / protocols           | Done                             |
-| Providers (Ollama, embeddings, mock)         | Done                             |
-| Chat engine + tool-calling loop              | Done                             |
-| Slash commands, TOML config                  | Done                             |
-| Session persistence, SQLite (M1)             | Done (no user profile yet)       |
-| FS tools with sandbox root (T4)              | Done                             |
-| RAG chunker / vector store / retriever       | Done, enabled with `--rag-dir`   |
-| CLI and TUI, shared bootstrap                | Done, `--ui cli\|tui`            |
-| Content & privacy guardrails (EV2)           | Done, on by default              |
-| Turn logger (EV3)                            | Built, not wired into the engine |
-| Token budget (M2), artifact (M4), manager    | Stubs                            |
-| MCP tools (T1), stdio client                 | Done, `[mcp.servers.*]` config   |
-| Sandbox exec (T2), web search (T3)           | Stubs                            |
-| Evaluator (EV1)                              | Stub                             |
-| Web interface (FastAPI SSE)                  | Stub                             |
+| Area                                      | Status                           |
+| ----------------------------------------- | -------------------------------- |
+| Domain models / events / protocols        | Done                             |
+| Providers (Ollama, embeddings, mock)      | Done                             |
+| Chat engine + tool-calling loop           | Done                             |
+| Slash commands, TOML config               | Done                             |
+| Session persistence, SQLite (M1)          | Done (no user profile yet)       |
+| FS tools with sandbox root (T4)           | Done                             |
+| RAG chunker / vector store / retriever    | Done, enabled with `--rag-dir`   |
+| CLI and TUI, shared bootstrap             | Done, `--ui cli\|tui`            |
+| Content & privacy guardrails (EV2)        | Done, on by default              |
+| Turn logger (EV3)                         | Built, not wired into the engine |
+| Token budget (M2), artifact (M4), manager | Stubs                            |
+| MCP tools (T1), stdio client              | Done, `[mcp.servers.*]` config   |
+| Sandbox exec (T2), web search (T3)        | Stubs                            |
+| Evaluator (EV1)                           | Stub                             |
+| Web interface (FastAPI SSE)               | Stub                             |
 
 ## 7. Target Pipeline (planned additions)
 
