@@ -1,3 +1,6 @@
+import sys
+from pathlib import Path
+
 import pytest
 
 from sensai.core.bootstrap import BootstrapError, build_session
@@ -33,6 +36,73 @@ async def test_build_session_loads_config_tools_and_existing_session(
     assert resumed.tool_registry.get("read_file") is not None
     assert resumed.tool_registry.get("list_dir") is not None
     assert resumed.tool_registry_factory(None).get("web_search") is not None
+
+
+def _mcp_config(tmp_path, *, working="demo", broken=None):
+    server = Path(__file__).parents[1] / "tools" / "mcp_test_server.py"
+    text = f'provider = "mock"\n[tools]\nfs_allowed_root = "{tmp_path}"\n'
+    if working:
+        text += (
+            f'[mcp.servers.{working}]\ncommand = "{sys.executable}"\n'
+            f'args = ["{server}"]\n'
+        )
+    if broken:
+        text += f'[mcp.servers.{broken}]\ncommand = "no-such-sensai-command"\n'
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(text, encoding="utf-8")
+    return config_path
+
+
+async def test_build_session_registers_mcp_tools_behind_confirmation(tmp_path):
+    context = await build_session(config_path=_mcp_config(tmp_path))
+    try:
+        tool = context.tool_registry.get("demo__add")
+
+        assert tool is not None
+        assert tool.requires_confirmation is True
+        assert await tool.execute(a=1, b=2) == "3"
+        assert context.startup_warnings == []
+    finally:
+        await context.aclose()
+
+
+async def test_mcp_tools_survive_a_registry_rebuild(tmp_path):
+    context = await build_session(config_path=_mcp_config(tmp_path))
+    try:
+        rebuilt = context.tool_registry_factory(None)
+
+        assert rebuilt.get("demo__add") is not None
+        assert rebuilt.get("read_file") is None
+    finally:
+        await context.aclose()
+
+
+async def test_failing_mcp_server_is_skipped_with_a_warning(tmp_path):
+    context = await build_session(config_path=_mcp_config(tmp_path, broken="bad"))
+    try:
+        assert context.tool_registry.get("demo__add") is not None
+        assert len(context.startup_warnings) == 1
+        assert "MCP server 'bad' skipped" in context.startup_warnings[0]
+    finally:
+        await context.aclose()
+
+
+async def test_session_starts_when_every_mcp_server_fails(tmp_path):
+    config_path = _mcp_config(tmp_path, working=None, broken="bad")
+
+    context = await build_session(config_path=config_path)
+
+    assert context.tool_registry.get("read_file") is not None
+    assert len(context.startup_warnings) == 1
+
+
+async def test_aclose_stops_the_mcp_servers(tmp_path):
+    context = await build_session(config_path=_mcp_config(tmp_path))
+    tool = context.tool_registry.get("demo__add")
+
+    await context.aclose()
+
+    assert await tool.execute(a=1, b=2) == "Error: MCP server is not running"
 
 
 async def test_build_session_indexes_rag_documents(monkeypatch, tmp_path):

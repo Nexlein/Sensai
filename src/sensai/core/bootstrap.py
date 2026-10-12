@@ -1,11 +1,19 @@
+import asyncio
 import sqlite3
+from functools import partial
 from pathlib import Path
 
 import httpx
 
 from sensai.core.budget import ContextBudget, LLMSummarizer
 from sensai.core.commands import CommandContext
-from sensai.core.config import DEFAULT_CONFIG_PATH, GuardrailsConfig, load_config
+from sensai.core.config import (
+    DEFAULT_CONFIG_PATH,
+    GuardrailsConfig,
+    McpConfig,
+    McpServerConfig,
+    load_config,
+)
 from sensai.core.engine import ChatEngine
 from sensai.domain.models import Conversation
 from sensai.domain.protocols import Guardrail
@@ -16,6 +24,7 @@ from sensai.memory.rag.store import SQLiteVectorStore
 from sensai.memory.session import SqliteMemoryStore
 from sensai.providers import get_provider
 from sensai.providers.ollama import OllamaEmbeddingProvider
+from sensai.tools.mcp import McpClient, McpError, McpTool
 from sensai.tools.registry import build_default_registry
 
 
@@ -27,6 +36,39 @@ def _build_guardrail(config: GuardrailsConfig) -> Guardrail | None:
     if not config.enabled:
         return None
     return RegexGuardrail(injection_action=config.injection, pii_action=config.pii)
+
+
+async def _start_mcp_server(
+    name: str, server: McpServerConfig
+) -> tuple[McpClient, list[McpTool]] | str:
+    """Start one server and list its tools; a warning string if it cannot."""
+    client = McpClient(server.command, server.args, server.env, server.timeout)
+    try:
+        await client.start()
+        definitions = await client.list_tools()
+    except McpError as exc:
+        await client.close()
+        return f"MCP server '{name}' skipped: {exc}"
+    return client, [McpTool(client, name, definition) for definition in definitions]
+
+
+async def _start_mcp_servers(
+    config: McpConfig,
+) -> tuple[list[McpClient], list[McpTool], list[str]]:
+    """Start every configured server at once. A failing one is skipped with a warning."""
+    outcomes = await asyncio.gather(
+        *(_start_mcp_server(name, server) for name, server in config.servers.items())
+    )
+    clients: list[McpClient] = []
+    tools: list[McpTool] = []
+    warnings: list[str] = []
+    for outcome in outcomes:
+        if isinstance(outcome, str):
+            warnings.append(outcome)
+        else:
+            clients.append(outcome[0])
+            tools.extend(outcome[1])
+    return clients, tools, warnings
 
 
 async def build_session(
@@ -60,7 +102,6 @@ async def build_session(
     if conversation is None:
         conversation = Conversation(id=session_name) if session_name else Conversation()
 
-    tool_registry = build_default_registry(config.tools.fs_allowed_root)
     retriever = None
     if rag_dir is not None:
         try:
@@ -78,6 +119,13 @@ async def build_session(
         ) as exc:
             raise BootstrapError(f"RAG indexing failed: {exc}") from exc
 
+    # Last step that can leave resources behind: servers started here are only
+    # stopped by context.aclose(), so nothing after this may raise.
+    mcp_clients, mcp_tools, warnings = await _start_mcp_servers(config.mcp)
+    # The factory remembers the MCP tools so /config rebuilds keep them.
+    registry_factory = partial(build_default_registry, extra_tools=mcp_tools)
+    tool_registry = registry_factory(config.tools.fs_allowed_root)
+
     engine = ChatEngine(
         provider,
         conversation,
@@ -94,7 +142,9 @@ async def build_session(
         engine=engine,
         provider_factory=get_provider,
         tool_registry=tool_registry,
-        tool_registry_factory=build_default_registry,
+        tool_registry_factory=registry_factory,
         memory_store=memory_store,
         config_path=Path(config_path),
+        startup_warnings=warnings,
+        closers=[client.close for client in mcp_clients],
     )
