@@ -1,7 +1,34 @@
+import httpx
 import pytest
 
+from sensai.domain.errors import ProviderError
 from sensai.domain.events import GuardrailEvent
-from sensai.interfaces.notices import guardrail_notice
+from sensai.interfaces.notices import error_text, guardrail_notice
+
+
+def _provider_error(cause: Exception) -> ProviderError:
+    exc = ProviderError("provider request failed")
+    exc.__cause__ = cause
+    return exc
+
+
+@pytest.mark.parametrize(
+    ("cause", "expected"),
+    [
+        (httpx.ConnectError("refused"), "Connection failed"),
+        (httpx.ConnectTimeout("slow"), "timed out"),
+        (httpx.ReadTimeout("slow"), "timed out"),
+        (httpx.RemoteProtocolError("closed"), "Connection lost"),
+        (httpx.ReadError("reset"), "Connection lost"),
+        (RuntimeError("HTTP Provider Error [404]: no model"), "Model unavailable"),
+    ],
+)
+def test_error_text_names_the_failure_in_one_line(cause, expected):
+    text = error_text(_provider_error(cause))
+
+    assert expected in text
+    assert "\n" not in text
+    assert "Traceback" not in text
 
 
 @pytest.mark.parametrize("stage", ["input", "output", "tool"])

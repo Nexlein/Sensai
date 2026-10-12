@@ -1,5 +1,8 @@
 """User-facing wording shared by every frontend."""
 
+import httpx
+
+from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import GuardrailEvent
 
 _NOTICES = {
@@ -20,3 +23,19 @@ def guardrail_notice(event: GuardrailEvent) -> str:
         "Guardrail {action} on {stage} ({reason}).",
     )
     return template.format(action=event.action, stage=event.stage, reason=event.reason)
+
+
+def error_text(exc: Exception) -> str:
+    """One line for a failed turn: what went wrong, never a traceback."""
+    if isinstance(exc, EmptyInputError):
+        return "Empty input — please enter a message before sending."
+    if isinstance(exc, ProviderError):
+        cause = exc.__cause__
+        if isinstance(cause, httpx.ConnectError):
+            return "Connection failed — could not connect to the model server."
+        if isinstance(cause, httpx.TimeoutException):
+            return "Model server timed out — it did not accept the request in time."
+        if isinstance(cause, httpx.TransportError):
+            return "Connection lost — the model server closed the connection."
+        return "Model unavailable — the model is unavailable or returned an error."
+    return f"Unexpected error — {exc}"
