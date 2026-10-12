@@ -116,6 +116,7 @@ GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_..."
 Every MCP call asks for your confirmation first. A server that fails to start is
 skipped with a warning. `timeout` (seconds, default 30) bounds each request. Keep
 tokens out of Git: `sensai.toml` is ignored, but do not paste it elsewhere.
+How it works end to end: [docs/mcp.md](docs/mcp.md).
 
 Run `sensai chat --ui tui` to use the Textual interface. The flag takes precedence over `interface` in `sensai.toml`. The web interface is planned but not available yet.
 
