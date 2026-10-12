@@ -1,4 +1,5 @@
 import json
+from collections import deque
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -11,7 +12,7 @@ class OllamaLLMProvider(BaseHTTPProvider):
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
-        model: str = "llama3.2",
+        model: str = "qwen3.5:4b",
         timeout: float = 60.0,
     ) -> None:
         super().__init__(base_url=base_url, timeout=timeout)
@@ -25,6 +26,19 @@ class OllamaLLMProvider(BaseHTTPProvider):
                 for tc in msg.tool_calls
             ]
         return payload
+
+    def _format_messages(self, messages: list[Message]) -> list[dict[str, Any]]:
+        """Associate tool results with the preceding assistant tool calls."""
+        formatted: list[dict[str, Any]] = []
+        pending_tools: deque[str] = deque()
+        for message in messages:
+            payload = self._format_message(message)
+            if message.role == "assistant":
+                pending_tools = deque(tc.name for tc in message.tool_calls or [])
+            elif message.role == "tool" and pending_tools:
+                payload["tool_name"] = pending_tools.popleft()
+            formatted.append(payload)
+        return formatted
 
     def _parse_line(self, line: str) -> list[Event]:
         msg = json.loads(line).get("message", {})
@@ -55,7 +69,7 @@ class OllamaLLMProvider(BaseHTTPProvider):
     ) -> AsyncGenerator[Event]:
         payload = {
             "model": self.model,
-            "messages": [self._format_message(m) for m in messages],
+            "messages": self._format_messages(messages),
             "stream": True,
             **({"tools": tools} if tools else {}),
         }

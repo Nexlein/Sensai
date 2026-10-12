@@ -9,10 +9,15 @@ class Tool(BaseTool, abc.ABC):
     name: str
     description: str
     parameters_schema: dict[str, Any]
+    requires_confirmation: bool = False
 
     @abc.abstractmethod
     async def execute(self, **kwargs: Any) -> str:
         pass
+
+
+class SensitiveTool(Tool, abc.ABC):
+    requires_confirmation: bool = True
 
 
 class PermissionBoundary:

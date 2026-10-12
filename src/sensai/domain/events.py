@@ -13,6 +13,10 @@ class Event(BaseModel):
     timestamp: Now
 
 
+class AssistantStartEvent(Event):
+    type: Literal["assistant_start"] = "assistant_start"
+
+
 class TextChunkEvent(Event):
     type: Literal["text_chunk"] = "text_chunk"
     content: str
