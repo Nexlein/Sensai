@@ -76,3 +76,13 @@ def test_tool_confirmation_hides_content_shown_by_the_diff():
 
     assert with_diff.details == (("path", "a.txt"),)
     assert without_diff.details == (("path", "a.txt"), ("content", "new"))
+
+
+def test_tool_confirmation_hides_code_shown_by_the_diff():
+    arguments = {"code": "print(1)", "timeout": 5}
+
+    with_diff = tool_confirmation(
+        ToolCall(name="run_python", arguments=arguments, preview="+print(1)")
+    )
+
+    assert with_diff.details == (("timeout", "5"),)
