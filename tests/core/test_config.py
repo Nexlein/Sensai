@@ -8,6 +8,8 @@ from sensai.core.config import (
     ConfigError,
     EvalConfig,
     GuardrailsConfig,
+    McpConfig,
+    McpServerConfig,
     ToolsConfig,
     load_config,
     save_config,
@@ -252,3 +254,73 @@ def test_save_config_omits_default_eval_section(tmp_path):
     save_config(AppConfig(), config_file)
 
     assert "[eval]" not in config_file.read_text()
+
+
+def test_mcp_has_no_servers_by_default():
+    assert load_config(config_path=None).mcp.servers == {}
+
+
+def test_mcp_servers_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(
+        '[mcp.servers.fs]\ncommand = "npx"\nargs = ["-y", "server"]\ntimeout = 5\n'
+        '[mcp.servers.fs.env]\nTOKEN = "abc"\n'
+        '[mcp.servers.bare]\ncommand = "tool"\n'
+    )
+
+    servers = load_config(config_file).mcp.servers
+
+    assert servers["fs"] == McpServerConfig(
+        command="npx", args=["-y", "server"], env={"TOKEN": "abc"}, timeout=5
+    )
+    assert servers["bare"] == McpServerConfig(command="tool")
+    assert servers["bare"].timeout == 30.0
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        '[mcp.servers.a]\ncommand = ""\n',
+        '[mcp.servers.a]\ncommand = "  "\n',
+        "[mcp.servers.a]\nargs = []\n",
+        '[mcp.servers.a]\ncommand = "x"\ntimeout = 0\n',
+        '[mcp.servers.a]\ncommand = "x"\nargs = "not-a-list"\n',
+        '[mcp.servers."bad name"]\ncommand = "x"\n',
+        '[mcp.servers."a.b"]\ncommand = "x"\n',
+    ],
+)
+def test_invalid_mcp_server_is_a_config_error(tmp_path, section):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(section)
+
+    with pytest.raises(ConfigError):
+        load_config(config_file)
+
+
+def test_save_config_round_trips_mcp_servers(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(
+        mcp=McpConfig(
+            servers={
+                "fs": McpServerConfig(
+                    command="npx",
+                    args=["-y", 'quote"d', "é"],
+                    env={"A-B": "x y", "TOKEN": 'se"cret'},
+                    timeout=12.5,
+                ),
+                "bare": McpServerConfig(command="tool"),
+            }
+        )
+    )
+
+    save_config(config, config_file)
+
+    assert load_config(config_file).mcp == config.mcp
+
+
+def test_save_config_omits_mcp_when_unset(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "mcp" not in config_file.read_text()
