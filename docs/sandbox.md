@@ -35,10 +35,10 @@ So Sensai runs it in a **throwaway Docker container** that has none of those thi
 
 `run_python` is a normal Sensai tool, like `read_file` or `web_search`. The model receives its name, a description and two arguments:
 
-| Argument  | Required | Meaning                                                           |
-| --------- | -------- | ----------------------------------------------------------------- |
-| `code`    | yes      | The complete Python 3 source. Results must be printed to stdout.  |
-| `timeout` | no       | Seconds before the run is killed. Default 10, capped at 60.       |
+| Argument  | Required | Meaning                                                          |
+| --------- | -------- | ---------------------------------------------------------------- |
+| `code`    | yes      | The complete Python 3 source. Results must be printed to stdout. |
+| `timeout` | no       | Seconds before the run is killed. Default 10, capped at 60.      |
 
 It is a `SensitiveTool` (`requires_confirmation = True`), so the engine will not execute it without an explicit yes. The description tells the model the sandbox has no network and no access to your files, and to fix and rerun the code if it fails.
 
@@ -69,18 +69,18 @@ Every run starts a new container named `sensai-sandbox-<random>` and removes it 
 
 ## 4. What the container is not allowed to do
 
-| Flag                                | Effect                                                              |
-| ----------------------------------- | ------------------------------------------------------------------- |
-| `--network none`                    | No network at all: no downloads, no calls out, no data leaving.     |
-| `--read-only`                       | The image filesystem cannot be written to.                          |
-| `--tmpfs /tmp:rw,size=16m`          | The only writable place: 16 MB of memory-backed scratch space.      |
-| no `-v` / `--volume`                | Your files are not in the container. Not even the project folder.   |
-| `--cap-drop ALL`                    | No Linux capabilities (no mounting, no raw sockets, and so on).     |
-| `--security-opt no-new-privileges`  | A program cannot gain rights through setuid binaries.               |
-| `--user 65534:65534`                | Runs as `nobody`, not root.                                         |
-| `--memory 256m --memory-swap 256m`  | At most 256 MB of RAM, and no swap to spill into.                   |
-| `--cpus 1`                          | At most one CPU core.                                               |
-| `--pids-limit 64`                   | At most 64 processes: a fork bomb stops at 64.                      |
+| Flag                               | Effect                                                            |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| `--network none`                   | No network at all: no downloads, no calls out, no data leaving.   |
+| `--read-only`                      | The image filesystem cannot be written to.                        |
+| `--tmpfs /tmp:rw,size=16m`         | The only writable place: 16 MB of memory-backed scratch space.    |
+| no `-v` / `--volume`               | Your files are not in the container. Not even the project folder. |
+| `--cap-drop ALL`                   | No Linux capabilities (no mounting, no raw sockets, and so on).   |
+| `--security-opt no-new-privileges` | A program cannot gain rights through setuid binaries.             |
+| `--user 65534:65534`               | Runs as `nobody`, not root.                                       |
+| `--memory 256m --memory-swap 256m` | At most 256 MB of RAM, and no swap to spill into.                 |
+| `--cpus 1`                         | At most one CPU core.                                             |
+| `--pids-limit 64`                  | At most 64 processes: a fork bomb stops at 64.                    |
 
 The command is built in `RunCodeTool._command`, and a unit test checks the important flags are present and that no volume is ever mounted.
 
@@ -93,7 +93,7 @@ A confirmation that only said "Allow run_python?" would be useless, because you 
   ⎿  +3 -0
      1 + import math
      2 + print(math.factorial(20))
-     3 + 
+     3 +
   Allow run_python?
     timeout  10
     ❯ Yes   No
@@ -149,14 +149,14 @@ If you stop the turn yourself (Ctrl+C in the CLI, Esc in the TUI), the same clea
 
 ## 8. When things go wrong
 
-| What happened                                    | What the model receives                                                 |
-| ------------------------------------------------ | ----------------------------------------------------------------------- |
-| The script raised an exception                   | exit code 1 plus the traceback on stderr                                |
-| The script ran past its timeout                  | `Error: timed out after Ns and was killed`                              |
-| `code` is missing, empty or not a string         | `Error: code must be a non-empty string`                                |
-| `timeout` is not a number, or is zero or negative | `Error: timeout must be a number` / `must be positive`                 |
-| The `docker` binary does not exist               | `Error: sandbox unavailable, could not start Docker: ...`               |
-| Docker is installed but failed (daemon down, image missing and not pullable) | `Error: sandbox unavailable: <docker's message>` |
+| What happened                                                                | What the model receives                                   |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------- |
+| The script raised an exception                                               | exit code 1 plus the traceback on stderr                  |
+| The script ran past its timeout                                              | `Error: timed out after Ns and was killed`                |
+| `code` is missing, empty or not a string                                     | `Error: code must be a non-empty string`                  |
+| `timeout` is not a number, or is zero or negative                            | `Error: timeout must be a number` / `must be positive`    |
+| The `docker` binary does not exist                                           | `Error: sandbox unavailable, could not start Docker: ...` |
+| Docker is installed but failed (daemon down, image missing and not pullable) | `Error: sandbox unavailable: <docker's message>`          |
 
 The last row is told apart by Docker's own exit codes (125 to 127) with an empty stdout. Without that, "the daemon is not running" would look like a script bug and the model would waste turns trying to fix perfectly good code.
 
@@ -174,11 +174,11 @@ There is nothing to configure: the tool is registered by `build_default_registry
 
 ## 10. Testing
 
-| What                                                       | Where                                   | Needs                                    |
-| ---------------------------------------------------------- | --------------------------------------- | ---------------------------------------- |
-| The tool against a **fake `docker`** executable            | `tests/tools/test_sandbox.py`           | nothing                                  |
-| The registry contains `run_python`                         | `tests/tools/test_tool_registry.py`     | nothing                                  |
-| The confirmation hides `code` when a preview is shown      | `tests/interfaces/test_prompts.py`      | nothing                                  |
+| What                                                                   | Where                                       | Needs                                      |
+| ---------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------ |
+| The tool against a **fake `docker`** executable                        | `tests/tools/test_sandbox.py`               | nothing                                    |
+| The registry contains `run_python`                                     | `tests/tools/test_tool_registry.py`         | nothing                                    |
+| The confirmation hides `code` when a preview is shown                  | `tests/interfaces/test_prompts.py`          | nothing                                    |
 | **Real containers**: network cut, files hidden, read-only, loop killed | `TestLive` in `tests/tools/test_sandbox.py` | Docker, the image, `SENSAI_LIVE_SANDBOX=1` |
 
 The fake `docker` is a few lines of Python written into a temporary directory and passed as `docker_bin`. It echoes stdin, writes a traceback, sleeps forever or exits with 125, depending on the test, and records the `docker kill` call. That checks all the Python-side logic (validation, clipping, timeout, error mapping) without needing Docker.
@@ -211,15 +211,15 @@ They run real code and check, from inside the container, that a socket to the in
 
 ## 12. File map
 
-| File                                 | Role                                                          |
-| ------------------------------------ | ------------------------------------------------------------- |
-| `src/sensai/tools/sandbox.py`        | `RunCodeTool`: arguments, preview, Docker command, result     |
-| `src/sensai/tools/registry.py`       | Registers `RunCodeTool()` with the built-in tools             |
-| `src/sensai/tools/base.py`           | `SensitiveTool`, which sets `requires_confirmation`           |
-| `src/sensai/core/engine.py`          | Builds the preview and asks for confirmation before `execute` |
-| `src/sensai/interfaces/diff.py`      | Draws the preview diff                                        |
-| `src/sensai/interfaces/prompts.py`   | The question; hides `code` when a preview is shown            |
-| `tests/tools/test_sandbox.py`        | Unit tests and the opt-in live tests                          |
+| File                               | Role                                                          |
+| ---------------------------------- | ------------------------------------------------------------- |
+| `src/sensai/tools/sandbox.py`      | `RunCodeTool`: arguments, preview, Docker command, result     |
+| `src/sensai/tools/registry.py`     | Registers `RunCodeTool()` with the built-in tools             |
+| `src/sensai/tools/base.py`         | `SensitiveTool`, which sets `requires_confirmation`           |
+| `src/sensai/core/engine.py`        | Builds the preview and asks for confirmation before `execute` |
+| `src/sensai/interfaces/diff.py`    | Draws the preview diff                                        |
+| `src/sensai/interfaces/prompts.py` | The question; hides `code` when a preview is shown            |
+| `tests/tools/test_sandbox.py`      | Unit tests and the opt-in live tests                          |
 
 ## 13. FAQ
 
