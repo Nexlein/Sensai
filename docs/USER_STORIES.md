@@ -254,3 +254,22 @@ Acceptance criteria:
 - A judge that stays invalid, times out or is unreachable gives a verdict with an error and no scores, and the batch goes on.
 - A scoring call that fails does not discard the faithfulness result, and the other way round.
 - The command exits with a non-zero status when any reply could not be judged.
+
+## Feature: [T2] Sandboxed Code Execution
+
+As a user asking the assistant to compute something or check a snippet, I want it to run Python in an isolated container and read the real output, so that I get a verified answer instead of a guess, without my machine being exposed to the code.
+
+Acceptance criteria:
+
+- The `run_python` tool runs the code in a throwaway Docker container with no network, a read-only filesystem, no host files, no capabilities, a non-root user and capped memory, CPU and processes.
+- The reply to the model carries the exit code, stdout and stderr, each truncated past 4000 characters.
+- Every run asks for confirmation first, and the full code is shown above the prompt so I read what I am approving.
+- A script that runs past its timeout (10 seconds by default, 60 at most) is killed together with its container.
+
+As a user whose generated code has a bug, I want the assistant to see the traceback and fix its own script, so that I get working code without copying errors back by hand.
+
+Acceptance criteria:
+
+- A failing script returns a non-zero exit code and its traceback on stderr, as a normal tool result, so the model can correct the code and run it again.
+- A missing Docker binary, a stopped daemon or a missing image come back as `Error: sandbox unavailable…`, never as a script failure the model would try to fix.
+- Empty code, a non-numeric or non-positive timeout are rejected before any container starts.

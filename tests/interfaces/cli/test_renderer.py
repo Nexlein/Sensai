@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 
 import httpx
@@ -14,7 +15,8 @@ from sensai.domain.events import (
     ToolCallEvent,
 )
 from sensai.domain.models import Conversation
-from sensai.interfaces.cli.renderer import error_text, render_history, render_stream
+from sensai.interfaces.cli.renderer import render_history, render_stream
+from sensai.interfaces.notices import error_text
 
 
 def test_render_history_prints_prior_messages(capsys):
@@ -270,3 +272,44 @@ async def test_confirmation_prints_diff_before_asking(monkeypatch):
 
     assert await renderer.confirm_tool(tc) is False
     assert output.getvalue().startswith("● write_file(a.txt)\n  ⎿  +1 -0\n")
+
+
+async def test_render_stream_shows_thinking_time_on_the_speaker_line(monkeypatch):
+    from io import StringIO
+
+    from sensai.interfaces import thinking
+
+    monkeypatch.setattr(thinking, "GRACE_SECONDS", 0.05)
+    monkeypatch.setattr(thinking, "TICK_SECONDS", 0.05)
+    output = StringIO()
+    console = Console(file=output, force_terminal=True, width=80)
+
+    async def events():
+        yield AssistantStartEvent()
+        await asyncio.sleep(0.3)
+        yield TextChunkEvent(content="Bonjour")
+
+    await render_stream(console, events())
+
+    out = output.getvalue()
+    assert "thinking… 0s · Ctrl+C to stop" in out
+    assert out.count("\r\x1b[2K") >= 2  # drawn, then rewritten in place
+    # Once text streams, the line holds the reply and no timer follows it.
+    assert out.rsplit("\x1b[2K", 1)[1].count("thinking") == 0
+    assert "Bonjour" in out
+
+
+async def test_render_stream_shows_no_timer_when_not_a_terminal():
+    from io import StringIO
+
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+
+    async def events():
+        yield AssistantStartEvent()
+        await asyncio.sleep(1.3)
+        yield TextChunkEvent(content="Bonjour")
+
+    await render_stream(console, events())
+
+    assert output.getvalue() == "sensai: Bonjour\n"

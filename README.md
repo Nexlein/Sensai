@@ -97,6 +97,14 @@ directory Sensai is launched from. This is also the default without `[tools]`.
 Every write asks for your confirmation first. Set `fs_allowed_root = false` to
 turn the filesystem tools off.
 
+### Code execution
+
+The `run_python` tool lets the model run Python and read the output or traceback. The
+code runs in a throwaway Docker container (no network, read-only filesystem, no host
+files, 256 MB, 10 s by default) and every run asks for your confirmation, with the full
+code shown first. It needs Docker and the `python:3.12-alpine` image
+(`docker pull python:3.12-alpine`); without Docker the tool reports it is unavailable.
+
 ### MCP servers
 
 Sensai can use tools from [MCP](https://modelcontextprotocol.io) servers that run

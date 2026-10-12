@@ -1,11 +1,13 @@
+import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import TypeVar
+from typing import ClassVar, TypeVar
 
-import httpx
 from textual import work
 from textual.app import App, ComposeResult
+from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
 from textual.widgets import Input, Markdown, Static
+from textual.worker import Worker
 
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.core.engine import ConfirmTool
@@ -13,24 +15,15 @@ from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import BudgetEvent, Event, GuardrailEvent, TextChunkEvent
 from sensai.domain.models import ToolCall
 from sensai.interfaces.diff import diff_text
-from sensai.interfaces.notices import guardrail_notice
+from sensai.interfaces.notices import error_text, guardrail_notice
 from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
+from sensai.interfaces.thinking import Thinking, format_thinking
 from sensai.interfaces.tui.question import QuestionPrompt
 from sensai.interfaces.usage import format_usage
 
 T = TypeVar("T")
 
 ProcessFn = Callable[[str, RenderFn, ConfirmTool], Awaitable[CommandResult]]
-
-
-def error_text(exc: Exception) -> str:
-    if isinstance(exc, EmptyInputError):
-        return "Empty input — please enter a message before sending."
-    if isinstance(exc, ProviderError):
-        if isinstance(exc.__cause__, httpx.ConnectError):
-            return "Connection failed — could not connect to the model server."
-        return "Model unavailable — the model is unavailable or returned an error."
-    return f"Unexpected error — {exc}"
 
 
 class RoleLabel(Static):
@@ -125,16 +118,43 @@ class ToolDecisionNotice(Static):
     """
 
 
+class ThinkingLabel(Static):
+    DEFAULT_CSS = """
+    ThinkingLabel {
+        margin: 0 0 0 2;
+        color: $text-muted;
+        text-style: italic;
+    }
+    """
+
+
+class StoppedNotice(Static):
+    DEFAULT_CSS = """
+    StoppedNotice {
+        margin: 1 0 0 2;
+        color: $text-warning;
+    }
+    """
+
+
 class ChatApp(App[None]):
     CSS = """
     Input {
         dock: bottom;
     }
     """
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "stop_turn", "Stop", show=False),
+    ]
 
     def __init__(self, process: ProcessFn) -> None:
         super().__init__()
         self._process = process
+        self._turn: Worker[None] | None = None
+
+    def action_stop_turn(self) -> None:
+        if self._turn is not None and self._turn.is_running:
+            self._turn.cancel()
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="history")
@@ -161,12 +181,17 @@ class ChatApp(App[None]):
             return
         input_widget.disabled = True
         input_widget.value = ""
-        self._respond(event.value, input_widget)
+        self._turn = self._respond(event.value, input_widget)
 
     @work
     async def _respond(self, text: str, input_widget: Input) -> None:
         try:
             await self._process_turn(text)
+        except asyncio.CancelledError:
+            # Esc stopped the turn: report it and go back to the prompt.
+            history = self.query_one("#history", VerticalScroll)
+            await history.mount(StoppedNotice("Stopped."))
+            history.scroll_end(animate=False)
         finally:
             input_widget.disabled = False
             input_widget.focus()
@@ -177,12 +202,32 @@ class ChatApp(App[None]):
         await history.mount(UserMessage(text))
         history.scroll_end(animate=False)
 
+        indicator: ThinkingLabel | None = None
+
+        async def show_thinking(elapsed: int | None) -> None:
+            nonlocal indicator
+            if elapsed is None:
+                if indicator is not None:
+                    await indicator.remove()
+                    indicator = None
+                return
+            text = format_thinking(elapsed, "Esc")
+            if indicator is None:
+                indicator = ThinkingLabel(text)
+                await history.mount(indicator)
+                history.scroll_end(animate=False)
+            else:
+                indicator.update(text)
+
+        thinking = Thinking(show_thinking)
+
         async def confirm_tool(tc: ToolCall) -> bool:
             diff = diff_text(tc)
             if diff is not None:
                 await history.mount(ToolDiff(diff))
                 history.scroll_end(animate=False)
-            approved = await self.ask(tool_confirmation(tc))
+            async with thinking.hold():
+                approved = await self.ask(tool_confirmation(tc))
             await history.mount(
                 ToolDecisionNotice(
                     tool_decision(tc, approved),
@@ -209,7 +254,7 @@ class ChatApp(App[None]):
                 usage.update(usage_text)
 
             try:
-                async for streamed in events:
+                async for streamed in thinking.watch(events):
                     if isinstance(streamed, TextChunkEvent):
                         if reply is None:
                             reply = AssistantMessage("")

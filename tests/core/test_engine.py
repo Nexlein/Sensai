@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -60,6 +61,55 @@ async def test_send_wraps_provider_runtime_error_and_leaves_conversation_unchang
     with pytest.raises(ProviderError):
         async for _ in engine.send("hi"):
             pass
+
+    assert conversation.messages == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc",
+    [
+        httpx.ReadTimeout("timed out"),
+        httpx.ConnectTimeout("timed out"),
+        httpx.RemoteProtocolError("server closed the connection"),
+        httpx.ReadError("connection reset"),
+    ],
+)
+async def test_send_wraps_any_http_failure_and_leaves_conversation_unchanged(exc):
+    conversation = Conversation()
+    engine = ChatEngine(FailingLLMProvider(exc), conversation)
+
+    with pytest.raises(ProviderError) as raised:
+        async for _ in engine.send("hi"):
+            pass
+
+    assert raised.value.__cause__ is exc
+    assert conversation.messages == []
+
+
+class StallingLLMProvider:
+    async def chat_stream(
+        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+    ) -> AsyncGenerator[Event]:
+        await asyncio.sleep(60)
+        yield  # pragma: no cover
+
+
+@pytest.mark.asyncio
+async def test_cancelling_a_turn_drops_the_unanswered_user_message():
+    conversation = Conversation()
+    engine = ChatEngine(StallingLLMProvider(), conversation)
+
+    async def consume() -> None:
+        async for _ in engine.send("hi"):
+            pass
+
+    task = asyncio.ensure_future(consume())
+    await asyncio.sleep(0.05)
+    assert [m.role for m in conversation.messages] == ["user"]
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
 
     assert conversation.messages == []
 

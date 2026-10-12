@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -107,6 +108,22 @@ class ChatEngine:
 
     async def send(
         self, user_text: str, confirm_tool: ConfirmTool | None = None
+    ) -> AsyncGenerator[Event]:
+        try:
+            async for event in self._send(user_text, confirm_tool):
+                yield event
+        except asyncio.CancelledError:
+            # The user stopped the turn: an unanswered question must not linger in
+            # the history, or the next request would send it twice.
+            if (
+                self.conversation.messages
+                and self.conversation.messages[-1].role == "user"
+            ):
+                self.conversation.messages.pop()
+            raise
+
+    async def _send(
+        self, user_text: str, confirm_tool: ConfirmTool | None
     ) -> AsyncGenerator[Event]:
         if not user_text.strip():
             raise EmptyInputError("user_text must not be empty")
@@ -219,7 +236,7 @@ class ChatEngine:
                 if tracker is not None:
                     usage = tracker.add(event.content)
                     yield BudgetEvent(used=usage.used, max_tokens=usage.max_tokens)
-        except (RuntimeError, httpx.ConnectError) as exc:
+        except (RuntimeError, httpx.HTTPError) as exc:
             self.conversation.messages.pop()
             raise ProviderError("provider request failed") from exc
 

@@ -85,7 +85,8 @@ Design choices and the reference design they were compared against are in [eleve
 | Turn logger (EV3)                         | Built, not wired into the engine |
 | Token budget (M2), artifact (M4), manager | Stubs                            |
 | MCP tools (T1), stdio client              | Done, `[mcp.servers.*]` config   |
-| Sandbox exec (T2), web search (T3)        | Stubs                            |
+| Sandbox exec (T2)                         | Done, `run_python` via Docker    |
+| Web search (T3)                           | Done                             |
 | Evaluator (EV1)                           | Stub                             |
 | Web interface (FastAPI SSE)               | Stub                             |
 

@@ -77,7 +77,7 @@ def test_build_default_registry_always_registers_web_search(tmp_path):
     web_tool = registry.get("web_search")
     assert web_tool is not None
     assert web_tool.base_url == SEARXNG_URL
-    assert {tool.name for tool in registry.list_tools()} == {"web_search"}
+    assert {tool.name for tool in registry.list_tools()} == {"web_search", "run_python"}
 
     with_files = build_default_registry(str(tmp_path))
     assert {tool.name for tool in with_files.list_tools()} == {
@@ -85,6 +85,7 @@ def test_build_default_registry_always_registers_web_search(tmp_path):
         "list_dir",
         "write_file",
         "web_search",
+        "run_python",
     }
     assert any(
         item["function"]["name"] == "web_search"
