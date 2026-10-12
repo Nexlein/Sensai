@@ -4,6 +4,7 @@ from typing import Any
 from sensai.domain.protocols import BaseTool, StructuredMemory
 from sensai.tools.fs import ListDirTool, ReadFileTool, WriteFileTool
 from sensai.tools.memory import ForgetFactTool, RecallMemoryTool, RememberFactTool
+from sensai.tools.sandbox import RunCodeTool
 from sensai.tools.web import WebSearch
 
 SEARXNG_URL = "http://127.0.0.1:8888"
@@ -54,4 +55,5 @@ def build_default_registry(
         registry.register(RememberFactTool(memory))
         registry.register(RecallMemoryTool(memory))
         registry.register(ForgetFactTool(memory))
+    registry.register(RunCodeTool())
     return registry

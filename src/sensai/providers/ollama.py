@@ -15,7 +15,7 @@ class OllamaLLMProvider(BaseHTTPProvider):
         model: str = "qwen3.5:4b",
         timeout: float = 60.0,
     ) -> None:
-        super().__init__(base_url=base_url, timeout=timeout)
+        super().__init__(base_url=base_url, timeout=timeout, wait_forever=True)
         self.model = model
 
     def _format_message(self, msg: Message) -> dict[str, Any]:

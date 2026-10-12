@@ -1,3 +1,6 @@
+import asyncio
+import os
+import signal
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import ClassVar
@@ -135,7 +138,10 @@ async def test_chat_session_unknown_name_creates_new(monkeypatch, capsys, tmp_pa
 
 def test_build_tool_registry_keeps_web_search_when_root_is_unset():
     schemas = build_default_registry(None).get_tools_schema()
-    assert [schema["function"]["name"] for schema in schemas] == ["web_search"]
+    assert [schema["function"]["name"] for schema in schemas] == [
+        "web_search",
+        "run_python",
+    ]
 
 
 def test_build_tool_registry_registers_file_tools(tmp_path):
@@ -146,6 +152,7 @@ def test_build_tool_registry_registers_file_tools(tmp_path):
         "list_dir",
         "write_file",
         "web_search",
+        "run_python",
     }
 
 
@@ -220,6 +227,59 @@ async def test_run_repl_sends_each_line_until_eof():
 
     assert sent == ["hi", "hi"]
     assert errors == []
+
+
+async def test_run_repl_ctrl_c_stops_the_turn_and_keeps_the_session():
+    inputs = iter(["slow", "next"])
+    rendered: list[str] = []
+    stops: list[bool] = []
+    turn = 0
+
+    def read_input() -> str:
+        try:
+            return next(inputs)
+        except StopIteration as exc:
+            raise EOFError from exc
+
+    async def render(events: AsyncIterator[Event]) -> None:
+        nonlocal turn
+        turn += 1
+        if turn == 1:
+            asyncio.get_running_loop().call_later(
+                0.05, os.kill, os.getpid(), signal.SIGINT
+            )
+            await asyncio.sleep(30)
+        rendered.append("done")
+
+    await run_repl(
+        _context(),
+        read_input=read_input,
+        render=render,
+        on_error=lambda exc: None,
+        on_stop=lambda: stops.append(True),
+    )
+
+    assert stops == [True]
+    assert rendered == ["done"]  # the second message was still processed
+
+
+async def test_run_repl_restores_the_default_ctrl_c_between_turns():
+    inputs = iter(["hi"])
+
+    def read_input() -> str:
+        try:
+            return next(inputs)
+        except StopIteration as exc:
+            raise EOFError from exc
+
+    async def render(events: AsyncIterator[Event]) -> None:
+        await _drain(events)
+
+    await run_repl(
+        _context(), read_input=read_input, render=render, on_error=lambda exc: None
+    )
+
+    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
 
 
 async def test_run_repl_treats_bare_exit_as_chat_message():
