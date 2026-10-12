@@ -26,6 +26,17 @@ async def test_handshake_then_list_tools(client):
     assert [tool["name"] for tool in tools] == ["add", "boom", "image"]
 
 
+async def test_list_tools_drops_definitions_without_a_name(client, monkeypatch):
+    async def fake_request(method, params):
+        return {
+            "tools": [{"name": "ok"}, {"description": "nameless"}, "junk", {"name": 3}]
+        }
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    assert await client.list_tools() == [{"name": "ok"}]
+
+
 async def test_call_tool_returns_text(client):
     assert await client.call_tool("add", {"a": 2, "b": 3}) == "5"
 

@@ -1,7 +1,7 @@
 from typing import Any
 
 from sensai.tools.base import Tool
-from sensai.tools.registry import ToolRegistry
+from sensai.tools.registry import ToolRegistry, build_default_registry
 
 
 class DummyTool(Tool):
@@ -22,6 +22,25 @@ def test_registry_register_and_get():
 
     assert registry.get("dummy") is tool
     assert registry.get("nonexistent") is None
+
+
+def test_default_registry_includes_extra_tools():
+    extra = DummyTool()
+
+    registry = build_default_registry(None, extra_tools=[extra])
+
+    assert registry.get("dummy") is extra
+    assert registry.get("web_search") is not None
+    assert registry.get("read_file") is None
+
+
+def test_default_registry_builtins_win_a_name_clash():
+    class FakeWebSearch(DummyTool):
+        name = "web_search"
+
+    registry = build_default_registry(None, extra_tools=[FakeWebSearch()])
+
+    assert not isinstance(registry.get("web_search"), FakeWebSearch)
 
 
 def test_registry_list_tools():
