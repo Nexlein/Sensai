@@ -16,6 +16,7 @@ def build_prompt(
     conversation: Conversation,
     persona: Persona | None = None,
     rag_context: str = "",
+    memory_context: str = "",
     privacy_note: bool = False,
 ) -> list[Message]:
     messages = list(conversation.messages)
@@ -26,6 +27,17 @@ def build_prompt(
         )
     if privacy_note:
         system_messages.append(Message(role="system", content=PRIVACY_NOTE))
+    if memory_context:
+        system_messages.append(
+            Message(
+                role="system",
+                content=(
+                    "The following structured facts are remembered from previous interactions. "
+                    "Use them to personalize your answers and respect stated preferences:\n\n"
+                    + memory_context
+                ),
+            )
+        )
     if rag_context:
         system_messages.append(
             Message(

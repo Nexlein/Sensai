@@ -19,6 +19,7 @@ from sensai.domain.models import Conversation
 from sensai.domain.protocols import Guardrail
 from sensai.eval.guardrails import RegexGuardrail
 from sensai.eval.logger import ReplyLogger
+from sensai.memory.manager import SqliteMemoryManager
 from sensai.memory.rag.retriever import RAGRetriever
 from sensai.memory.rag.store import SQLiteVectorStore
 from sensai.memory.session import SqliteMemoryStore
@@ -122,8 +123,11 @@ async def build_session(
     # Last step that can leave resources behind: servers started here are only
     # stopped by context.aclose(), so nothing after this may raise.
     mcp_clients, mcp_tools, warnings = await _start_mcp_servers(config.mcp)
+    structured_memory = SqliteMemoryManager() if config.memory.enabled else None
     # The factory remembers the MCP tools so /config rebuilds keep them.
-    registry_factory = partial(build_default_registry, extra_tools=mcp_tools)
+    registry_factory = partial(
+        build_default_registry, extra_tools=mcp_tools, memory=structured_memory
+    )
     tool_registry = registry_factory(config.tools.fs_allowed_root)
 
     engine = ChatEngine(
@@ -135,6 +139,8 @@ async def build_session(
         recorder=(
             ReplyLogger(config.eval.replies_path) if config.eval.log_replies else None
         ),
+        memory=structured_memory,
+        memory_auto_inject=config.memory.auto_inject,
     )
     engine.budget = ContextBudget(config.budget, LLMSummarizer(lambda: engine.provider))
     return CommandContext(
@@ -144,6 +150,7 @@ async def build_session(
         tool_registry=tool_registry,
         tool_registry_factory=registry_factory,
         memory_store=memory_store,
+        structured_memory=structured_memory,
         config_path=Path(config_path),
         startup_warnings=warnings,
         closers=[client.close for client in mcp_clients],

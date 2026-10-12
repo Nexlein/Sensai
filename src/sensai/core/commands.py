@@ -13,7 +13,12 @@ from sensai.core.engine import ChatEngine
 from sensai.domain.errors import ProviderError
 from sensai.domain.events import Event
 from sensai.domain.models import Conversation
-from sensai.domain.protocols import LLMProvider, MemoryStore, ToolRegistry
+from sensai.domain.protocols import (
+    LLMProvider,
+    MemoryStore,
+    StructuredMemory,
+    ToolRegistry,
+)
 
 ReadInputFn = Callable[[], str]
 ProviderFactory = Callable[..., LLMProvider]
@@ -42,6 +47,7 @@ class CommandContext:
     tool_registry: ToolRegistry
     tool_registry_factory: ToolRegistryFactory
     memory_store: MemoryStore
+    structured_memory: StructuredMemory | None = None
     config_path: Path = DEFAULT_CONFIG_PATH
     # Non-fatal problems found while building the session, shown once at startup.
     startup_warnings: list[str] = field(default_factory=list)
@@ -248,11 +254,90 @@ async def handle_exit(
     return CommandResult(should_exit=True)
 
 
+async def handle_memory(
+    context: CommandContext,
+    arguments: tuple[str, ...],
+) -> CommandResult:
+    mem = context.structured_memory or getattr(context.engine, "memory", None)
+    if mem is None:
+        return CommandResult(message="Structured memory is not available.")
+
+    if not arguments or arguments[0] == "list":
+        entity_filter = arguments[1] if len(arguments) > 1 else None
+        facts = mem.list_facts(entity=entity_filter)
+        if not facts:
+            return CommandResult(message="No memories stored.")
+        lines = ["Stored memories:"]
+        for f in facts:
+            tags_str = f" [{', '.join(f.tags)}]" if f.tags else ""
+            lines.append(f"• {f.entity_name}.{f.key} = {f.value}{tags_str}")
+        return CommandResult(message="\n".join(lines))
+
+    subcmd = arguments[0].lower()
+    if subcmd == "get":
+        if len(arguments) != 3:
+            return CommandResult(message="Usage: /memory get <entity> <key>")
+        fact = mem.get_fact(arguments[1], arguments[2])
+        if fact is None:
+            return CommandResult(
+                message=f"Memory not found: {arguments[1]}.{arguments[2]}"
+            )
+        tags_str = f" [{', '.join(fact.tags)}]" if fact.tags else ""
+        return CommandResult(
+            message=f"{fact.entity_name}.{fact.key} = {fact.value}{tags_str}"
+        )
+
+    if subcmd == "set":
+        if len(arguments) < 4:
+            return CommandResult(message="Usage: /memory set <entity> <key> <value>")
+        entity = arguments[1]
+        key = arguments[2]
+        value = " ".join(arguments[3:])
+        fact = mem.store_fact(entity, key, value)
+        return CommandResult(
+            message=f"Saved: {fact.entity_name}.{fact.key} = {fact.value}"
+        )
+
+    if subcmd == "delete":
+        if len(arguments) != 3:
+            return CommandResult(message="Usage: /memory delete <entity> <key>")
+        deleted = mem.delete_fact(arguments[1], arguments[2])
+        if deleted:
+            return CommandResult(
+                message=f"Deleted memory: {arguments[1]}.{arguments[2]}"
+            )
+        return CommandResult(message=f"Memory not found: {arguments[1]}.{arguments[2]}")
+
+    if subcmd == "search":
+        if len(arguments) < 2:
+            return CommandResult(message="Usage: /memory search <query>")
+        query = " ".join(arguments[1:])
+        facts = mem.search_facts(query)
+        if not facts:
+            return CommandResult(message=f"No memories matching '{query}'.")
+        lines = [f"Memories matching '{query}':"]
+        for f in facts:
+            tags_str = f" [{', '.join(f.tags)}]" if f.tags else ""
+            lines.append(f"• {f.entity_name}.{f.key} = {f.value}{tags_str}")
+        return CommandResult(message="\n".join(lines))
+
+    if subcmd == "clear":
+        mem.clear()
+        return CommandResult(message="All structured memories cleared.")
+
+    return CommandResult(
+        message="Usage: /memory [list [entity]] | /memory get <entity> <key> | /memory set <entity> <key> <value> | /memory delete <entity> <key> | /memory search <query> | /memory clear"
+    )
+
+
 COMMANDS = {
     "exit": CommandSpec(handle_exit, "Exit the interactive session"),
     "help": CommandSpec(handle_help, "Show available commands"),
     "clear": CommandSpec(handle_clear, "Clear the current conversation history"),
     "new": CommandSpec(handle_new, "Start and persist a new conversation"),
+    "memory": CommandSpec(
+        handle_memory, "Inspect or manage long-term structured memory"
+    ),
     "model": CommandSpec(handle_model, "Switch model for subsequent turns"),
     "provider": CommandSpec(handle_provider, "Switch LLM provider"),
     "config": CommandSpec(handle_config, "View or update runtime configuration"),

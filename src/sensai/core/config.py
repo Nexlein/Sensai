@@ -88,6 +88,13 @@ class McpConfig(BaseModel):
         return servers
 
 
+class MemoryConfig(BaseModel):
+    """Structured long-term memory (M3). On by default; `enabled = false` opts out."""
+
+    enabled: bool = True
+    auto_inject: bool = True
+
+
 class AppConfig(BaseModel):
     interface: Literal["cli", "tui", "web"] = DEFAULT_INTERFACE
     provider: str = DEFAULT_PROVIDER
@@ -98,6 +105,7 @@ class AppConfig(BaseModel):
     guardrails: GuardrailsConfig = GuardrailsConfig()
     eval: EvalConfig = EvalConfig()
     mcp: McpConfig = McpConfig()
+    memory: MemoryConfig = MemoryConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -198,6 +206,16 @@ def save_config(
                 f"log_replies = {json.dumps(config.eval.log_replies)}",
                 "replies_path = "
                 + json.dumps(config.eval.replies_path, ensure_ascii=False),
+            ]
+        )
+
+    if config.memory != MemoryConfig():
+        lines.extend(
+            [
+                "",
+                "[memory]",
+                f"enabled = {json.dumps(config.memory.enabled)}",
+                f"auto_inject = {json.dumps(config.memory.auto_inject)}",
             ]
         )
 
