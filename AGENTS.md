@@ -55,7 +55,7 @@ Implemented:
 - `core/`: `ChatEngine` (streaming, tool-calling loop capped at 5 iterations, optional RAG retriever and guardrail), `bootstrap.py` (`build_session`), `commands.py` (slash commands), `config.py` (CLI > `sensai.toml` > defaults, `[tools]` and `[guardrails]` sections), `prompt.py`, `input.py`.
 - `tools/`: `ToolRegistry`, `ReadFileTool`, `ListDirTool` (confined to `fs_allowed_root`).
 - `tools/mcp.py` (T1): hand-written MCP client over stdio (`McpClient`: initialize, `tools/list`, `tools/call`) and `McpTool` (a `SensitiveTool`, named `<server>__<tool>`). Servers come from `[mcp.servers.<name>]` in `sensai.toml`; `build_session` starts them in parallel, skips a failing one with a warning in `CommandContext.startup_warnings`, and `CommandContext.aclose()` stops them. `save_config` rewrites the whole file, so new config sections must be written back there too. Live test against the GitHub server: `SENSAI_LIVE_MCP=1` (needs Docker and `GITHUB_PERSONAL_ACCESS_TOKEN`).
-- `memory/`: SQLite session persistence (`--session`), RAG (`TextChunker`, `SQLiteVectorStore`, `RAGRetriever`, enabled with `--rag-dir`).
+- `memory/`: SQLite session persistence (`--session`), RAG (`TextChunker`, `SQLiteVectorStore`, `RAGRetriever`, enabled with `--rag-dir`), structured memory `manager.py` (M3: SQLite CRUD over entities and facts, auto-injected into prompt and managed via `/memory`).
 - `eval/guardrails/` (EV2): regex + checksum PII detectors, heuristic injection rules, `RegexGuardrail`, `PiiOutputStream`. On by default; disable with `[guardrails] enabled = false`.
 - `eval/evaluator.py` + `eval/adversarial/` (EV4): attack corpus (`corpus.py`, `known_gap` marks what the heuristics miss) replayed at guardrail and engine level, with a report. Run with `python -m sensai.eval.adversarial`.
 - `eval/judge/` (EV1): `LLMJudge` grades a reply for relevance and coherence (1-5) and checks its claims against the RAG context, through an injected `LLMProvider`. Failures come back as a verdict with `error`, never an exception. Run with `python -m sensai.eval.judge replies.jsonl`. Not wired into the chat loop. Its input comes from `ReplyLogger` (`eval/logger.py`, a `ReplyRecorder`): with `[eval] log_replies = true`, `ChatEngine` appends each final, non-refused reply to `logs/replies.jsonl`. Live test: `SENSAI_LIVE_JUDGE=1` (needs Ollama). Usage and test guide for EV1/EV4: [docs/evaluation.md](docs/evaluation.md).
@@ -63,7 +63,7 @@ Implemented:
 
 Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`), `Persona` (`build_prompt` accepts one, nothing passes it).
 
-Empty stubs, not yet built: `core/budget.py`, `memory/manager.py`, `memory/artifact.py`, `tools/sandbox.py`, `interfaces/web/*`.
+Empty stubs, not yet built: `tools/sandbox.py`, `interfaces/web/*`.
 
 Guardrail scope and known limits: input, model output and tool results are filtered. Not covered: PII inside tool-call arguments written by the model, the RAG context injected into the prompt, names and postal addresses. Reference design: [docs/elevenlabs-guardrails.md](docs/elevenlabs-guardrails.md).
 

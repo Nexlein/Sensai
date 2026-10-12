@@ -254,3 +254,31 @@ Acceptance criteria:
 - A judge that stays invalid, times out or is unreachable gives a verdict with an error and no scores, and the batch goes on.
 - A scoring call that fails does not discard the faithfulness result, and the other way round.
 - The command exits with a non-zero status when any reply could not be judged.
+
+## Feature: [M3] External Structured Memory
+
+As a developer, I want Sensai to remember my coding stack, preferred test runner, and style rules across different sessions, so that I do not have to re-explain my environment every time I start a new chat.
+
+Acceptance criteria:
+
+- Stored user facts (e.g. `user.preferred_language`, `user.linter`) persist across sessions in the SQLite database (`sensai.db`).
+- Starting a new conversation with `/new` or without `--session` still injects known facts into the prompt when `auto_inject = true`.
+- Stored facts can be updated idempotently with new values.
+
+As a user, I want the agent to autonomously record decisions, project details, and preferences during a conversation using tools, so that future answers seamlessly use those verified facts.
+
+Acceptance criteria:
+
+- Agent calls `remember_fact` to store facts into structured memory across turns.
+- Agent calls `recall_memory` to search or retrieve facts when needed.
+- `forget_fact` is marked as a sensitive tool requiring human confirmation before deleting a fact, showing a clear preview of the targeted record.
+
+As a user, I want to inspect, update, and delete stored memories via the `/memory` slash command, so that I maintain complete transparency and control over what the assistant remembers.
+
+Acceptance criteria:
+
+- `/memory list` shows all saved entities and their facts.
+- `/memory set <entity> <key> <value>` creates or updates a fact directly.
+- `/memory delete <entity> <key>` removes a fact.
+- `/memory search <query>` finds facts matching a keyword.
+- `/memory clear` wipes all structured memories.
