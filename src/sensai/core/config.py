@@ -93,6 +93,8 @@ class AppConfig(BaseModel):
     provider: str = DEFAULT_PROVIDER
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_BASE_URL
+    # Only providers that need a key (Groq) read it; GROQ_API_KEY works too.
+    api_key: str | None = None
     tools: ToolsConfig = ToolsConfig()
     budget: BudgetConfig = BudgetConfig()
     guardrails: GuardrailsConfig = GuardrailsConfig()
@@ -156,6 +158,8 @@ def save_config(
         f"model = {json.dumps(config.model, ensure_ascii=False)}",
         f"base_url = {json.dumps(config.base_url, ensure_ascii=False)}",
     ]
+    if config.api_key:
+        lines.append(f"api_key = {json.dumps(config.api_key, ensure_ascii=False)}")
 
     if config.tools != ToolsConfig():
         # json.dumps(False) is "false", which loads back as None.

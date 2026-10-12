@@ -92,7 +92,10 @@ async def build_session(
         base_url=base_url,
     )
     provider = get_provider(
-        config.provider, base_url=config.base_url, model=config.model
+        config.provider,
+        base_url=config.base_url,
+        model=config.model,
+        api_key=config.api_key,
     )
 
     memory_store = SqliteMemoryStore()
