@@ -3,6 +3,7 @@ from typing import Any
 
 from sensai.domain.protocols import BaseTool
 from sensai.tools.fs import ListDirTool, ReadFileTool, WriteFileTool
+from sensai.tools.sandbox import RunCodeTool
 from sensai.tools.web import WebSearch
 
 SEARXNG_URL = "http://127.0.0.1:8888"
@@ -47,4 +48,5 @@ def build_default_registry(
         registry.register(ListDirTool(allowed_root))
         registry.register(WriteFileTool(allowed_root))
     registry.register(WebSearch(SEARXNG_URL))
+    registry.register(RunCodeTool())
     return registry

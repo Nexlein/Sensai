@@ -135,7 +135,10 @@ async def test_chat_session_unknown_name_creates_new(monkeypatch, capsys, tmp_pa
 
 def test_build_tool_registry_keeps_web_search_when_root_is_unset():
     schemas = build_default_registry(None).get_tools_schema()
-    assert [schema["function"]["name"] for schema in schemas] == ["web_search"]
+    assert [schema["function"]["name"] for schema in schemas] == [
+        "web_search",
+        "run_python",
+    ]
 
 
 def test_build_tool_registry_registers_file_tools(tmp_path):
@@ -146,6 +149,7 @@ def test_build_tool_registry_registers_file_tools(tmp_path):
         "list_dir",
         "write_file",
         "web_search",
+        "run_python",
     }
 
 
