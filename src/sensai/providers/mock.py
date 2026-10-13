@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import Event, TextChunkEvent, ThoughtEvent, ToolCallEvent
 from sensai.domain.models import Message
 
 
@@ -11,13 +11,20 @@ class MockLLMProvider:
         self,
         default_response: str = "This is a mocked response from SENSAI.",
         simulated_delay: float = 0.02,
+        thought: str | None = None,
     ) -> None:
         self.default_response = default_response
         self.simulated_delay = simulated_delay
+        self.thought = thought
 
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
+        if self.thought:
+            yield ThoughtEvent(content=self.thought, source="native")
         words = self.default_response.split(" ")
         for i, word in enumerate(words):
             chunk = word if i == 0 else f" {word}"
@@ -38,7 +45,10 @@ class MockToolCallingLLMProvider:
         self.simulated_delay = simulated_delay
 
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         if self.simulated_delay > 0:
             await asyncio.sleep(self.simulated_delay)
