@@ -3,9 +3,11 @@ from collections import deque
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import Event, TextChunkEvent, ThoughtEvent, ToolCallEvent
 from sensai.domain.models import Message
 from sensai.providers.base import BaseHTTPProvider
+
+Think = bool | str
 
 
 class OllamaLLMProvider(BaseHTTPProvider):
@@ -17,6 +19,7 @@ class OllamaLLMProvider(BaseHTTPProvider):
     ) -> None:
         super().__init__(base_url=base_url, timeout=timeout, wait_forever=True)
         self.model = model
+        self.think_unsupported = False
 
     def _format_message(self, msg: Message) -> dict[str, Any]:
         payload: dict[str, Any] = {"role": msg.role, "content": msg.content}
@@ -42,7 +45,10 @@ class OllamaLLMProvider(BaseHTTPProvider):
 
     def _parse_line(self, line: str) -> list[Event]:
         msg = json.loads(line).get("message", {})
-        events: list[Event] = [
+        events: list[Event] = []
+        if thinking := msg.get("thinking"):
+            events.append(ThoughtEvent(content=thinking, source="native"))
+        events += [
             ToolCallEvent(
                 tool_name=tc.get("function", {}).get("name", ""),
                 arguments=tc.get("function", {}).get("arguments", {}),
@@ -64,17 +70,42 @@ class OllamaLLMProvider(BaseHTTPProvider):
                     for event in self._parse_line(stripped):
                         yield event
 
+    @staticmethod
+    def _rejects_think(exc: RuntimeError) -> bool:
+        """True when the server refused the request because the model cannot think."""
+        text = str(exc)
+        return "[400]" in text and "think" in text.lower()
+
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: Think | None = None,
     ) -> AsyncGenerator[Event]:
+        """Stream a reply; `think` asks for reasoning (`True` or a level name).
+
+        A model that cannot think makes the server answer 400: the request is then
+        repeated once without `think`, and `think` is ignored from then on.
+        """
+        use_think = think is not None and not self.think_unsupported
         payload = {
             "model": self.model,
             "messages": self._format_messages(messages),
             "stream": True,
             **({"tools": tools} if tools else {}),
+            **({"think": think} if use_think else {}),
         }
-        async for event in self._stream_response(payload):
-            yield event
+        started = False
+        try:
+            async for event in self._stream_response(payload):
+                started = True
+                yield event
+        except RuntimeError as exc:
+            if not use_think or started or not self._rejects_think(exc):
+                raise
+            self.think_unsupported = True
+            async for event in self.chat_stream(messages, tools):
+                yield event
 
 
 class OllamaEmbeddingProvider(BaseHTTPProvider):
