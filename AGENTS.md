@@ -18,7 +18,7 @@ Layered, one-way dependency:
 
 ```
 interfaces/  (cli, tui, web)   -> talks to core, nothing talks to interfaces
-core/        (engine, bootstrap, commands, config, prompt, budget) -> orchestrates via domain protocols
+core/        (engine, streaming, tool_runner, turn, guard, bootstrap, commands, config, prompt, budget) -> orchestrates via domain protocols
 providers/ , tools/ , memory/ , eval/  -> pluggable impls of domain/protocols.py
 domain/      (models, events, protocols) -> pure data + interfaces, no deps upward
 ```
