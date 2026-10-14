@@ -121,6 +121,7 @@ class ChatEngine:
         memory: StructuredMemory | None = None,
         memory_auto_inject: bool = True,
         reasoning: bool = False,
+        split_thoughts: bool = True,
         max_steps: int = MAX_TOOL_ROUNDS,
         think: bool | str | None = None,
     ) -> None:
@@ -136,6 +137,7 @@ class ChatEngine:
         self.memory = memory
         self.memory_auto_inject = memory_auto_inject
         self.reasoning = reasoning
+        self.split_thoughts = split_thoughts
         self.max_steps = max_steps
         self.think = think
 
@@ -286,7 +288,7 @@ class ChatEngine:
             if self.guardrail and self.reasoning
             else None
         )
-        hold = self.reasoning and bool(tools_schema)
+        hold = self.reasoning and self.split_thoughts and bool(tools_schema)
         held: list[str] = []
         held_tool_events: list[ToolCallEvent] = []
         options: dict[str, Any] = {}

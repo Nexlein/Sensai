@@ -379,3 +379,42 @@ async def test_declined_tool_ends_the_turn_without_a_forced_answer():
     assert of_type(events, MaxStepsEvent) == []
     assert len(provider.prompts) == 1
     assert "didn't run" in shown_text(events)
+
+
+async def test_without_split_thoughts_text_streams_as_it_arrives():
+    class Probe:
+        def __init__(self):
+            self.calls = 0
+            self.tool_call_sent = False
+
+        async def chat_stream(self, messages, tools=None, **options):
+            self.calls += 1
+            if self.calls == 1:
+                yield TextChunkEvent(content="let me look")
+                self.tool_call_sent = True
+                yield call()
+            else:
+                yield TextChunkEvent(content="final")
+
+    provider = Probe()
+    engine, conversation = build(provider, reasoning=True, split_thoughts=False)
+
+    sent_before_first_chunk = None
+    async for event in engine.send("go"):
+        if isinstance(event, TextChunkEvent) and sent_before_first_chunk is None:
+            sent_before_first_chunk = provider.tool_call_sent
+
+    assert sent_before_first_chunk is False
+    assistant = conversation.messages[1]
+    assert assistant.content == "let me look"
+    assert assistant.thought is None
+
+
+async def test_without_split_thoughts_no_text_becomes_a_thought():
+    provider = ScriptedProvider([*chunks("I should ", "read it"), call()], chunks("x"))
+    engine, _ = build(provider, reasoning=True, split_thoughts=False)
+
+    events = await run(engine)
+
+    assert of_type(events, ThoughtEvent) == []
+    assert shown_text(events) == "I should read itx"
