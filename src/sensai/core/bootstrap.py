@@ -144,6 +144,10 @@ async def build_session(
         ),
         memory=structured_memory,
         memory_auto_inject=config.memory.auto_inject,
+        reasoning=config.reasoning.enabled,
+        split_thoughts=config.reasoning.show_thoughts,
+        max_steps=config.reasoning.max_steps,
+        think=config.reasoning.think,
     )
     engine.budget = ContextBudget(config.budget, LLMSummarizer(lambda: engine.provider))
     return CommandContext(

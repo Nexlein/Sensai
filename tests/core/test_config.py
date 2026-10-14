@@ -11,6 +11,7 @@ from sensai.core.config import (
     McpConfig,
     McpServerConfig,
     MemoryConfig,
+    ReasoningConfig,
     ToolsConfig,
     load_config,
     save_config,
@@ -359,6 +360,31 @@ def test_memory_config_from_file(tmp_path):
     )
 
 
+def test_reasoning_config_defaults():
+    assert load_config(config_path=None).reasoning == ReasoningConfig(
+        enabled=True, show_thoughts=False, max_steps=5, think="low"
+    )
+
+
+def test_reasoning_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(
+        '[reasoning]\nshow_thoughts = true\nmax_steps = 3\nthink = "high"\n'
+    )
+
+    assert load_config(config_file).reasoning == ReasoningConfig(
+        enabled=True, show_thoughts=True, max_steps=3, think="high"
+    )
+
+
+def test_reasoning_max_steps_must_be_positive(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text("[reasoning]\nmax_steps = 0\n")
+
+    with pytest.raises(ConfigError):
+        load_config(config_file)
+
+
 def test_save_config_round_trips_memory(tmp_path):
     config_file = tmp_path / "sensai.toml"
     config = AppConfig(memory=MemoryConfig(enabled=False, auto_inject=False))
@@ -366,3 +392,16 @@ def test_save_config_round_trips_memory(tmp_path):
     save_config(config, config_file)
 
     assert load_config(config_file).memory == config.memory
+
+
+def test_save_config_round_trips_reasoning(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(
+        reasoning=ReasoningConfig(
+            enabled=True, show_thoughts=True, max_steps=3, think="high"
+        )
+    )
+
+    save_config(config, config_file)
+
+    assert load_config(config_file).reasoning == config.reasoning
