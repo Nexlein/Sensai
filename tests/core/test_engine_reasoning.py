@@ -1,6 +1,7 @@
 import pytest
 
-from sensai.core.engine import STEP_LIMIT_NOTE, ChatEngine
+from sensai.core.engine import ChatEngine
+from sensai.core.prompt import STEP_LIMIT_NOTE
 from sensai.domain.events import (
     GuardrailEvent,
     MaxStepsEvent,

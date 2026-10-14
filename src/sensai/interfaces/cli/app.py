@@ -7,8 +7,8 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from rich.console import Console
 
 from sensai.core.commands import CommandContext, CommandResult
-from sensai.core.engine import ConfirmTool
 from sensai.core.input import process_input
+from sensai.core.tool_runner import ConfirmTool
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event
 from sensai.interfaces.cli.renderer import CliRenderer, render_history

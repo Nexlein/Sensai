@@ -10,7 +10,7 @@ from textual.widgets import Input, Markdown, Static
 from textual.worker import Worker
 
 from sensai.core.commands import CommandResult, RenderFn
-from sensai.core.engine import ConfirmTool
+from sensai.core.tool_runner import ConfirmTool
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import (
     BudgetEvent,

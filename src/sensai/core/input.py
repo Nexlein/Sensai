@@ -7,7 +7,7 @@ from sensai.core.commands import (
     dispatch_command,
     parse_commands,
 )
-from sensai.core.engine import ConfirmTool
+from sensai.core.tool_runner import ConfirmTool
 
 
 async def process_input(

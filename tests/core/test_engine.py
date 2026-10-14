@@ -5,8 +5,9 @@ from typing import Any
 import httpx
 import pytest
 
-from sensai.core.engine import TOOL_RESULT_WITHHELD, TOOL_USE_GUIDANCE, ChatEngine
-from sensai.core.prompt import PRIVACY_NOTE
+from sensai.core.engine import ChatEngine
+from sensai.core.prompt import PRIVACY_NOTE, TOOL_USE_GUIDANCE
+from sensai.core.tool_runner import TOOL_RESULT_WITHHELD
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import AssistantStartEvent, Event, GuardrailEvent
 from sensai.domain.models import Conversation, Message

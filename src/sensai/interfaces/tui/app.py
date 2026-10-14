@@ -3,8 +3,8 @@
 from collections.abc import Mapping, Sequence
 
 from sensai.core.commands import CommandContext, CommandResult, RenderFn
-from sensai.core.engine import ConfirmTool
 from sensai.core.input import process_input
+from sensai.core.tool_runner import ConfirmTool
 from sensai.interfaces.prompts import choice_question
 from sensai.interfaces.tui.renderer import ChatApp
 
