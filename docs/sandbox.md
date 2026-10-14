@@ -106,7 +106,7 @@ Two rules come from the confirmation gate itself, not from this tool:
 - If the UI callback crashes, the run is treated as **declined**, never as approved.
 - A decline sends the model the message `Tool execution declined by the user.` and the turn ends with "I didn't run the requested tool".
 
-Only the first 20 lines of a long script are drawn, followed by "… N more lines". The model sent all of it, and all of it runs, so for a long script read what is shown and decline if you want to see more.
+The whole script is drawn, however long, so you read all of it before you allow it.
 
 ## 6. What the model gets back
 
