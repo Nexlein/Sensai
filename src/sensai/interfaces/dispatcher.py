@@ -13,6 +13,7 @@ from sensai.core.config import DEFAULT_CONFIG_PATH, ConfigError
 from sensai.domain.errors import ProviderError
 from sensai.interfaces.cli.app import run_cli
 from sensai.interfaces.tui.app import run_tui
+from sensai.interfaces.web.app import run_web
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -73,8 +74,8 @@ async def dispatch(argv: list[str]) -> int:
             await run_tui(context)
             return 0
 
-        console.print("[bold red]✗ Web interface is not implemented yet.[/]")
-        return 1
+        await run_web(context)
+        return 0
     finally:
         await context.aclose()
 
