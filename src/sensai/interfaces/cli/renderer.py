@@ -11,12 +11,15 @@ from sensai.domain.events import (
     BudgetEvent,
     Event,
     GuardrailEvent,
+    MaxStepsEvent,
+    StepEvent,
     TextChunkEvent,
+    ThoughtEvent,
 )
 from sensai.domain.models import Conversation, ToolCall
 from sensai.interfaces.cli.select import select
 from sensai.interfaces.diff import diff_text
-from sensai.interfaces.notices import guardrail_notice
+from sensai.interfaces.notices import guardrail_notice, max_steps_notice, step_notice
 from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
 from sensai.interfaces.thinking import Thinking, format_thinking
 from sensai.interfaces.usage import format_usage
@@ -29,21 +32,28 @@ _ROLE_LABELS = {
 }
 
 
-def render_history(console: Console, conversation: Conversation) -> None:
+def render_history(
+    console: Console, conversation: Conversation, show_thoughts: bool = False
+) -> None:
     for msg in conversation.messages:
         label = _ROLE_LABELS.get(msg.role)
         if label is None:
             continue
         prefix, style = label
-        console.print(Text(prefix, style=style) + Text(msg.content))
+        if show_thoughts and msg.thought:
+            console.print(Text(f"  {msg.thought}", style="dim italic"))
+        if msg.content or not msg.tool_calls:
+            console.print(Text(prefix, style=style) + Text(msg.content))
     if conversation.messages:
         console.print()
 
 
 class CliRenderer:
-    def __init__(self, console: Console) -> None:
+    def __init__(self, console: Console, show_thoughts: bool = False) -> None:
         self.console = console
+        self.show_thoughts = show_thoughts
         self._line_open = False
+        self._thought_open = False
         self._streaming = False
         self._thinking = Thinking(self._show_thinking)
 
@@ -67,6 +77,20 @@ class CliRenderer:
             self.console.print(Text("sensai: ", style="bold magenta"), end="")
             self._line_open = True
 
+    def _close_thought(self) -> None:
+        if self._thought_open:
+            self.console.print()
+            self._thought_open = False
+            self._streaming = False
+
+    def _show_thought(self, content: str) -> None:
+        if not self._thought_open:
+            self._finish_line()
+            content = "  " + content.lstrip()
+            self._thought_open = True
+            self._streaming = True
+        self.console.print(Text(content, style="dim italic"), end="", soft_wrap=True)
+
     def _finish_line(self) -> None:
         if self._line_open:
             self.console.print()
@@ -81,7 +105,7 @@ class CliRenderer:
         width = max((len(key) for key, _ in question.details), default=0)
         for key, value in question.details:
             self.console.print(Text(f"    {key.ljust(width)}  ", style="dim") + value)
-        labels = "/".join(option.label for option in question.options)
+        labels = "/".join(option.text for option in question.options)
         try:
             answer = self.console.input(Text(f"  [{labels}] ", style="dim"))
         except (EOFError, KeyboardInterrupt):
@@ -111,12 +135,24 @@ class CliRenderer:
         usage: BudgetEvent | None = None
         try:
             async for event in self._thinking.watch(events):
+                if not isinstance(event, ThoughtEvent):
+                    self._close_thought()
                 if isinstance(event, AssistantStartEvent):
                     self._start_reply()
                 elif isinstance(event, TextChunkEvent):
                     self._start_reply()
                     self._streaming = True
                     self.console.print(Text(event.content), end="", soft_wrap=True)
+                elif isinstance(event, StepEvent):
+                    if self.show_thoughts:
+                        self._finish_line()
+                        self.console.print(Text(step_notice(event), style="dim"))
+                elif isinstance(event, ThoughtEvent):
+                    if self.show_thoughts:
+                        self._show_thought(event.content)
+                elif isinstance(event, MaxStepsEvent):
+                    self._finish_line()
+                    self.console.print(Text(max_steps_notice(event), style="yellow"))
                 elif isinstance(event, BudgetEvent):
                     usage = event
                 elif isinstance(event, GuardrailEvent):
@@ -125,6 +161,7 @@ class CliRenderer:
                         Text(f"⚠ {guardrail_notice(event)}", style="yellow")
                     )
         finally:
+            self._close_thought()
             self._finish_line()
             if usage is not None:
                 self.console.print(Text(format_usage(usage), style="dim"))

@@ -12,10 +12,23 @@ from textual.worker import Worker
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.core.engine import ConfirmTool
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import BudgetEvent, Event, GuardrailEvent, TextChunkEvent
+from sensai.domain.events import (
+    BudgetEvent,
+    Event,
+    GuardrailEvent,
+    MaxStepsEvent,
+    StepEvent,
+    TextChunkEvent,
+    ThoughtEvent,
+)
 from sensai.domain.models import ToolCall
 from sensai.interfaces.diff import diff_text
-from sensai.interfaces.notices import error_text, guardrail_notice
+from sensai.interfaces.notices import (
+    error_text,
+    guardrail_notice,
+    max_steps_notice,
+    step_notice,
+)
 from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
 from sensai.interfaces.thinking import Thinking, format_thinking
 from sensai.interfaces.tui.question import QuestionPrompt
@@ -128,6 +141,25 @@ class ThinkingLabel(Static):
     """
 
 
+class ThoughtMessage(Static):
+    DEFAULT_CSS = """
+    ThoughtMessage {
+        margin: 0 0 0 2;
+        color: $text-muted;
+        text-style: italic;
+    }
+    """
+
+
+class StepLabel(Static):
+    DEFAULT_CSS = """
+    StepLabel {
+        margin: 0 0 0 2;
+        color: $text-muted;
+    }
+    """
+
+
 class StoppedNotice(Static):
     DEFAULT_CSS = """
     StoppedNotice {
@@ -147,8 +179,9 @@ class ChatApp(App[None]):
         Binding("escape", "stop_turn", "Stop", show=False),
     ]
 
-    def __init__(self, process: ProcessFn) -> None:
+    def __init__(self, process: ProcessFn, show_thoughts: bool = False) -> None:
         super().__init__()
+        self._show_thoughts = show_thoughts
         self._process = process
         self._turn: Worker[None] | None = None
 
@@ -242,6 +275,9 @@ class ChatApp(App[None]):
             await history.mount(label)
             history.scroll_end(animate=False)
             reply: AssistantMessage | None = None
+            shown = False
+            thought: ThoughtMessage | None = None
+            thought_text = ""
             content = ""
             usage: UsageLabel | None = None
             usage_text = ""
@@ -255,6 +291,8 @@ class ChatApp(App[None]):
 
             try:
                 async for streamed in thinking.watch(events):
+                    if not isinstance(streamed, ThoughtEvent):
+                        thought = None
                     if isinstance(streamed, TextChunkEvent):
                         if reply is None:
                             reply = AssistantMessage("")
@@ -263,6 +301,21 @@ class ChatApp(App[None]):
                         await reply.update(content)
                         if usage_text:
                             await show_usage()
+                    elif isinstance(streamed, StepEvent):
+                        if self._show_thoughts:
+                            shown = True
+                            await history.mount(StepLabel(step_notice(streamed)))
+                    elif isinstance(streamed, ThoughtEvent):
+                        if self._show_thoughts:
+                            shown = True
+                            if thought is None:
+                                thought_text = ""
+                                thought = ThoughtMessage("")
+                                await history.mount(thought)
+                            thought_text += streamed.content
+                            thought.update(thought_text.strip())
+                    elif isinstance(streamed, MaxStepsEvent):
+                        await history.mount(GuardrailNotice(max_steps_notice(streamed)))
                     elif isinstance(streamed, BudgetEvent):
                         usage_text = format_usage(streamed)
                         if reply is not None:
@@ -273,7 +326,7 @@ class ChatApp(App[None]):
                         )
                     history.scroll_end(animate=False)
             finally:
-                if reply is None:
+                if reply is None and not shown:
                     await label.remove()
 
         try:

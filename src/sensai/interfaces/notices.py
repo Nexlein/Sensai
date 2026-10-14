@@ -3,7 +3,7 @@
 import httpx
 
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import GuardrailEvent
+from sensai.domain.events import GuardrailEvent, MaxStepsEvent, StepEvent
 
 ENGINE_WRAPPER_MESSAGE = "provider request failed"
 
@@ -25,6 +25,16 @@ def guardrail_notice(event: GuardrailEvent) -> str:
         "Guardrail {action} on {stage} ({reason}).",
     )
     return template.format(action=event.action, stage=event.stage, reason=event.reason)
+
+
+def step_notice(event: StepEvent) -> str:
+    """One line announcing which tool round is starting."""
+    return f"step {event.index}/{event.max_steps}"
+
+
+def max_steps_notice(event: MaxStepsEvent) -> str:
+    """One line explaining why the model is made to answer without tools."""
+    return f"Step limit ({event.max_steps}) reached, answering with what I have."
 
 
 def error_text(exc: Exception) -> str:
