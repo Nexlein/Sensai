@@ -1,4 +1,13 @@
-from sensai.core.prompt import PRIVACY_NOTE, build_prompt
+import pytest
+
+from sensai.core.prompt import (
+    PRIVACY_NOTE,
+    STEP_LIMIT_NOTE,
+    TOOL_USE_GUIDANCE,
+    PromptComposer,
+    build_prompt,
+)
+from sensai.core.turn import Turn
 from sensai.domain.models import Conversation, Persona
 
 
@@ -112,3 +121,49 @@ def test_memory_context_order_with_rag_and_privacy():
     assert messages[1].content == PRIVACY_NOTE
     assert "- user.editor: neovim" in messages[2].content
     assert "doc context" in messages[3].content
+
+
+@pytest.mark.asyncio
+async def test_composer_adds_tool_guidance_and_step_limit_in_order():
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+    composer = PromptComposer(conversation)
+
+    prompt = await composer.compose(Turn("hello"), with_tools=True, step_limit=True)
+
+    assert [m.content for m in prompt[:2]] == [STEP_LIMIT_NOTE, TOOL_USE_GUIDANCE]
+    assert prompt[-1].content == "hello"
+
+
+@pytest.mark.asyncio
+async def test_composer_adds_privacy_note_and_rag_from_the_turn():
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+    composer = PromptComposer(conversation)
+
+    prompt = await composer.compose(
+        Turn("hello", rag_context="doc text", masked=True), with_tools=False
+    )
+
+    contents = [m.content for m in prompt]
+    assert PRIVACY_NOTE in contents
+    assert any("doc text" in c for c in contents)
+    assert TOOL_USE_GUIDANCE not in contents
+
+
+@pytest.mark.asyncio
+async def test_composer_injects_memory_only_when_enabled():
+    class Memory:
+        def format_context(self):
+            return "likes tea"
+
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+
+    on = await PromptComposer(conversation, memory=Memory()).compose(Turn("h"), False)
+    off = await PromptComposer(
+        conversation, memory=Memory(), memory_auto_inject=False
+    ).compose(Turn("h"), False)
+
+    assert any("likes tea" in m.content for m in on)
+    assert not any("likes tea" in m.content for m in off)

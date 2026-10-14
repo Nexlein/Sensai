@@ -31,7 +31,7 @@ async def test_tui_uses_shared_input_handler_and_persists_reply(monkeypatch):
 
     app = None
 
-    def make_app(process):
+    def make_app(process, show_thoughts=False):
         nonlocal app
         app = FakeChatApp(process)
         return app

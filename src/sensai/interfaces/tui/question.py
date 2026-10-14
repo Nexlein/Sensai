@@ -36,6 +36,7 @@ class QuestionPrompt(Widget, Generic[T], can_focus=True):
     def __init__(self, question: Question[T]) -> None:
         super().__init__()
         self.question = question
+        self.index = question.initial
         self.answer: asyncio.Future[T] = asyncio.get_running_loop().create_future()
 
     def render(self) -> Text:
@@ -47,7 +48,7 @@ class QuestionPrompt(Widget, Generic[T], can_focus=True):
             text.append(f"{value}\n")
         text.append("\n")
         for position, option in enumerate(self.question.options):
-            line = f"{position + 1}. {option.label}\n"
+            line = f"{position + 1}. {option.text}\n"
             if position == self.index:
                 text.append(f"❯ {line}", style="bold #bb9af7")
             else:

@@ -10,7 +10,10 @@ from sensai.domain.events import (
     BudgetEvent,
     Event,
     GuardrailEvent,
+    MaxStepsEvent,
+    StepEvent,
     TextChunkEvent,
+    ThoughtEvent,
     ToolCallEvent,
 )
 from sensai.interfaces.tui.renderer import (
@@ -19,6 +22,8 @@ from sensai.interfaces.tui.renderer import (
     ErrorMessage,
     GuardrailNotice,
     RoleLabel,
+    StepLabel,
+    ThoughtMessage,
     UsageLabel,
     UserMessage,
     error_text,
@@ -407,3 +412,97 @@ async def test_escape_with_no_turn_running_does_nothing():
         await pilot.pause()
 
         assert app.is_running
+
+
+@pytest.mark.asyncio
+async def test_thoughts_and_steps_are_mounted_before_the_answer():
+    app = ChatApp(
+        _process_events(
+            StepEvent(index=1, max_steps=5),
+            ThoughtEvent(content="I should read the file"),
+            StepEvent(index=2, max_steps=5),
+            TextChunkEvent(content="done"),
+        ),
+        show_thoughts=True,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert [str(w.render()) for w in app.query(StepLabel)] == [
+            "step 1/5",
+            "step 2/5",
+        ]
+        assert str(app.query(ThoughtMessage).first().render()) == (
+            "I should read the file"
+        )
+        assert app.query(AssistantMessage).first().source == "done"
+
+
+@pytest.mark.asyncio
+async def test_thought_only_turn_keeps_the_speaker_label():
+    app = ChatApp(_process_events(ThoughtEvent(content="thinking")), show_thoughts=True)
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert len(app.query(ThoughtMessage)) == 1
+        assert len(app.query(RoleLabel)) == 2
+
+
+@pytest.mark.asyncio
+async def test_step_limit_mounts_a_notice():
+    app = ChatApp(_process_events(MaxStepsEvent(max_steps=5)))
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert "Step limit (5) reached" in str(
+            app.query(GuardrailNotice).first().render()
+        )
+
+
+@pytest.mark.asyncio
+async def test_thought_chunks_merge_into_one_message():
+    app = ChatApp(
+        _process_events(
+            ThoughtEvent(content="I should ", source="native"),
+            ThoughtEvent(content="read it", source="native"),
+            TextChunkEvent(content="done"),
+        ),
+        show_thoughts=True,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        messages = list(app.query(ThoughtMessage))
+        assert [str(m.render()) for m in messages] == ["I should read it"]
+
+
+@pytest.mark.asyncio
+async def test_thoughts_and_steps_hidden_by_default():
+    app = ChatApp(
+        _process_events(
+            StepEvent(index=1, max_steps=5),
+            ThoughtEvent(content="secret"),
+            TextChunkEvent(content="done"),
+        )
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert len(app.query(ThoughtMessage)) == 0
+        assert len(app.query(StepLabel)) == 0
+        assert app.query(AssistantMessage).first().source == "done"

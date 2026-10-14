@@ -125,6 +125,7 @@ async def test_dispatch_help_lists_commands():
 /new - Start and persist a new conversation
 /memory - Inspect or manage long-term structured memory
 /model - Switch model for subsequent turns
+/effort - Show or set the thinking effort
 /provider - Switch LLM provider
 /config - View or update runtime configuration"""
     )
@@ -687,3 +688,104 @@ async def test_dispatch_memory_usage_and_errors(tmp_path):
         context,
     )
     assert res_search_none.message == "No memories matching 'nonexistent'."
+
+
+async def test_effort_with_level_sets_config_and_engine():
+    context = _context()
+
+    result = await dispatch_command(
+        ParsedCommand(name="effort", arguments=("high",)), context
+    )
+
+    assert result.message == "Effort set to high."
+    assert context.config.reasoning.think == "high"
+    assert context.engine.think == "high"
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"), [("off", False), ("LOW", "low"), ("High", "high")]
+)
+async def test_effort_accepts_off_and_any_case(name, expected):
+    context = _context()
+
+    await dispatch_command(ParsedCommand(name="effort", arguments=(name,)), context)
+
+    assert context.engine.think == expected
+
+
+async def test_effort_rejects_unknown_level():
+    context = _context()
+
+    result = await dispatch_command(
+        ParsedCommand(name="effort", arguments=("max",)), context
+    )
+
+    assert "Usage: /effort" in (result.message or "")
+    assert context.engine.think is None
+
+
+async def test_effort_without_argument_opens_the_picker():
+    context = _context()
+    asked: list[tuple[str, tuple[str, ...], str | None, dict]] = []
+
+    async def choose(title, labels, current, notes):
+        asked.append((title, tuple(labels), current, dict(notes)))
+        return "medium"
+
+    context.choose = choose
+    result = await dispatch_command(ParsedCommand(name="effort", arguments=()), context)
+
+    assert asked == [
+        (
+            "Thinking effort",
+            ("low", "medium", "high", "off"),
+            "low",
+            {"low": "default"},
+        )
+    ]
+    assert result.message == "Effort set to medium."
+    assert context.engine.think == "medium"
+
+
+async def test_effort_picker_cancel_leaves_effort_unchanged():
+    context = _context()
+    context.config.reasoning.think = "high"
+
+    async def choose(title, labels, current, notes):
+        return None
+
+    context.choose = choose
+    result = await dispatch_command(ParsedCommand(name="effort", arguments=()), context)
+
+    assert result.message == "Effort unchanged: high."
+    assert context.config.reasoning.think == "high"
+
+
+async def test_effort_without_argument_or_picker_shows_current():
+    result = await dispatch_command(
+        ParsedCommand(name="effort", arguments=()), _context()
+    )
+
+    assert result.message is not None
+    assert result.message.startswith("Effort: low.")
+
+
+async def test_effort_warns_when_reasoning_is_disabled():
+    context = _context()
+    context.config.reasoning.enabled = False
+
+    result = await dispatch_command(
+        ParsedCommand(name="effort", arguments=("low",)), context
+    )
+
+    assert "no effect" in (result.message or "")
+
+
+async def test_effort_default_is_no_longer_a_level():
+    context = _context()
+
+    result = await dispatch_command(
+        ParsedCommand(name="effort", arguments=("default",)), context
+    )
+
+    assert "Usage: /effort [low|medium|high|off]" in (result.message or "")

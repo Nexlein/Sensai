@@ -86,3 +86,35 @@ def test_tool_confirmation_hides_code_shown_by_the_diff():
     )
 
     assert with_diff.details == (("timeout", "5"),)
+
+
+def test_choice_question_capitalizes_labels_and_cancels_to_none():
+    from sensai.interfaces.prompts import choice_question
+
+    question = choice_question("Pick", ("low", "high"))
+
+    assert [o.label for o in question.options] == ["Low", "High"]
+    assert question.resolve("h") == "high"
+    assert question.resolve("zzz") is None
+
+
+def test_choice_question_marks_and_preselects_current():
+    from sensai.interfaces.prompts import choice_question
+
+    question = choice_question("Pick", ("low", "medium", "high"), "medium")
+
+    assert [o.text for o in question.options] == ["Low", "Medium (current)", "High"]
+    assert question.initial == 1
+    assert question.resolve("") == "medium"
+    assert question.resolve("medium") == "medium"
+
+
+def test_choice_question_adds_notes_next_to_current_mark():
+    from sensai.interfaces.prompts import choice_question
+
+    question = choice_question("Pick", ("low", "high"), "low", {"low": "default"})
+
+    assert [o.text for o in question.options] == [
+        "Low (default, current)",
+        "High",
+    ]

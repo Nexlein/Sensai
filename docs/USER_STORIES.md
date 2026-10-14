@@ -394,6 +394,36 @@ Acceptance criteria:
 - Any HTTP failure or runtime error from the provider is reported as a single line that gives the reason.
 - The session stays open after the error, and I can fix the setting (for example with `/provider` or `/config set base_url`) and send the message again.
 
+## Feature: Visible Reasoning and Effort
+
+As a user watching a multi-step answer, I want to optionally see the model's reasoning and which step it is on, so that I can follow what it does between tool calls.
+
+Acceptance criteria:
+
+- Thoughts and `step N/M` lines are hidden by default and shown with `[reasoning] show_thoughts = true`, in both the CLI and the TUI.
+- A thought streamed in several pieces appears as one block, not one line per piece.
+- With thoughts hidden, the final answer streams as it arrives.
+- When the step limit (`max_steps`, 5 by default) is reached, a notice says so and the model answers without tools.
+
+As a user who wants faster or deeper answers, I want to change the thinking effort during a session, so that I do not have to edit `sensai.toml` and restart.
+
+Acceptance criteria:
+
+- `/effort` opens a picker with Low, Medium, High and Off, marks the default and the current level, and keeps the level unchanged on Esc.
+- `/effort high` (or `low`, `medium`, `off`) sets it from the next turn; any other value shows the usage line and changes nothing.
+- `/config save` writes the effort to `sensai.toml` and the `[reasoning]` section survives later saves.
+- The default effort is `low`.
+
+## Feature: Full Write Preview
+
+As a user confirming a file write, I want to see every changed line, so that I know exactly what will be written before I allow it.
+
+Acceptance criteria:
+
+- The confirmation shows all added and removed lines, however many, with their line numbers.
+- Unchanged stretches are collapsed to 3 lines of context around each change, with `⋮` between changes.
+- A write that changes nothing shows "No changes".
+
 ## Feature: Web UI
 
 As a user who prefers a browser to a terminal, I want to chat with Sensai in a web page, so that I can use it without a terminal UI.

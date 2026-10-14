@@ -4,7 +4,7 @@ import os
 import httpx
 import pytest
 
-from sensai.domain.events import TextChunkEvent, ToolCallEvent
+from sensai.domain.events import TextChunkEvent, ThoughtEvent, ToolCallEvent
 from sensai.domain.models import Message, ToolCall
 from sensai.providers.ollama import OllamaLLMProvider
 
@@ -193,6 +193,144 @@ async def test_chat_stream_omits_tools_key_when_not_given():
         pass
 
     assert "tools" not in captured["body"]
+
+
+def _capturing_transport(
+    bodies: list[dict], responses: list[httpx.Response]
+) -> httpx.MockTransport:
+    remaining = list(responses)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return remaining.pop(0)
+
+    return httpx.MockTransport(handler)
+
+
+def test_parse_line_thinking_yields_native_thought():
+    provider = OllamaLLMProvider()
+    events = provider._parse_line(json.dumps({"message": {"thinking": "check dir"}}))
+    assert len(events) == 1
+    assert isinstance(events[0], ThoughtEvent)
+    assert events[0].content == "check dir"
+    assert events[0].source == "native"
+
+
+def test_parse_line_orders_thought_before_tool_call_and_text():
+    provider = OllamaLLMProvider()
+    line = json.dumps(
+        {
+            "message": {
+                "thinking": "plan",
+                "content": "go",
+                "tool_calls": [{"function": {"name": "search", "arguments": {}}}],
+            }
+        }
+    )
+    kinds = [type(e) for e in provider._parse_line(line)]
+    assert kinds == [ThoughtEvent, ToolCallEvent, TextChunkEvent]
+
+
+def test_parse_line_empty_thinking_yields_no_event():
+    provider = OllamaLLMProvider()
+    assert provider._parse_line(json.dumps({"message": {"thinking": ""}})) == []
+
+
+def test_format_message_never_sends_the_thought():
+    provider = OllamaLLMProvider()
+    msg = Message(role="assistant", content="done", thought="secret plan")
+    assert provider._format_message(msg) == {"role": "assistant", "content": "done"}
+
+
+@pytest.mark.parametrize("think", [True, False, "high"])
+async def test_chat_stream_sends_think_when_given(think):
+    provider = OllamaLLMProvider()
+    bodies: list[dict] = []
+    _patch_client(provider, _capturing_transport(bodies, [httpx.Response(200)]))
+
+    async for _ in provider.chat_stream(messages=[], think=think):
+        pass
+
+    assert bodies[0]["think"] == think
+
+
+async def test_chat_stream_omits_think_key_when_not_given():
+    provider = OllamaLLMProvider()
+    bodies: list[dict] = []
+    _patch_client(provider, _capturing_transport(bodies, [httpx.Response(200)]))
+
+    async for _ in provider.chat_stream(messages=[]):
+        pass
+
+    assert "think" not in bodies[0]
+
+
+async def test_chat_stream_yields_thought_then_text():
+    provider = OllamaLLMProvider()
+    transport = _lines_response(
+        [{"message": {"thinking": "hmm"}}, {"message": {"content": "answer"}}]
+    )
+    _patch_client(provider, transport)
+
+    events = [e async for e in provider.chat_stream(messages=[], think=True)]
+
+    assert [type(e) for e in events] == [ThoughtEvent, TextChunkEvent]
+
+
+async def test_chat_stream_retries_without_think_when_model_cannot_think():
+    provider = OllamaLLMProvider()
+    bodies: list[dict] = []
+    rejected = httpx.Response(
+        400, text='{"error":"\\"llama3.2\\" does not support thinking"}'
+    )
+    ok = httpx.Response(200, text=json.dumps({"message": {"content": "hi"}}))
+    _patch_client(provider, _capturing_transport(bodies, [rejected, ok]))
+
+    events = [e async for e in provider.chat_stream(messages=[], think=True)]
+
+    assert [e.content for e in events] == ["hi"]
+    assert bodies[0]["think"] is True
+    assert "think" not in bodies[1]
+    assert provider.think_unsupported is True
+
+
+async def test_chat_stream_stops_sending_think_after_a_rejection():
+    provider = OllamaLLMProvider()
+    provider.think_unsupported = True
+    bodies: list[dict] = []
+    _patch_client(provider, _capturing_transport(bodies, [httpx.Response(200)]))
+
+    async for _ in provider.chat_stream(messages=[], think=True):
+        pass
+
+    assert "think" not in bodies[0]
+
+
+async def test_chat_stream_does_not_retry_other_400_errors():
+    provider = OllamaLLMProvider()
+    bodies: list[dict] = []
+    bad = httpx.Response(400, text="model not found")
+    _patch_client(provider, _capturing_transport(bodies, [bad]))
+
+    with pytest.raises(RuntimeError, match="400"):
+        async for _ in provider.chat_stream(messages=[], think=True):
+            pass
+
+    assert len(bodies) == 1
+    assert provider.think_unsupported is False
+
+
+async def test_chat_stream_does_not_retry_server_errors_mentioning_think():
+    provider = OllamaLLMProvider()
+    bodies: list[dict] = []
+    bad = httpx.Response(500, text="think failed")
+    _patch_client(provider, _capturing_transport(bodies, [bad]))
+
+    with pytest.raises(RuntimeError, match="500"):
+        async for _ in provider.chat_stream(messages=[], think=True):
+            pass
+
+    assert len(bodies) == 1
 
 
 async def test_embedding_provider_calls_embed_endpoint():

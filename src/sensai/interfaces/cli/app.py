@@ -2,27 +2,39 @@
 
 import asyncio
 import signal
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 
 from rich.console import Console
 
 from sensai.core.commands import CommandContext, CommandResult
-from sensai.core.engine import ConfirmTool
 from sensai.core.input import process_input
+from sensai.core.tool_runner import ConfirmTool
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import Event
 from sensai.interfaces.cli.renderer import CliRenderer, render_history
 from sensai.interfaces.notices import error_text
+from sensai.interfaces.prompts import choice_question
 
 
 async def run_cli(context: CommandContext, console: Console) -> None:
     console.clear()
-    render_history(console, context.engine.conversation)
+    show_thoughts = context.config.reasoning.show_thoughts
+    render_history(console, context.engine.conversation, show_thoughts)
 
     def read_input() -> str:
         return console.input("[bold blue]you:[/] ")
 
-    renderer = CliRenderer(console)
+    renderer = CliRenderer(console, show_thoughts)
+
+    async def choose(
+        title: str,
+        labels: Sequence[str],
+        current: str | None,
+        notes: Mapping[str, str],
+    ) -> str | None:
+        return await renderer.ask(choice_question(title, labels, current, notes))
+
+    context.choose = choose
 
     async def render(events: AsyncIterator[Event]) -> None:
         console.print()

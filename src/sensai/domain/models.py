@@ -30,6 +30,7 @@ class Message(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     tool_calls: list[ToolCall] | None = None
+    thought: str | None = None
     timestamp: Now
 
 
@@ -44,8 +45,11 @@ class Conversation(BaseModel):
         role: Literal["system", "user", "assistant", "tool"],
         content: str,
         tool_calls: list[ToolCall] | None = None,
+        thought: str | None = None,
     ) -> Message:
-        msg = Message(role=role, content=content, tool_calls=tool_calls)
+        msg = Message(
+            role=role, content=content, tool_calls=tool_calls, thought=thought
+        )
         self.messages.append(msg)
         self.updated_at = now_utc()
         return msg
