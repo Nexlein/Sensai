@@ -27,6 +27,7 @@
       .error { color: var(--err); }
       .usage, .thinking { color: var(--muted); font-size: 0.85rem; }
       code { background: var(--code); padding: 0.1rem 0.3rem; border-radius: 3px; font-family: ui-monospace, monospace; }
+      .math { font-family: ui-serif, Georgia, serif; font-style: italic; }
       .block { position: relative; margin: 0.5rem 0; }
       .block pre { margin: 0; padding: 0.75rem; background: var(--code); border-radius: 6px; overflow-x: auto; white-space: pre; }
       .block pre code { padding: 0; background: none; }
@@ -94,15 +95,54 @@
 
       // Minimal markdown: fenced blocks and `inline code`, built with the DOM so the
       // model's text is never parsed as HTML.
+      const LATEX = [
+        [/\\times/g, "×"], [/\\cdot/g, "·"], [/\\div/g, "÷"], [/\\pm/g, "±"],
+        [/\\leq?/g, "≤"], [/\\geq?/g, "≥"], [/\\neq/g, "≠"], [/\\approx/g, "≈"],
+        [/\\rightarrow|\\to/g, "→"], [/\\pi/g, "π"], [/\\sqrt\{([^}]*)\}/g, "√($1)"],
+        [/\\frac\{([^}]*)\}\{([^}]*)\}/g, "($1)/($2)"], [/\\text\{([^}]*)\}/g, "$1"],
+        [/\\[,;! ]/g, " "], [/[{}]/g, ""],
+      ];
+      function plainMath(source) {
+        return LATEX.reduce((s, [re, to]) => s.replace(re, to), source).trim();
+      }
+      const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*|\\\([^\n]*?\\\)|\\\[[\s\S]*?\\\])/;
       function inline(parent, text) {
-        text.split(/(`[^`\n]+`)/).forEach((part) => {
+        text.split(INLINE).forEach((part) => {
+          if (!part) return;
+          let el = null;
           if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) {
-            const code = document.createElement("code");
-            code.textContent = part.slice(1, -1);
-            parent.appendChild(code);
-          } else if (part) {
-            parent.appendChild(document.createTextNode(part));
+            el = document.createElement("code");
+            el.textContent = part.slice(1, -1);
+          } else if (part.length > 4 && part.startsWith("**") && part.endsWith("**")) {
+            el = document.createElement("strong");
+            el.textContent = part.slice(2, -2);
+          } else if (part.length > 2 && part.startsWith("*") && part.endsWith("*")) {
+            el = document.createElement("em");
+            el.textContent = part.slice(1, -1);
+          } else if (part.startsWith("\\(") || part.startsWith("\\[")) {
+            el = document.createElement("span");
+            el.className = "math";
+            el.textContent = plainMath(part.slice(2, -2));
           }
+          parent.appendChild(el || document.createTextNode(part));
+        });
+      }
+      // Line level: headings become bold lines, "- " and "* " bullets become "•".
+      function block(parent, text) {
+        text.split("\n").forEach((line, i, lines) => {
+          const heading = line.match(/^#{1,6}\s+(.*)$/);
+          const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
+          if (heading) {
+            const strong = document.createElement("strong");
+            inline(strong, heading[1]);
+            parent.appendChild(strong);
+          } else if (bullet) {
+            parent.appendChild(document.createTextNode(`${bullet[1]}• `));
+            inline(parent, bullet[2]);
+          } else {
+            inline(parent, line);
+          }
+          if (i < lines.length - 1) parent.appendChild(document.createTextNode("\n"));
         });
       }
       function codeBlock(source) {
@@ -128,7 +168,7 @@
         el.textContent = "";
         text.split("```").forEach((part, i) => {
           if (i % 2 === 1) el.appendChild(codeBlock(part));
-          else inline(el, part);
+          else block(el, part);
         });
         scroll();
       }
