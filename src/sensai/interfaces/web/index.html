@@ -30,6 +30,7 @@
       .error { color: var(--err); }
       .usage, .thinking { color: var(--muted); font-size: 0.85rem; }
       code { background: var(--code); padding: 0.1rem 0.3rem; border-radius: 3px; font-family: ui-monospace, monospace; }
+      .msg hr { border: 0; border-top: 1px solid var(--border); margin: 0.75rem 0; }
       .math { font-family: ui-serif, Georgia, serif; }
       .math-block { margin: 0.5rem 0; overflow-x: auto; white-space: normal; }
       .block { position: relative; margin: 0.5rem 0; }
@@ -145,6 +146,10 @@
         text.split("\n").forEach((line, i, lines) => {
           // A delimiter the model left unpaired is noise, not content.
           if (/^\s*\\[\[\]]\s*$/.test(line)) return;
+          if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
+            parent.appendChild(document.createElement("hr"));
+            return;  // a rule is a block: no newline after it
+          }
           const heading = line.match(/^#{1,6}\s+(.*)$/);
           const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
           if (heading) {
