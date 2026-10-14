@@ -443,15 +443,6 @@ async def test_ui_flag_overrides_config_file(monkeypatch, tmp_path):
     assert code == 0
 
 
-async def test_web_ui_reports_not_implemented(monkeypatch, tmp_path, capsys):
-    monkeypatch.chdir(tmp_path)
-
-    code = await _run(["chat", "--provider", "mock", "--ui", "web"])
-
-    assert code == 1
-    assert "not implemented" in capsys.readouterr().out
-
-
 async def test_cli_confirmation_then_followup_keeps_chat_working(monkeypatch):
     from io import StringIO
 

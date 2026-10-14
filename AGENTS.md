@@ -66,11 +66,12 @@ Implemented:
 - Reasoning loop: with `[reasoning] enabled` (default) `ChatEngine` emits `StepEvent`, `ThoughtEvent` (`source` native or text) and `MaxStepsEvent`, stores the thought on `Message.thought`, and at `max_steps` makes one last tool-free call. `split_thoughts` (set from `show_thoughts`) is what holds text back during a round that may call tools; off by default so answers stream. `think` is the effort passed to `chat_stream(think=...)`; the default is `DEFAULT_EFFORT = "low"` and `/effort` changes it live through `CommandContext.choose`, a picker each UI provides. `save_config` writes the `[reasoning]` section back.
 - `interfaces/diff.py`: the confirmation diff shows every changed line, with 3 lines of context per change and `⋮` between changes; there is no line cap.
 - `interfaces/`: CLI (rich), TUI (textual, `--ui tui`), shared dispatcher and notice wording.
+- `interfaces/web/` (X1): FastAPI app (`app.py`, `run_web` serves on 127.0.0.1:8000 with uvicorn) with one page (`index.html`) and one websocket `/ws` (`routes.py`). Each message goes through `process_input` on the shared session, so slash commands, guardrails and persistence behave as in the CLI. Wire format: client sends `message`, `confirm` (`approved`), `stop`; server sends `history`, `text_chunk`, `notice`, `usage` (last budget event of the turn only), `error`, `confirm`, `done`. One turn at a time per connection. Local use only: no auth, bound to localhost.
 
 Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`), `Persona` (`build_prompt` accepts one, nothing passes it).
 
-Empty stubs, not yet built: `tools/sandbox.py`, `interfaces/web/*`.
-Empty stubs, not yet built: `core/budget.py`, `memory/manager.py`, `memory/artifact.py`, `interfaces/web/*`.
+Empty stubs, not yet built: `tools/sandbox.py`.
+Empty stubs, not yet built: `core/budget.py`, `memory/manager.py`, `memory/artifact.py`.
 
 Guardrail scope and known limits: input, model output and tool results are filtered. Not covered: PII inside tool-call arguments written by the model, the RAG context injected into the prompt, names and postal addresses. Reference design: [docs/elevenlabs-guardrails.md](docs/elevenlabs-guardrails.md).
 

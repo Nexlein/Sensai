@@ -84,6 +84,25 @@ async def test_dispatch_closes_the_session_when_the_interface_crashes(monkeypatc
     assert context.closed
 
 
+async def test_dispatch_runs_the_web_interface(monkeypatch):
+    context = _context("web")
+    ran = []
+
+    async def fake_build_session(**kwargs):
+        return context
+
+    async def fake_run_web(received_context):
+        ran.append(received_context)
+
+    monkeypatch.setattr(dispatcher, "build_session", fake_build_session)
+    monkeypatch.setattr(dispatcher, "run_web", fake_run_web)
+
+    assert await dispatcher.dispatch(["chat", "--ui", "web"]) == 0
+
+    assert ran == [context]
+    assert context.closed
+
+
 def test_console_entry_point_invokes_dispatcher(monkeypatch):
     async def fake_dispatch(argv):
         assert argv == ["chat", "--ui", "cli"]
