@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sensai</title>
+    <!-- KaTeX draws the model's math; without network the page falls back to plain symbols. -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
     <style>
       :root {
         --bg: #1a1b26; --panel: #24283b; --border: #414868; --text: #c0caf5;
@@ -27,7 +30,8 @@
       .error { color: var(--err); }
       .usage, .thinking { color: var(--muted); font-size: 0.85rem; }
       code { background: var(--code); padding: 0.1rem 0.3rem; border-radius: 3px; font-family: ui-monospace, monospace; }
-      .math { font-family: ui-serif, Georgia, serif; font-style: italic; }
+      .math { font-family: ui-serif, Georgia, serif; }
+      .math-block { margin: 0.5rem 0; overflow-x: auto; white-space: normal; }
       .block { position: relative; margin: 0.5rem 0; }
       .block pre { margin: 0; padding: 0.75rem; background: var(--code); border-radius: 6px; overflow-x: auto; white-space: pre; }
       .block pre code { padding: 0; background: none; }
@@ -105,7 +109,18 @@
       function plainMath(source) {
         return LATEX.reduce((s, [re, to]) => s.replace(re, to), source).trim();
       }
-      const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*|\\\([^\n]*?\\\)|\\\[[\s\S]*?\\\])/;
+      function mathEl(tex, display) {
+        const el = document.createElement(display ? "div" : "span");
+        el.className = display ? "math math-block" : "math";
+        try {
+          if (typeof katex === "undefined") throw new Error("KaTeX not loaded");
+          katex.render(tex, el, { displayMode: display, throwOnError: false });
+        } catch (e) {
+          el.textContent = plainMath(tex);
+        }
+        return el;
+      }
+      const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*|\\\([^\n]*?\\\))/;
       function inline(parent, text) {
         text.split(INLINE).forEach((part) => {
           if (!part) return;
@@ -119,10 +134,8 @@
           } else if (part.length > 2 && part.startsWith("*") && part.endsWith("*")) {
             el = document.createElement("em");
             el.textContent = part.slice(1, -1);
-          } else if (part.startsWith("\\(") || part.startsWith("\\[")) {
-            el = document.createElement("span");
-            el.className = "math";
-            el.textContent = plainMath(part.slice(2, -2));
+          } else if (part.startsWith("\\(")) {
+            el = mathEl(part.slice(2, -2), false);
           }
           parent.appendChild(el || document.createTextNode(part));
         });
@@ -130,6 +143,8 @@
       // Line level: headings become bold lines, "- " and "* " bullets become "•".
       function block(parent, text) {
         text.split("\n").forEach((line, i, lines) => {
+          // A delimiter the model left unpaired is noise, not content.
+          if (/^\s*\\[\[\]]\s*$/.test(line)) return;
           const heading = line.match(/^#{1,6}\s+(.*)$/);
           const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
           if (heading) {
@@ -168,7 +183,16 @@
         el.textContent = "";
         text.split("```").forEach((part, i) => {
           if (i % 2 === 1) el.appendChild(codeBlock(part));
-          else block(el, part);
+          else {
+            // Display math spans lines, so it is cut out before the line-level pass.
+            part.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$)/).forEach((piece) => {
+              if (/^(\\\[[\s\S]*\\\]|\$\$[\s\S]*\$\$)$/.test(piece)) {
+                el.appendChild(mathEl(piece.slice(2, -2), true));
+              } else {
+                block(el, piece);
+              }
+            });
+          }
         });
         scroll();
       }
