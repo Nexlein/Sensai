@@ -113,6 +113,30 @@ Prefer the `GROQ_API_KEY` environment variable: a key in `sensai.toml` is stored
 clear text (the file is ignored by Git). `/config` hides the key. Switch at runtime
 with `/provider groq` then `/model <groq-model>`. RAG embeddings still use Ollama.
 
+### Reasoning and effort
+
+Between tool calls the model can show its reasoning and a `step N/M` line. They are
+hidden by default; the final answer streams as usual. Tune it in `sensai.toml`:
+
+```toml
+[reasoning]
+enabled = true         # false turns the reasoning loop off
+show_thoughts = false  # true shows thoughts and steps in the CLI and the TUI
+max_steps = 5          # tool rounds before the model must answer without tools
+think = "low"          # thinking effort: "low", "medium", "high", false, or true
+```
+
+With `show_thoughts = true`, text the model writes before a tool call is shown as a
+thought instead of part of the answer, so an answer only appears once its round has
+ended. At the step limit Sensai tells the model to answer with what it has and prints a
+notice.
+
+`/effort` changes the thinking effort for the running session. Without an argument it
+opens a picker (`Low`, `Medium`, `High`, `Off`), with the default marked and the current
+level preselected; `/effort high` or `/effort off` sets it directly. `/config save` keeps
+it in `sensai.toml`. A model that cannot think ignores the setting after one refused
+request.
+
 ### Code execution
 
 The `run_python` tool lets the model run Python and read the output or traceback. The
