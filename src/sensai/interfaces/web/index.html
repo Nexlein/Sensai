@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sensai</title>
+    <!-- KaTeX draws the model's math; without network the page falls back to plain symbols. -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+    <style>
+      :root {
+        --bg: #1a1b26; --panel: #24283b; --border: #414868; --text: #c0caf5;
+        --muted: #565f89; --user: #7aa2f7; --bot: #bb9af7; --warn: #e0af68; --err: #f7768e;
+        --code: #16161e;
+      }
+      :root[data-theme="light"] {
+        --bg: #f5f5f7; --panel: #ffffff; --border: #c9ccd6; --text: #2a2c3a;
+        --muted: #7a7f94; --user: #2e5bd8; --bot: #7a3fc4; --warn: #9a6700; --err: #c4243b;
+        --code: #ececf1;
+      }
+      body { font-family: system-ui, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; background: var(--bg); color: var(--text); }
+      header { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); }
+      header strong { letter-spacing: 0.05em; }
+      header div { display: flex; gap: 0.5rem; }
+      #log { flex: 1; overflow-y: auto; padding: 1rem; }
+      .msg { white-space: pre-wrap; margin: 0 0 1rem; line-height: 1.5; }
+      .user::before { content: "you: "; color: var(--user); font-weight: bold; }
+      .assistant::before { content: "sensai: "; color: var(--bot); font-weight: bold; }
+      .notice { color: var(--warn); }
+      .error { color: var(--err); }
+      .usage, .thinking { color: var(--muted); font-size: 0.85rem; }
+      code { background: var(--code); padding: 0.1rem 0.3rem; border-radius: 3px; font-family: ui-monospace, monospace; }
+      .msg table { border-collapse: collapse; margin: 0.5rem 0; white-space: normal; }
+      .msg th, .msg td { border: 1px solid var(--border); padding: 0.3rem 0.6rem; }
+      .msg th { background: var(--panel); }
+      .msg hr { border: 0; border-top: 1px solid var(--border); margin: 0.75rem 0; }
+      .math { font-family: ui-serif, Georgia, serif; }
+      .math-block { margin: 0.5rem 0; overflow-x: auto; white-space: normal; }
+      .block { position: relative; margin: 0.5rem 0; }
+      .block pre { margin: 0; padding: 0.75rem; background: var(--code); border-radius: 6px; overflow-x: auto; white-space: pre; }
+      .block pre code { padding: 0; background: none; }
+      .block button { position: absolute; top: 0.35rem; right: 0.35rem; font-size: 0.75rem; padding: 0.15rem 0.5rem; }
+      #confirm { display: none; padding: 0.75rem 1rem; background: var(--panel); border-top: 1px solid var(--border); }
+      #confirm pre { margin: 0.5rem 0; max-height: 12rem; overflow: auto; }
+      form { display: flex; gap: 0.5rem; padding: 0.75rem 1rem; border-top: 1px solid var(--border); }
+      input { flex: 1; padding: 0.5rem; background: var(--panel); color: inherit; border: 1px solid var(--border); border-radius: 4px; }
+      button { padding: 0.5rem 1rem; cursor: pointer; background: var(--panel); color: inherit; border: 1px solid var(--border); border-radius: 4px; }
+      button:disabled { opacity: 0.5; cursor: default; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>SENSAI</strong>
+      <div>
+        <button id="clear-view" type="button" title="Clear what is shown (the conversation is kept)">Clear view</button>
+        <button id="theme" type="button" title="Switch light or dark theme">Theme</button>
+      </div>
+    </header>
+    <div id="log"></div>
+    <div id="confirm">
+      <strong id="confirm-title"></strong>
+      <pre id="confirm-body"></pre>
+      <button id="yes">Yes</button>
+      <button id="no">No</button>
+    </div>
+    <form id="form">
+      <input id="text" autocomplete="off" autofocus placeholder="Message or /command (Esc stops a reply)" />
+      <button id="send" type="submit">Send</button>
+      <button id="stop" type="button" disabled>Stop</button>
+    </form>
+    <script>
+      const log = document.getElementById("log");
+      const input = document.getElementById("text");
+      const send = document.getElementById("send");
+      const stop = document.getElementById("stop");
+      const confirmBox = document.getElementById("confirm");
+      const socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+      let reply = null;
+      let replyText = "";
+      let thinking = null;
+      let thinkingTimer = null;
+
+      // Theme: remembered per browser, falls back to the system setting.
+      function applyTheme(theme) { document.documentElement.dataset.theme = theme; }
+      try { applyTheme(localStorage.getItem("theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")); }
+      catch (e) { applyTheme("dark"); }
+      document.getElementById("theme").onclick = () => {
+        const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+        applyTheme(next);
+        try { localStorage.setItem("theme", next); } catch (e) {}
+      };
+      document.getElementById("clear-view").onclick = () => { log.textContent = ""; reply = null; };
+
+      function scroll() { log.scrollTop = log.scrollHeight; }
+      function add(cls, text) {
+        const el = document.createElement("div");
+        el.className = `msg ${cls}`;
+        el.textContent = text;
+        log.appendChild(el);
+        scroll();
+        return el;
+      }
+
+      // Minimal markdown: fenced blocks and `inline code`, built with the DOM so the
+      // model's text is never parsed as HTML.
+      const LATEX = [
+        [/\\times/g, "×"], [/\\cdot/g, "·"], [/\\div/g, "÷"], [/\\pm/g, "±"],
+        [/\\leq?/g, "≤"], [/\\geq?/g, "≥"], [/\\neq/g, "≠"], [/\\approx/g, "≈"],
+        [/\\rightarrow|\\to/g, "→"], [/\\pi/g, "π"], [/\\sqrt\{([^}]*)\}/g, "√($1)"],
+        [/\\frac\{([^}]*)\}\{([^}]*)\}/g, "($1)/($2)"], [/\\text\{([^}]*)\}/g, "$1"],
+        [/\\[,;! ]/g, " "], [/[{}]/g, ""],
+      ];
+      function plainMath(source) {
+        return LATEX.reduce((s, [re, to]) => s.replace(re, to), source).trim();
+      }
+      function mathEl(tex, display) {
+        const el = document.createElement(display ? "div" : "span");
+        el.className = display ? "math math-block" : "math";
+        try {
+          if (typeof katex === "undefined") throw new Error("KaTeX not loaded");
+          katex.render(tex, el, { displayMode: display, throwOnError: false });
+        } catch (e) {
+          el.textContent = plainMath(tex);
+        }
+        return el;
+      }
+      const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*|\\\([^\n]*?\\\))/;
+      function inline(parent, text) {
+        text.split(INLINE).forEach((part) => {
+          if (!part) return;
+          let el = null;
+          if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) {
+            el = document.createElement("code");
+            el.textContent = part.slice(1, -1);
+          } else if (part.length > 4 && part.startsWith("**") && part.endsWith("**")) {
+            el = document.createElement("strong");
+            el.textContent = part.slice(2, -2);
+          } else if (part.length > 2 && part.startsWith("*") && part.endsWith("*")) {
+            el = document.createElement("em");
+            el.textContent = part.slice(1, -1);
+          } else if (part.startsWith("\\(")) {
+            el = mathEl(part.slice(2, -2), false);
+          }
+          parent.appendChild(el || document.createTextNode(part));
+        });
+      }
+      const TABLE_ROW = /^\s*\|.*\|\s*$/;
+      const TABLE_RULE = /^\s*\|[\s:|-]*-[\s:|-]*\|\s*$/;
+      function tableCells(line) {
+        return line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      }
+      function tableEl(header, rule, rows) {
+        const aligns = tableCells(rule).map((c) =>
+          c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : "left");
+        const table = document.createElement("table");
+        const addRow = (cells, tag) => {
+          const tr = document.createElement("tr");
+          cells.forEach((text, i) => {
+            const cell = document.createElement(tag);
+            cell.style.textAlign = aligns[i] || "left";
+            inline(cell, text);
+            tr.appendChild(cell);
+          });
+          table.appendChild(tr);
+        };
+        addRow(tableCells(header), "th");
+        rows.forEach((row) => addRow(tableCells(row), "td"));
+        return table;
+      }
+      // Line level: headings become bold lines, "- " and "* " bullets become "•",
+      // numbered items keep their number, `---` is a rule, pipe rows form a table.
+      function block(parent, text) {
+        const lines = text.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          // A delimiter the model left unpaired is noise, not content.
+          if (/^\s*\\[\[\]]\s*$/.test(line)) continue;
+          if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
+            parent.appendChild(document.createElement("hr"));
+            continue;  // a rule is a block: no newline after it
+          }
+          if (TABLE_ROW.test(line) && i + 1 < lines.length && TABLE_RULE.test(lines[i + 1])) {
+            const rows = [];
+            let j = i + 2;
+            while (j < lines.length && TABLE_ROW.test(lines[j])) rows.push(lines[j++]);
+            parent.appendChild(tableEl(line, lines[i + 1], rows));
+            i = j - 1;  // a table is a block: no newline after it
+            continue;
+          }
+          const heading = line.match(/^#{1,6}\s+(.*)$/);
+          const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
+          const numbered = line.match(/^(\s*)(\d+)[.)]\s+(.*)$/);
+          if (heading) {
+            const strong = document.createElement("strong");
+            inline(strong, heading[1]);
+            parent.appendChild(strong);
+          } else if (bullet) {
+            parent.appendChild(document.createTextNode(`${bullet[1]}• `));
+            inline(parent, bullet[2]);
+          } else if (numbered) {
+            parent.appendChild(document.createTextNode(`${numbered[1]}${numbered[2]}. `));
+            inline(parent, numbered[3]);
+          } else {
+            inline(parent, line);
+          }
+          if (i < lines.length - 1) parent.appendChild(document.createTextNode("\n"));
+        }
+      }
+      function codeBlock(source) {
+        const body = source.replace(/^[\w+-]*\n/, "").replace(/\n$/, "");
+        const wrap = document.createElement("div");
+        wrap.className = "block";
+        const pre = document.createElement("pre");
+        const code = document.createElement("code");
+        code.textContent = body;
+        pre.appendChild(code);
+        const copy = document.createElement("button");
+        copy.type = "button";
+        copy.textContent = "Copy";
+        copy.onclick = async () => {
+          try { await navigator.clipboard.writeText(body); copy.textContent = "Copied"; }
+          catch (e) { copy.textContent = "Failed"; }
+          setTimeout(() => { copy.textContent = "Copy"; }, 1500);
+        };
+        wrap.append(pre, copy);
+        return wrap;
+      }
+      function renderReply(el, text) {
+        el.textContent = "";
+        text.split("```").forEach((part, i) => {
+          if (i % 2 === 1) el.appendChild(codeBlock(part));
+          else {
+            // Display math spans lines, so it is cut out before the line-level pass.
+            part.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$)/).forEach((piece) => {
+              if (/^(\\\[[\s\S]*\\\]|\$\$[\s\S]*\$\$)$/.test(piece)) {
+                el.appendChild(mathEl(piece.slice(2, -2), true));
+              } else {
+                block(el, piece);
+              }
+            });
+          }
+        });
+        scroll();
+      }
+
+      function setBusy(busy) {
+        send.disabled = busy;
+        stop.disabled = !busy;
+      }
+
+      // "thinking… N s" after a 1 s grace, until the first token of the reply.
+      function startThinking() {
+        stopThinking();
+        const started = Date.now();
+        thinkingTimer = setInterval(() => {
+          const seconds = Math.floor((Date.now() - started) / 1000);
+          if (seconds < 1) return;
+          if (!thinking) thinking = add("thinking", "");
+          thinking.textContent = `thinking… ${seconds} s`;
+          scroll();
+        }, 250);
+      }
+      function stopThinking() {
+        clearInterval(thinkingTimer);
+        thinkingTimer = null;
+        if (thinking) { thinking.remove(); thinking = null; }
+      }
+
+      function answer(approved) {
+        confirmBox.style.display = "none";
+        socket.send(JSON.stringify({ type: "confirm", approved }));
+        startThinking();
+      }
+      function stopReply() { if (!stop.disabled) socket.send(JSON.stringify({ type: "stop" })); }
+
+      socket.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === "history") {
+          data.messages.forEach((m) => {
+            const el = add(m.role, m.content);
+            if (m.role === "assistant") renderReply(el, m.content);
+          });
+        } else if (data.type === "text_chunk") {
+          stopThinking();
+          if (!reply) { reply = add("assistant", ""); replyText = ""; }
+          replyText += data.content;
+          renderReply(reply, replyText);
+        } else if (data.type === "confirm") {
+          stopThinking();
+          document.getElementById("confirm-title").textContent = data.title;
+          const lines = data.details.map(([k, v]) => `${k}: ${v}`);
+          document.getElementById("confirm-body").textContent = [...lines, data.preview || ""].join("\n");
+          confirmBox.style.display = "block";
+        } else if (data.type === "done") {
+          stopThinking();
+          reply = null;
+          confirmBox.style.display = "none";
+          setBusy(false);
+          input.focus();
+        } else {
+          add(data.type, data.message);
+          if (data.type === "error") { stopThinking(); setBusy(false); }
+        }
+      };
+      socket.onclose = () => { stopThinking(); add("error", "Disconnected."); setBusy(true); stop.disabled = true; };
+
+      document.getElementById("form").onsubmit = (e) => {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        add("user", text);
+        socket.send(JSON.stringify({ type: "message", text }));
+        input.value = "";
+        reply = null;
+        setBusy(true);
+        startThinking();
+      };
+      stop.onclick = stopReply;
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") stopReply(); });
+      document.getElementById("yes").onclick = () => answer(true);
+      document.getElementById("no").onclick = () => answer(false);
+    </script>
+  </body>
+</html>

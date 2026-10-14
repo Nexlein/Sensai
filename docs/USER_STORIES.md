@@ -393,3 +393,23 @@ Acceptance criteria:
 
 - Any HTTP failure or runtime error from the provider is reported as a single line that gives the reason.
 - The session stays open after the error, and I can fix the setting (for example with `/provider` or `/config set base_url`) and send the message again.
+
+## Feature: Web UI
+
+As a user who prefers a browser to a terminal, I want to chat with Sensai in a web page, so that I can use it without a terminal UI.
+
+Acceptance criteria:
+
+- `sensai chat --ui web` serves the page on `http://127.0.0.1:8000`.
+- Replies appear progressively in the page while the model writes them.
+- Slash commands such as `/clear` work and their result is shown in the page.
+- Resuming a session with `--session` shows the earlier messages when the page loads.
+
+As a user who lets the model run tools, I want to approve or refuse each sensitive tool call in the page and to stop a reply that takes too long, so that I stay in control as in the terminal.
+
+Acceptance criteria:
+
+- A sensitive tool call shows its name, arguments and preview with Yes and No buttons; the tool runs only after Yes.
+- The Stop button cancels the current reply and leaves no unanswered message in the history.
+- A second message sent while a reply is in progress is refused with a message, not queued.
+- A failing model server shows a one-line error in the page and the page stays usable.
