@@ -423,6 +423,7 @@ Acceptance criteria:
 - The confirmation shows all added and removed lines, however many, with their line numbers.
 - Unchanged stretches are collapsed to 3 lines of context around each change, with `⋮` between changes.
 - A write that changes nothing shows "No changes".
+
 ## Feature: Web UI
 
 As a user who prefers a browser to a terminal, I want to chat with Sensai in a web page, so that I can use it without a terminal UI.
