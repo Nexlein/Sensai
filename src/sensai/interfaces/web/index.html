@@ -30,6 +30,9 @@
       .error { color: var(--err); }
       .usage, .thinking { color: var(--muted); font-size: 0.85rem; }
       code { background: var(--code); padding: 0.1rem 0.3rem; border-radius: 3px; font-family: ui-monospace, monospace; }
+      .msg table { border-collapse: collapse; margin: 0.5rem 0; white-space: normal; }
+      .msg th, .msg td { border: 1px solid var(--border); padding: 0.3rem 0.6rem; }
+      .msg th { background: var(--panel); }
       .msg hr { border: 0; border-top: 1px solid var(--border); margin: 0.75rem 0; }
       .math { font-family: ui-serif, Georgia, serif; }
       .math-block { margin: 0.5rem 0; overflow-x: auto; white-space: normal; }
@@ -141,17 +144,52 @@
           parent.appendChild(el || document.createTextNode(part));
         });
       }
-      // Line level: headings become bold lines, "- " and "* " bullets become "•".
+      const TABLE_ROW = /^\s*\|.*\|\s*$/;
+      const TABLE_RULE = /^\s*\|[\s:|-]*-[\s:|-]*\|\s*$/;
+      function tableCells(line) {
+        return line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      }
+      function tableEl(header, rule, rows) {
+        const aligns = tableCells(rule).map((c) =>
+          c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : "left");
+        const table = document.createElement("table");
+        const addRow = (cells, tag) => {
+          const tr = document.createElement("tr");
+          cells.forEach((text, i) => {
+            const cell = document.createElement(tag);
+            cell.style.textAlign = aligns[i] || "left";
+            inline(cell, text);
+            tr.appendChild(cell);
+          });
+          table.appendChild(tr);
+        };
+        addRow(tableCells(header), "th");
+        rows.forEach((row) => addRow(tableCells(row), "td"));
+        return table;
+      }
+      // Line level: headings become bold lines, "- " and "* " bullets become "•",
+      // numbered items keep their number, `---` is a rule, pipe rows form a table.
       function block(parent, text) {
-        text.split("\n").forEach((line, i, lines) => {
+        const lines = text.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
           // A delimiter the model left unpaired is noise, not content.
-          if (/^\s*\\[\[\]]\s*$/.test(line)) return;
+          if (/^\s*\\[\[\]]\s*$/.test(line)) continue;
           if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
             parent.appendChild(document.createElement("hr"));
-            return;  // a rule is a block: no newline after it
+            continue;  // a rule is a block: no newline after it
+          }
+          if (TABLE_ROW.test(line) && i + 1 < lines.length && TABLE_RULE.test(lines[i + 1])) {
+            const rows = [];
+            let j = i + 2;
+            while (j < lines.length && TABLE_ROW.test(lines[j])) rows.push(lines[j++]);
+            parent.appendChild(tableEl(line, lines[i + 1], rows));
+            i = j - 1;  // a table is a block: no newline after it
+            continue;
           }
           const heading = line.match(/^#{1,6}\s+(.*)$/);
           const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
+          const numbered = line.match(/^(\s*)(\d+)[.)]\s+(.*)$/);
           if (heading) {
             const strong = document.createElement("strong");
             inline(strong, heading[1]);
@@ -159,11 +197,14 @@
           } else if (bullet) {
             parent.appendChild(document.createTextNode(`${bullet[1]}• `));
             inline(parent, bullet[2]);
+          } else if (numbered) {
+            parent.appendChild(document.createTextNode(`${numbered[1]}${numbered[2]}. `));
+            inline(parent, numbered[3]);
           } else {
             inline(parent, line);
           }
           if (i < lines.length - 1) parent.appendChild(document.createTextNode("\n"));
-        });
+        }
       }
       function codeBlock(source) {
         const body = source.replace(/^[\w+-]*\n/, "").replace(/\n$/, "");
