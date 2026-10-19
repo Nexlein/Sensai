@@ -251,3 +251,33 @@ async def test_enabled_guardrail_protects_a_real_session_turn(monkeypatch, tmp_p
 
     assert [e.action for e in events if isinstance(e, GuardrailEvent)] == ["redact"]
     assert context.engine.conversation.messages[0].content == "my mail is [EMAIL]"
+
+
+async def test_build_session_passes_reasoning_settings_to_the_engine(
+    monkeypatch, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(
+        'provider = "mock"\n[reasoning]\nshow_thoughts = true\nmax_steps = 3\n'
+        'think = "high"\n',
+        encoding="utf-8",
+    )
+
+    context = await build_session(config_path=config_path)
+
+    engine = context.engine
+    assert (engine.reasoning, engine.split_thoughts) == (True, True)
+    assert (engine.max_steps, engine.think) == (3, "high")
+
+
+async def test_build_session_streams_answers_by_default(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text('provider = "mock"\n', encoding="utf-8")
+
+    context = await build_session(config_path=config_path)
+
+    assert context.engine.reasoning is True
+    assert context.engine.split_thoughts is False
+    assert context.engine.think == "low"

@@ -11,11 +11,14 @@ from sensai.domain.events import (
     BudgetEvent,
     Event,
     GuardrailEvent,
+    MaxStepsEvent,
+    StepEvent,
     TextChunkEvent,
+    ThoughtEvent,
     ToolCallEvent,
 )
-from sensai.domain.models import Conversation
-from sensai.interfaces.cli.renderer import render_history, render_stream
+from sensai.domain.models import Conversation, ToolCall
+from sensai.interfaces.cli.renderer import CliRenderer, render_history, render_stream
 from sensai.interfaces.notices import error_text
 
 
@@ -313,3 +316,80 @@ async def test_render_stream_shows_no_timer_when_not_a_terminal():
     await render_stream(console, events())
 
     assert output.getvalue() == "sensai: Bonjour\n"
+
+
+async def test_render_stream_shows_steps_thoughts_and_answer_in_order(capsys):
+    await CliRenderer(Console(), show_thoughts=True).render(
+        _events(
+            AssistantStartEvent(),
+            StepEvent(index=1, max_steps=5),
+            ThoughtEvent(content="I should read the file"),
+            StepEvent(index=2, max_steps=5),
+            TextChunkEvent(content="done"),
+        ),
+    )
+
+    out = capsys.readouterr().out
+    assert out.index("step 1/5") < out.index("I should read the file")
+    assert out.index("I should read the file") < out.index("step 2/5")
+    assert out.index("step 2/5") < out.index("done")
+
+
+async def test_render_stream_shows_step_limit_notice(capsys):
+    await render_stream(Console(), _events(MaxStepsEvent(max_steps=5)))
+
+    assert "Step limit (5) reached" in capsys.readouterr().out
+
+
+def test_render_history_shows_thought_and_skips_empty_tool_call_message(capsys):
+    conversation = Conversation()
+    conversation.add_message(
+        role="assistant",
+        content="",
+        tool_calls=[ToolCall(name="fs", arguments={})],
+        thought="reading the file",
+    )
+
+    render_history(Console(), conversation, show_thoughts=True)
+
+    out = capsys.readouterr().out
+    assert "reading the file" in out
+    assert "sensai:" not in out
+
+
+async def test_thought_chunks_share_one_line(capsys):
+    await CliRenderer(Console(), show_thoughts=True).render(
+        _events(
+            ThoughtEvent(content="I should ", source="native"),
+            ThoughtEvent(content="read it", source="native"),
+            TextChunkEvent(content="done"),
+        )
+    )
+
+    out = capsys.readouterr().out
+    assert "I should read it\n" in out
+
+
+async def test_thoughts_and_steps_hidden_by_default(capsys):
+    await render_stream(
+        Console(),
+        _events(
+            StepEvent(index=1, max_steps=5),
+            ThoughtEvent(content="secret reasoning"),
+            TextChunkEvent(content="done"),
+        ),
+    )
+
+    out = capsys.readouterr().out
+    assert "secret reasoning" not in out
+    assert "step 1/5" not in out
+    assert "done" in out
+
+
+def test_render_history_hides_thought_by_default(capsys):
+    conversation = Conversation()
+    conversation.add_message(role="assistant", content="hi", thought="secret")
+
+    render_history(Console(), conversation)
+
+    assert "secret" not in capsys.readouterr().out

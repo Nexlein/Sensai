@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import tomllib
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from sensai.core.budget import BudgetConfig
 
@@ -13,6 +13,7 @@ DEFAULT_PROVIDER = "ollama"
 DEFAULT_MODEL = "qwen3.5:4b"
 DEFAULT_BASE_URL = "http://localhost:11434"
 DEFAULT_CONFIG_PATH = Path("sensai.toml")
+DEFAULT_EFFORT = "low"
 _SERVER_NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 
@@ -95,6 +96,15 @@ class MemoryConfig(BaseModel):
     auto_inject: bool = True
 
 
+class ReasoningConfig(BaseModel):
+    """Visible reasoning loop: thoughts and steps between tool calls."""
+
+    enabled: bool = True
+    show_thoughts: bool = False
+    max_steps: int = Field(default=5, ge=1)
+    think: bool | str | None = DEFAULT_EFFORT
+
+
 class AppConfig(BaseModel):
     interface: Literal["cli", "tui", "web"] = DEFAULT_INTERFACE
     provider: str = DEFAULT_PROVIDER
@@ -108,6 +118,7 @@ class AppConfig(BaseModel):
     eval: EvalConfig = EvalConfig()
     mcp: McpConfig = McpConfig()
     memory: MemoryConfig = MemoryConfig()
+    reasoning: ReasoningConfig = ReasoningConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -222,6 +233,19 @@ def save_config(
                 f"auto_inject = {json.dumps(config.memory.auto_inject)}",
             ]
         )
+
+    if config.reasoning != ReasoningConfig():
+        lines.extend(
+            [
+                "",
+                "[reasoning]",
+                f"enabled = {json.dumps(config.reasoning.enabled)}",
+                f"show_thoughts = {json.dumps(config.reasoning.show_thoughts)}",
+                f"max_steps = {config.reasoning.max_steps}",
+            ]
+        )
+        if config.reasoning.think is not None:
+            lines.append(f"think = {json.dumps(config.reasoning.think)}")
 
     # save_config rewrites the whole file, so every section must be written back or
     # a runtime /model would silently delete the user's MCP servers.

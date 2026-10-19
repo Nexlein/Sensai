@@ -47,13 +47,14 @@ def test_diff_text_shows_header_counts_and_lines():
     assert "     11 + -- not a header\n" in text
 
 
-def test_diff_text_crops_long_diffs():
+def test_diff_text_shows_every_changed_line_of_a_long_diff():
     body = "\n".join(f"+row {i}" for i in range(30))
-    text = diff_text(_call(f"@@ -0,0 +1,30 @@\n{body}"), max_lines=5).plain
+    text = diff_text(_call(f"@@ -0,0 +1,30 @@\n{body}")).plain
 
-    assert "row 4\n" in text
-    assert "row 5" not in text
-    assert text.endswith("… 25 more lines\n")
+    assert "+30 -0" in text
+    assert "row 0\n" in text
+    assert "row 29\n" in text
+    assert "more lines" not in text
 
 
 def test_diff_text_reports_no_changes():

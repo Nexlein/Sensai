@@ -145,7 +145,10 @@ class GroqLLMProvider(BaseHTTPProvider):
             yield self._tool_call_event(calls[index])
 
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         payload = {
             "model": self.model,

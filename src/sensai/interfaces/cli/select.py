@@ -30,7 +30,7 @@ def question_fragments(question: Question[T], index: int) -> StyleAndTextTuples:
         fragments.append(("", f"{value}\n"))
     fragments.append(("", "\n"))
     for position, option in enumerate(question.options):
-        line = f"{position + 1}. {option.label}\n"
+        line = f"{position + 1}. {option.text}\n"
         if position == index:
             fragments.append(("class:selected", f"  ❯ {line}"))
         else:
@@ -40,7 +40,7 @@ def question_fragments(question: Question[T], index: int) -> StyleAndTextTuples:
 
 
 def build_select(question: Question[T]) -> Application[T]:
-    index = 0
+    index = question.initial
     bindings = KeyBindings()
 
     @bindings.add("up")

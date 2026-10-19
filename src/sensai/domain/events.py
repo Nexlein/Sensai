@@ -34,6 +34,29 @@ class ToolCallEvent(Event):
     arguments: dict[str, Any]
 
 
+class ThoughtEvent(Event):
+    """A reasoning step shown between tool calls, never part of the final answer."""
+
+    type: Literal["thought"] = "thought"
+    content: str
+    source: Literal["native", "text"] = "text"
+
+
+class StepEvent(Event):
+    """A tool round is about to start: step `index` of at most `max_steps`."""
+
+    type: Literal["step"] = "step"
+    index: int
+    max_steps: int
+
+
+class MaxStepsEvent(Event):
+    """The step cap was reached; the answer that follows is forced."""
+
+    type: Literal["max_steps"] = "max_steps"
+    max_steps: int
+
+
 class GuardrailEvent(Event):
     type: Literal["guardrail"] = "guardrail"
     stage: Literal["input", "output", "tool"]

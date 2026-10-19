@@ -1,5 +1,5 @@
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
@@ -14,6 +14,11 @@ DETAIL_MAX_LENGTH = 80
 class Option(Generic[T]):
     label: str
     value: T
+    hint: str = ""
+
+    @property
+    def text(self) -> str:
+        return f"{self.label} ({self.hint})" if self.hint else self.label
 
 
 @dataclass(frozen=True)
@@ -22,11 +27,12 @@ class Question(Generic[T]):
     options: tuple[Option[T], ...]
     cancel_value: T
     details: tuple[tuple[str, str], ...] = ()
+    initial: int = 0
 
     def resolve(self, answer: str) -> T:
         text = answer.strip().lower()
         if not text:
-            return self.options[0].value
+            return self.options[self.initial].value
         if text.isdigit() and 1 <= int(text) <= len(self.options):
             return self.options[int(text) - 1].value
         for option in self.options:
@@ -45,6 +51,36 @@ def _detail_value(value: Any) -> str:
     if len(text) > DETAIL_MAX_LENGTH:
         return text[: DETAIL_MAX_LENGTH - 1] + "…"
     return text
+
+
+def choice_question(
+    title: str,
+    labels: Sequence[str],
+    current: str | None = None,
+    notes: Mapping[str, str] | None = None,
+) -> Question[str | None]:
+    """A pick-one question over plain labels; cancelling answers None.
+
+    The `current` label is marked and preselected; `notes` adds text after a label.
+    """
+    notes = notes or {}
+    return Question(
+        title=title,
+        options=tuple(
+            Option(
+                label.capitalize(),
+                label,
+                ", ".join(
+                    part
+                    for part in (notes.get(label, ""), "current" * (label == current))
+                    if part
+                ),
+            )
+            for label in labels
+        ),
+        cancel_value=None,
+        initial=labels.index(current) if current in labels else 0,
+    )
 
 
 def tool_confirmation(tc: ToolCall) -> Question[bool]:

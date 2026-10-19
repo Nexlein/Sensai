@@ -413,12 +413,14 @@ To see what a server offers before wiring it in, list its tools through the clie
 import asyncio
 from sensai.tools.mcp import McpClient
 
+
 async def main():
     client = McpClient("npx", ["-y", "@upstash/context7-mcp"], timeout=120)
     await client.start()
     for tool in await client.list_tools():
         print(tool["name"], list(tool.get("inputSchema", {}).get("properties", {})))
     await client.close()
+
 
 asyncio.run(main())
 ```

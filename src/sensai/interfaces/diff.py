@@ -6,8 +6,6 @@ from rich.text import Text
 
 from sensai.domain.models import ToolCall
 
-DIFF_MAX_LINES = 20
-
 _HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
 
@@ -54,7 +52,7 @@ _STYLES = {
 }
 
 
-def diff_text(tc: ToolCall, max_lines: int = DIFF_MAX_LINES) -> Text | None:
+def diff_text(tc: ToolCall) -> Text | None:
     """Claude Code style block for a pending tool call, or None without preview."""
     if tc.preview is None:
         return None
@@ -73,17 +71,13 @@ def diff_text(tc: ToolCall, max_lines: int = DIFF_MAX_LINES) -> Text | None:
     text.append(f"  ⎿  +{added} ", style="green")
     text.append(f"-{removed}\n", style="red")
 
-    shown = lines[:max_lines]
     width = max(
-        (len(str(line.number)) for line in shown if line.number is not None),
+        (len(str(line.number)) for line in lines if line.number is not None),
         default=1,
     )
-    for line in shown:
+    for line in lines:
         sign, style = _STYLES[line.kind]
         number = "" if line.number is None else str(line.number)
         text.append(f"     {number.rjust(width)} ", style="dim")
         text.append(f"{sign} {line.text}\n", style=style)
-    hidden = len(lines) - len(shown)
-    if hidden:
-        text.append(f"     … {hidden} more lines\n", style="dim italic")
     return text

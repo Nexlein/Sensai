@@ -1,10 +1,11 @@
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from sensai.core.config import (
     DEFAULT_CONFIG_PATH,
+    DEFAULT_EFFORT,
     AppConfig,
     ConfigError,
     save_config,
@@ -25,6 +26,9 @@ ProviderFactory = Callable[..., LLMProvider]
 ToolRegistryFactory = Callable[[str | None], ToolRegistry]
 RenderFn = Callable[[AsyncIterator[Event]], Awaitable[None]]
 ErrorFn = Callable[[Exception], None]
+ChoiceFn = Callable[
+    [str, Sequence[str], str | None, Mapping[str, str]], Awaitable[str | None]
+]
 
 
 @dataclass(frozen=True)
@@ -53,6 +57,7 @@ class CommandContext:
     startup_warnings: list[str] = field(default_factory=list)
     # Awaited when the session ends, e.g. to stop MCP server processes.
     closers: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
+    choose: ChoiceFn | None = None
 
     async def aclose(self) -> None:
         await asyncio.gather(*(close() for close in self.closers))
@@ -111,6 +116,51 @@ async def handle_model(
     context.engine.provider = new_provider
     context.config.model = model_name
     return CommandResult(message=f"Model switched to {model_name}.")
+
+
+EFFORT_LEVELS = ("low", "medium", "high", "off")
+EFFORT_USAGE = "Usage: /effort [low|medium|high|off]"
+
+
+def _effort_name(think: bool | str | None) -> str:
+    if think is False:
+        return "off"
+    if think is None or think is True:
+        return "default"
+    return think
+
+
+async def handle_effort(
+    context: CommandContext,
+    arguments: tuple[str, ...],
+) -> CommandResult:
+    """Show or set the thinking effort sent to the model."""
+    reasoning = context.config.reasoning
+    current = _effort_name(reasoning.think)
+    if len(arguments) > 1:
+        return CommandResult(message=EFFORT_USAGE)
+
+    if arguments:
+        name = arguments[0].lower()
+    elif context.choose is None:
+        return CommandResult(message=f"Effort: {current}. {EFFORT_USAGE}")
+    else:
+        picked = await context.choose(
+            "Thinking effort",
+            EFFORT_LEVELS,
+            current,
+            {DEFAULT_EFFORT: "default"},
+        )
+        if picked is None:
+            return CommandResult(message=f"Effort unchanged: {current}.")
+        name = picked
+
+    if name not in EFFORT_LEVELS:
+        return CommandResult(message=EFFORT_USAGE)
+    reasoning.think = False if name == "off" else name
+    context.engine.think = reasoning.think
+    note = "" if reasoning.enabled else " Reasoning is disabled, so it has no effect."
+    return CommandResult(message=f"Effort set to {name}.{note}")
 
 
 async def handle_base_url(
@@ -358,6 +408,7 @@ COMMANDS = {
         handle_memory, "Inspect or manage long-term structured memory"
     ),
     "model": CommandSpec(handle_model, "Switch model for subsequent turns"),
+    "effort": CommandSpec(handle_effort, "Show or set the thinking effort"),
     "provider": CommandSpec(handle_provider, "Switch LLM provider"),
     "config": CommandSpec(handle_config, "View or update runtime configuration"),
 }
