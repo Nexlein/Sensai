@@ -14,7 +14,7 @@ from sensai.core.budget import BudgetConfig, ContextBudget
 from sensai.core.config import DEFAULT_MODEL, AppConfig, load_config
 from sensai.core.engine import ChatEngine
 from sensai.domain.events import Event
-from sensai.domain.models import Conversation, LoadedModel, ModelOptions
+from sensai.domain.models import Conversation, LoadedModel, ModelOptions, Persona
 from sensai.domain.protocols import LLMProvider
 from sensai.providers import get_provider
 from sensai.providers.mock import MockLLMProvider
@@ -130,6 +130,7 @@ async def test_dispatch_help_lists_commands():
 /model - Switch model for subsequent turns
 /effort - Show or set the thinking effort
 /provider - Switch LLM provider
+/persona - Show or switch the domain persona
 /config - View or update runtime configuration
 /prompt - Show the full prompt of the last model call
 /ps - Show RAM/VRAM used by the loaded models"""
@@ -798,6 +799,53 @@ async def test_effort_default_is_no_longer_a_level():
     )
 
     assert "Usage: /effort [low|medium|high|off]" in (result.message or "")
+
+
+def _persona_context(enabled: bool = True) -> CommandContext:
+    context = _context()
+    context.engine.persona = Persona(
+        id="c", name="Collecte", description="", system_instruction="Tu es Collecte."
+    )
+    context.engine.persona_enabled = enabled
+    context.config.persona.enabled = enabled
+    return context
+
+
+async def test_persona_off_then_on_switches_it_and_the_config():
+    context = _persona_context()
+
+    off = await dispatch_command(ParsedCommand("persona", ("off",)), context)
+    assert off.message == "Persona Collecte: off."
+    assert context.engine.persona_enabled is False
+    assert context.config.persona.enabled is False
+
+    on = await dispatch_command(ParsedCommand("persona", ("ON",)), context)
+    assert on.message == "Persona Collecte: on."
+    assert context.engine.persona_enabled is True
+    assert context.config.persona.enabled is True
+
+
+async def test_persona_without_argument_shows_its_state():
+    result = await dispatch_command(
+        ParsedCommand("persona", ()), _persona_context(enabled=False)
+    )
+
+    assert result.message == "Persona Collecte: off."
+
+
+async def test_persona_rejects_unknown_arguments():
+    context = _persona_context()
+
+    result = await dispatch_command(ParsedCommand("persona", ("maybe",)), context)
+
+    assert result.message == "Usage: /persona [on|off]"
+    assert context.engine.persona_enabled is True
+
+
+async def test_persona_explains_when_none_is_configured():
+    result = await dispatch_command(ParsedCommand("persona", ("on",)), _context())
+
+    assert "No persona configured" in (result.message or "")
 
 
 class FakeInspector(MockLLMProvider):

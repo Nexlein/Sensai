@@ -393,3 +393,61 @@ async def test_build_session_streams_answers_by_default(monkeypatch, tmp_path):
     assert context.engine.reasoning is True
     assert context.engine.split_thoughts is False
     assert context.engine.think == "low"
+
+
+async def test_build_session_has_no_persona_by_default(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    context = await build_session(provider_name="mock")
+
+    assert context.engine.persona is None
+
+
+async def test_build_session_loads_the_persona_file(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "collecte.md").write_text("\nTu es Collecte.\n", encoding="utf-8")
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(
+        'provider = "mock"\n\n[persona]\nenabled = true\nname = "Collecte"\n'
+        'file = "collecte.md"\n'
+    )
+
+    context = await build_session(config_path=config_path)
+
+    assert context.engine.persona is not None
+    assert context.engine.persona.name == "Collecte"
+    assert context.engine.persona.system_instruction == "Tu es Collecte."
+    assert context.engine.persona_enabled is True
+
+
+async def test_build_session_keeps_a_disabled_persona_for_later(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(
+        'provider = "mock"\n\n[persona]\nenabled = false\ninstruction = "Tu es X."\n'
+    )
+
+    context = await build_session(config_path=config_path)
+
+    assert context.engine.persona is not None
+    assert context.engine.persona_enabled is False
+
+
+async def test_build_session_reports_a_missing_persona_file(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(
+        'provider = "mock"\n\n[persona]\nenabled = true\nfile = "missing.md"\n'
+    )
+
+    with pytest.raises(BootstrapError, match="persona file"):
+        await build_session(config_path=config_path)
+
+
+def test_shipped_collecte_persona_matches_the_scenario():
+    path = Path(__file__).parents[2] / "personas" / "collecte.md"
+    text = path.read_text(encoding="utf-8")
+
+    assert text.startswith("Tu es Sensai Collecte")
+    assert "Je ne trouve pas cette information" in text
+    assert "Demande à ton responsable" in text

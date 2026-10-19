@@ -19,7 +19,7 @@ from sensai.domain.events import (
     StepEvent,
     TextChunkEvent,
 )
-from sensai.domain.models import Conversation
+from sensai.domain.models import Conversation, Persona
 from sensai.domain.protocols import (
     ContextRetriever,
     Guardrail,
@@ -58,6 +58,8 @@ class ChatEngine:
         max_steps: int = MAX_TOOL_ROUNDS,
         think: bool | str | None = None,
         prompt_recorder: PromptRecorder | None = None,
+        persona: Persona | None = None,
+        persona_enabled: bool = True,
     ) -> None:
         if max_steps < 1:
             raise ValueError("max_steps must be at least 1")
@@ -77,6 +79,9 @@ class ChatEngine:
         self.prompt_recorder = prompt_recorder
         # Prompt of the latest model call, for /prompt.
         self.last_prompt: list[PromptPart] = []
+        # Kept when disabled so `/persona on` can bring it back.
+        self.persona = persona
+        self.persona_enabled = persona_enabled
 
     @property
     def _streamer(self) -> RoundStreamer:
@@ -96,7 +101,11 @@ class ChatEngine:
     @property
     def _composer(self) -> PromptComposer:
         return PromptComposer(
-            self.conversation, self.budget, self.memory, self.memory_auto_inject
+            self.conversation,
+            self.budget,
+            self.memory,
+            self.memory_auto_inject,
+            persona=self.persona if self.persona_enabled else None,
         )
 
     async def send(

@@ -11,6 +11,7 @@ from sensai.core.config import (
     McpConfig,
     McpServerConfig,
     MemoryConfig,
+    PersonaConfig,
     RagConfig,
     ReasoningConfig,
     ToolsConfig,
@@ -553,3 +554,57 @@ def test_save_config_omits_default_rag_section(tmp_path):
     save_config(AppConfig(), config_file)
 
     assert "[rag]" not in config_file.read_text()
+
+
+def test_persona_is_off_by_default():
+    assert AppConfig().persona == PersonaConfig()
+    assert AppConfig().persona.enabled is False
+
+
+def test_persona_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(
+        '[persona]\nenabled = true\nname = "Collecte"\nfile = "personas/collecte.md"\n'
+    )
+
+    persona = load_config(config_file).persona
+
+    assert persona == PersonaConfig(
+        enabled=True, name="Collecte", file="personas/collecte.md"
+    )
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        "[persona]\nenabled = true\n",
+        '[persona]\ninstruction = "a"\nfile = "b.md"\n',
+    ],
+)
+def test_invalid_persona_is_rejected(tmp_path, section):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(section)
+
+    with pytest.raises(ConfigError, match="Invalid config values"):
+        load_config(config_file)
+
+
+def test_save_config_round_trips_persona(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(
+        persona=PersonaConfig(
+            enabled=True, name="Collecte", instruction='Tu es "Collecte".\nRègle 1.'
+        )
+    )
+
+    save_config(config, config_file)
+
+    assert load_config(config_file).persona == config.persona
+
+
+def test_save_config_omits_default_persona_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[persona]" not in config_file.read_text()

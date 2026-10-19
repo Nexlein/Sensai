@@ -74,7 +74,9 @@ Prompt log: `PromptComposer.compose_parts` returns `PromptPart`s (message + sour
 
 Real usage: providers end a call with a `UsageEvent` (Ollama: `done` object, ns → s; Groq: `usage` or `x_groq.usage`), which carries computed `reply_rate`, `prompt_rate` and `first_token_seconds`. `RoundStream` keeps it on `Round.usage` and passes it on; the UIs show `interfaces/usage.format_metrics` of the last one under the budget line (nothing when no counters), and the prompt log adds `usage` and `estimate_error`. The 4-chars/token estimate still drives the budget.
 
-Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`), `Persona` (`build_prompt` accepts one, nothing passes it).
+Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`).
+
+Persona: `[persona]` (`enabled`, `name`, `instruction` or `file`, not both) is loaded by `bootstrap.load_persona` into `ChatEngine.persona`, even when disabled, so `/persona on|off` can flip `engine.persona_enabled` (and `config.persona.enabled`) live. `PromptComposer.compose_parts` inserts it last at index 0 (source `persona`), so it leads every system message; off gives exactly the persona-less prompt. Shipped prompt: `personas/collecte.md`.
 
 Empty stubs, not yet built: `tools/sandbox.py`.
 Empty stubs, not yet built: `core/budget.py`, `memory/manager.py`, `memory/artifact.py`.

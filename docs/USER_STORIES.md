@@ -444,6 +444,26 @@ Acceptance criteria:
 - A second message sent while a reply is in progress is refused with a message, not queued.
 - A failing model server shows a one-line error in the page and the page stays usable.
 
+## Feature: Domain Persona
+
+As a waste-collection crew leader, I want Sensai to answer as the Régie's assistant, so that I get short French answers that cite the internal document instead of generic or invented ones.
+
+Acceptance criteria:
+
+- With `[persona] enabled = true` and `file = "personas/collecte.md"`, the persona text is the first system message of every call to the model.
+- Corpus questions are answered in French and cite the source file, for example `[securite-collecte.md]`.
+- A question the documents do not cover gets "Je ne trouve pas cette information dans les documents de la régie" instead of an invented fact.
+- A missing or empty persona file stops startup with a one-line error.
+
+As a team member running the A/B benchmark, I want to switch the persona off and on during a session, so that I can compare the generic and specialised prompts on the same questions.
+
+Acceptance criteria:
+
+- `/persona off` sends exactly the prompt Sensai sends without a persona, from the next turn.
+- `/persona on` brings it back; `/persona` alone shows the current state.
+- `/config save` keeps the chosen state in `sensai.toml`.
+- Without a configured persona, `/persona` says none is configured and changes nothing.
+
 ## Feature: Feature Toggles in the Config File
 
 As a user setting up document retrieval, I want to enable RAG and tune it in `sensai.toml`, so that I do not have to repeat CLI flags at every start and can compare runs with RAG on and off.

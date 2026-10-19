@@ -89,7 +89,19 @@ internes) : un modèle sans RAG ne peut pas les connaître, ce qui rend la mesur
 
 ## Pré-prompt proposé
 
-À brancher via `Persona` (`domain/models.py`), aujourd'hui accepté par `build_prompt` mais jamais passé.
+Livré dans `personas/collecte.md`. Pour l'activer :
+
+```toml
+[persona]
+enabled = true
+name = "Sensai Collecte"
+file = "personas/collecte.md"   # ou instruction = "..." en ligne
+```
+
+Le texte est envoyé comme premier message système de chaque appel, avant le guide d'usage des
+outils, la note de confidentialité, la mémoire et le contexte RAG. `/persona off` revient au prompt
+générique sans redémarrer (le prompt est alors identique à celui sans persona), `/persona on` le
+remet, `/config save` garde l'état.
 
 ```text
 Tu es Sensai Collecte, l'assistant des équipes de la Régie de collecte du Val-Brûlé.

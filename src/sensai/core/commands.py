@@ -171,6 +171,33 @@ async def handle_effort(
     return CommandResult(message=f"Effort set to {name}.{note}")
 
 
+PERSONA_USAGE = "Usage: /persona [on|off]"
+
+
+async def handle_persona(
+    context: CommandContext,
+    arguments: tuple[str, ...],
+) -> CommandResult:
+    """Show or switch the domain system prompt, e.g. for a generic vs persona A/B."""
+    engine = context.engine
+    if len(arguments) > 1:
+        return CommandResult(message=PERSONA_USAGE)
+    if engine.persona is None:
+        return CommandResult(
+            message="No persona configured: set [persona] instruction or file."
+        )
+
+    if arguments:
+        choice = arguments[0].lower()
+        if choice not in {"on", "off"}:
+            return CommandResult(message=PERSONA_USAGE)
+        engine.persona_enabled = choice == "on"
+        context.config.persona.enabled = engine.persona_enabled
+
+    state = "on" if engine.persona_enabled else "off"
+    return CommandResult(message=f"Persona {engine.persona.name}: {state}.")
+
+
 async def handle_base_url(
     context: CommandContext,
     arguments: tuple[str, ...],
@@ -508,6 +535,7 @@ COMMANDS = {
     "model": CommandSpec(handle_model, "Switch model for subsequent turns"),
     "effort": CommandSpec(handle_effort, "Show or set the thinking effort"),
     "provider": CommandSpec(handle_provider, "Switch LLM provider"),
+    "persona": CommandSpec(handle_persona, "Show or switch the domain persona"),
     "config": CommandSpec(handle_config, "View or update runtime configuration"),
     "prompt": CommandSpec(handle_prompt, "Show the full prompt of the last model call"),
     "ps": CommandSpec(handle_ps, "Show RAM/VRAM used by the loaded models"),
