@@ -4,9 +4,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 import tomllib
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from sensai.core.budget import BudgetConfig
+from sensai.domain.models import ModelOptions
 
 DEFAULT_INTERFACE = "cli"
 DEFAULT_PROVIDER = "ollama"
@@ -119,6 +120,24 @@ class AppConfig(BaseModel):
     mcp: McpConfig = McpConfig()
     memory: MemoryConfig = MemoryConfig()
     reasoning: ReasoningConfig = ReasoningConfig()
+    options: ModelOptions = ModelOptions()
+
+    @model_validator(mode="after")
+    def _budget_fits_context(self) -> "AppConfig":
+        check_context_fits(self.budget, self.options)
+        return self
+
+
+def check_context_fits(budget: BudgetConfig, options: ModelOptions) -> None:
+    """Past `num_ctx` Ollama silently drops the start of the prompt (system notes)."""
+    if options.num_ctx is None:
+        return
+    room = options.num_ctx - (options.num_predict or 0)
+    if budget.max_tokens > room:
+        raise ValueError(
+            f"budget.max_tokens ({budget.max_tokens}) must not exceed "
+            f"options.num_ctx - options.num_predict ({room})"
+        )
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -163,7 +182,13 @@ def load_config(
     try:
         return AppConfig(**merged)
     except ValidationError as exc:
-        raise ConfigError(f"Invalid config values: {exc}") from exc
+        reasons = "; ".join(
+            ".".join(map(str, err["loc"])) + f": {err['msg']}"
+            if err["loc"]
+            else err["msg"]
+            for err in exc.errors()
+        )
+        raise ConfigError(f"Invalid config values: {reasons}") from exc
 
 
 def save_config(
@@ -246,6 +271,10 @@ def save_config(
         )
         if config.reasoning.think is not None:
             lines.append(f"think = {json.dumps(config.reasoning.think)}")
+
+    if options := config.options.to_payload():
+        lines.extend(["", "[options]"])
+        lines.extend(f"{key} = {json.dumps(value)}" for key, value in options.items())
 
     # save_config rewrites the whole file, so every section must be written back or
     # a runtime /model would silently delete the user's MCP servers.

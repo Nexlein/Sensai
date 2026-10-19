@@ -30,7 +30,7 @@ Les user stories restent dans [`../USER_STORIES.md`](../USER_STORIES.md).
 | -------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Lancer l'app et envoyer un prompt                  | ✅   | `uv run sensai chat` (CLI), `--ui tui`, `--ui web`                                                                                      |
 | Config pour activer/désactiver les features        | ⚠️   | `sensai.toml` couvre guardrails, mémoire, raisonnement, fs, MCP, eval. RAG seulement par `--rag-dir`, pas de bascule web search/sandbox |
-| Modifier température et taille du contexte         | ❌   | Aucun `options` envoyé à Ollama. Spécification : [configuration.md](configuration.md#température-et-contexte-à-implémenter)             |
+| Modifier température et taille du contexte         | ✅   | `[options]` dans `sensai.toml`, `/config set options.temperature`. Voir [configuration.md](configuration.md#température-et-contexte)    |
 | Adapter la config au modèle                        | ⚠️   | `budget.max_tokens` (8192) indépendant du `num_ctx` réel d'Ollama : voir [configuration.md](configuration.md#profils-par-modèle)        |
 | Aucune erreur visible (exceptions interceptées)    | ✅   | `ProviderError`, `ConfigError`, erreurs d'outils en texte. Voir [securite-rgpd.md](securite-rgpd.md#gestion-des-erreurs)                |
 | Afficher le prompt complet reconstitué (logs)      | ❌   | `TurnLogger` existe mais n'est pas branché. Spécification : [observabilite.md](observabilite.md#logs-du-prompt-complet)                 |
@@ -63,7 +63,7 @@ Les user stories restent dans [`../USER_STORIES.md`](../USER_STORIES.md).
 
 Dans l'ordre, ce qui bloque un prérequis éliminatoire :
 
-1. `[model]` dans `sensai.toml` : `temperature`, `num_ctx`, `top_p`, `seed`, envoyés dans `options` d'`/api/chat`. Aligner `budget.max_tokens` sur `num_ctx`.
+1. ~~`[options]` dans `sensai.toml` : `temperature`, `num_ctx`, `top_p`, `seed`, envoyés dans `options` d'`/api/chat`. Aligner `budget.max_tokens` sur `num_ctx`.~~ Fait (#75).
 2. `[rag]` dans `sensai.toml` (`enabled`, `dir`, `model`, `db`, `top_k`, `chunk_size`) et bascules `tools.web_search`, `tools.sandbox`.
 3. Log du prompt complet envoyé à Ollama (`logs/prompts.jsonl` + `/prompt` pour afficher le dernier).
 4. Lire `prompt_eval_count`, `eval_count`, `eval_duration` du dernier message d'Ollama : vrai compteur de tokens et tokens/s affichés après chaque réponse.

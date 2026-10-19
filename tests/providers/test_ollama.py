@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from sensai.domain.events import TextChunkEvent, ThoughtEvent, ToolCallEvent
-from sensai.domain.models import Message, ToolCall
+from sensai.domain.models import Message, ModelOptions, ToolCall
 from sensai.providers.ollama import OllamaLLMProvider
 
 
@@ -263,6 +263,42 @@ async def test_chat_stream_omits_think_key_when_not_given():
         pass
 
     assert "think" not in bodies[0]
+
+
+async def test_chat_stream_sends_only_the_options_that_are_set():
+    options = ModelOptions(temperature=0, num_ctx=4096, seed=42)
+    provider = OllamaLLMProvider(options=options)
+    bodies: list[dict] = []
+    _patch_client(provider, _capturing_transport(bodies, [httpx.Response(200)]))
+
+    async for _ in provider.chat_stream(messages=[]):
+        pass
+
+    assert bodies[0]["options"] == {"temperature": 0, "num_ctx": 4096, "seed": 42}
+
+
+async def test_chat_stream_omits_options_key_when_none_are_set():
+    provider = OllamaLLMProvider()
+    bodies: list[dict] = []
+    _patch_client(provider, _capturing_transport(bodies, [httpx.Response(200)]))
+
+    async for _ in provider.chat_stream(messages=[]):
+        pass
+
+    assert "options" not in bodies[0]
+
+
+async def test_chat_stream_reads_options_changed_after_creation():
+    options = ModelOptions()
+    provider = OllamaLLMProvider(options=options)
+    bodies: list[dict] = []
+    _patch_client(provider, _capturing_transport(bodies, [httpx.Response(200)]))
+
+    options.temperature = 1.2
+    async for _ in provider.chat_stream(messages=[]):
+        pass
+
+    assert bodies[0]["options"] == {"temperature": 1.2}
 
 
 async def test_chat_stream_yields_thought_then_text():
