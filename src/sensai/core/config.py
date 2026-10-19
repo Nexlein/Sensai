@@ -42,10 +42,13 @@ class GuardrailsConfig(BaseModel):
 
 
 class EvalConfig(BaseModel):
-    """Opt-in reply log (EV1) graded later with `python -m sensai.eval.judge`."""
+    """Opt-in logs: replies (EV1, graded with `python -m sensai.eval.judge`) and the
+    full prompt of every model call."""
 
     log_replies: bool = False
     replies_path: str = "logs/replies.jsonl"
+    log_prompts: bool = False
+    prompts_path: str = "logs/prompts.jsonl"
 
 
 class McpServerConfig(BaseModel):
@@ -246,6 +249,9 @@ def save_config(
                 f"log_replies = {json.dumps(config.eval.log_replies)}",
                 "replies_path = "
                 + json.dumps(config.eval.replies_path, ensure_ascii=False),
+                f"log_prompts = {json.dumps(config.eval.log_prompts)}",
+                "prompts_path = "
+                + json.dumps(config.eval.prompts_path, ensure_ascii=False),
             ]
         )
 

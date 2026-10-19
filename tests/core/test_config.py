@@ -261,7 +261,14 @@ def test_eval_config_from_file(tmp_path):
 
 def test_save_config_round_trips_eval(tmp_path):
     config_file = tmp_path / "sensai.toml"
-    config = AppConfig(eval=EvalConfig(log_replies=True, replies_path="out/r.jsonl"))
+    config = AppConfig(
+        eval=EvalConfig(
+            log_replies=True,
+            replies_path="out/r.jsonl",
+            log_prompts=True,
+            prompts_path="out/p.jsonl",
+        )
+    )
 
     save_config(config, config_file)
 

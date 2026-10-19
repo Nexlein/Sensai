@@ -108,6 +108,7 @@ async def run_repl(
             continue
 
         if result.message:
-            Console().print(result.message)
+            # Plain text: results such as /prompt echo user and document content.
+            Console().print(result.message, markup=False)
         if result.should_exit:
             break

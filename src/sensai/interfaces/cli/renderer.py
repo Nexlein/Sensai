@@ -15,6 +15,7 @@ from sensai.domain.events import (
     StepEvent,
     TextChunkEvent,
     ThoughtEvent,
+    UsageEvent,
 )
 from sensai.domain.models import Conversation, ToolCall
 from sensai.interfaces.cli.select import select
@@ -22,7 +23,7 @@ from sensai.interfaces.diff import diff_text
 from sensai.interfaces.notices import guardrail_notice, max_steps_notice, step_notice
 from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
 from sensai.interfaces.thinking import Thinking, format_thinking
-from sensai.interfaces.usage import format_usage
+from sensai.interfaces.usage import format_metrics, format_usage
 
 T = TypeVar("T")
 
@@ -133,6 +134,7 @@ class CliRenderer:
     async def render(self, events: AsyncIterator[Event]) -> None:
         self._line_open = False
         usage: BudgetEvent | None = None
+        metrics = ""
         try:
             async for event in self._thinking.watch(events):
                 if not isinstance(event, ThoughtEvent):
@@ -155,6 +157,8 @@ class CliRenderer:
                     self.console.print(Text(max_steps_notice(event), style="yellow"))
                 elif isinstance(event, BudgetEvent):
                     usage = event
+                elif isinstance(event, UsageEvent):
+                    metrics = format_metrics(event)  # last call = the reply
                 elif isinstance(event, GuardrailEvent):
                     self._finish_line()
                     self.console.print(
@@ -165,6 +169,8 @@ class CliRenderer:
             self._finish_line()
             if usage is not None:
                 self.console.print(Text(format_usage(usage), style="dim"))
+            if metrics:
+                self.console.print(Text(metrics, style="dim"))
 
 
 async def render_stream(console: Console, events: AsyncIterator[Event]) -> None:

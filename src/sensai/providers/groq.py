@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from sensai.domain.errors import ProviderError
-from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent, UsageEvent
 from sensai.domain.models import Message, ModelOptions
 from sensai.providers.base import BaseHTTPProvider
 
@@ -116,6 +116,7 @@ class GroqLLMProvider(BaseHTTPProvider):
     async def _stream_response(self, payload: dict[str, Any]) -> AsyncGenerator[Event]:
         # Tool calls arrive as fragments keyed by index; emit them once complete.
         calls: dict[int, dict[str, str]] = {}
+        usage: UsageEvent | None = None
         try:
             async with (
                 self._get_client() as client,
@@ -136,6 +137,10 @@ class GroqLLMProvider(BaseHTTPProvider):
                     if "error" in chunk:
                         message = chunk["error"].get("message", chunk["error"])
                         raise ProviderError(f"Groq error: {message}")
+                    if counters := (
+                        chunk.get("usage") or (chunk.get("x_groq") or {}).get("usage")
+                    ):
+                        usage = self._usage(counters)
                     for choice in chunk.get("choices") or []:
                         delta = choice.get("delta") or {}
                         if content := delta.get("content"):
@@ -156,6 +161,19 @@ class GroqLLMProvider(BaseHTTPProvider):
 
         for index in sorted(calls):
             yield self._tool_call_event(calls[index])
+        if usage is not None:
+            yield usage
+
+    @staticmethod
+    def _usage(counters: dict[str, Any]) -> UsageEvent:
+        """OpenAI-style `usage`; Groq adds its timings in seconds."""
+        return UsageEvent(
+            prompt_tokens=counters.get("prompt_tokens"),
+            reply_tokens=counters.get("completion_tokens"),
+            prompt_seconds=counters.get("prompt_time"),
+            reply_seconds=counters.get("completion_time"),
+            total_seconds=counters.get("total_time"),
+        )
 
     async def chat_stream(
         self,

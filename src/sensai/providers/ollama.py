@@ -3,7 +3,13 @@ from collections import deque
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from sensai.domain.events import Event, TextChunkEvent, ThoughtEvent, ToolCallEvent
+from sensai.domain.events import (
+    Event,
+    TextChunkEvent,
+    ThoughtEvent,
+    ToolCallEvent,
+    UsageEvent,
+)
 from sensai.domain.models import Message, ModelOptions
 from sensai.providers.base import BaseHTTPProvider
 
@@ -46,8 +52,31 @@ class OllamaLLMProvider(BaseHTTPProvider):
             formatted.append(payload)
         return formatted
 
+    @staticmethod
+    def _usage(data: dict[str, Any]) -> UsageEvent | None:
+        """Counters of the final (`done`) object; durations come in nanoseconds."""
+        if not data.get("done"):
+            return None
+
+        def seconds(key: str) -> float | None:
+            value = data.get(key)
+            return value / 1e9 if isinstance(value, int | float) else None
+
+        counters = {
+            "prompt_tokens": data.get("prompt_eval_count"),
+            "reply_tokens": data.get("eval_count"),
+            "prompt_seconds": seconds("prompt_eval_duration"),
+            "reply_seconds": seconds("eval_duration"),
+            "load_seconds": seconds("load_duration"),
+            "total_seconds": seconds("total_duration"),
+        }
+        if all(value is None for value in counters.values()):
+            return None
+        return UsageEvent(**counters)
+
     def _parse_line(self, line: str) -> list[Event]:
-        msg = json.loads(line).get("message", {})
+        data = json.loads(line)
+        msg = data.get("message", {})
         events: list[Event] = []
         if thinking := msg.get("thinking"):
             events.append(ThoughtEvent(content=thinking, source="native"))
@@ -60,6 +89,8 @@ class OllamaLLMProvider(BaseHTTPProvider):
         ]
         if content := msg.get("content"):
             events.append(TextChunkEvent(content=content))
+        if usage := self._usage(data):
+            events.append(usage)
         return events
 
     async def _stream_response(self, payload: dict[str, Any]) -> AsyncGenerator[Event]:

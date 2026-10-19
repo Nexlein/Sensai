@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from sensai.domain.events import UsageEvent
 from sensai.domain.models import ToolCall
 
 
@@ -29,6 +30,7 @@ class Round:
     refused: bool = False
     native_thoughts: list[str] = field(default_factory=list)
     text_thought: str = ""
+    usage: UsageEvent | None = None
 
     @property
     def text(self) -> str:

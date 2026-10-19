@@ -462,3 +462,38 @@ Acceptance criteria:
 - `/config set options.temperature 1.2` applies from the next turn without restarting.
 - `/config set options.<key> none` removes the option; an invalid or incoherent value is refused with a message and leaves the setting unchanged.
 - `/config save` writes the `[options]` section, and it is loaded back on the next start.
+
+## Feature: Full Prompt Log
+
+As a developer debugging an answer, I want to see the full prompt Sensai sent to the model, so that I can tell which system notes, documents and history the model actually received.
+
+Acceptance criteria:
+
+- `/prompt` shows the prompt of the last model call in the CLI, TUI and web UI, one block per message with its role, its source (tools, privacy, memory, RAG, summary, history) and its estimated tokens.
+- The last line gives the estimated total against the context budget.
+- Before any message, `/prompt` says no prompt was sent yet.
+
+As a team member preparing the evaluation, I want every model call written to a log file, so that I can replay and compare what the model saw across a session.
+
+Acceptance criteria:
+
+- With `[eval] log_prompts = true`, each model call, tool rounds and failed calls included, adds one JSON line to `logs/prompts.jsonl` with the model, options, tool names and the messages exactly as sent.
+- A personal value masked by the guardrails appears only as its placeholder, such as `[EMAIL]`.
+- With logging off (the default), no file is created.
+
+## Feature: Real Token Counts and Throughput
+
+As a user running a model on my own machine, I want to see the real token counts and speed after each reply, so that I know how fast my hardware generates and how big my prompts really are.
+
+Acceptance criteria:
+
+- After each reply, the CLI, TUI and web UI show one line such as `prompt 1 024 tok · reply 187 tok · 11.4 tok/s · first token 2.1 s · total 18.5 s`.
+- The counts and the rate match `ollama run <model> --verbose` for the same prompt, within rounding.
+- A provider that reports no counters shows no such line, never zeros or an error.
+
+As a team member explaining the token budget, I want the gap between the estimated and the real prompt size logged, so that I can say how far our estimate is off.
+
+Acceptance criteria:
+
+- With `[eval] log_prompts = true`, each prompt-log line holds the real counts, the rates and `estimate_error`.
+- The estimate keeps driving the budget, so behaviour does not change with a provider that sends no counters.

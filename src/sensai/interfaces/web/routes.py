@@ -12,11 +12,17 @@ from fastapi.responses import HTMLResponse
 from sensai.core.commands import CommandContext
 from sensai.core.input import process_input
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import BudgetEvent, Event, GuardrailEvent, TextChunkEvent
+from sensai.domain.events import (
+    BudgetEvent,
+    Event,
+    GuardrailEvent,
+    TextChunkEvent,
+    UsageEvent,
+)
 from sensai.domain.models import ToolCall
 from sensai.interfaces.notices import error_text, guardrail_notice
 from sensai.interfaces.prompts import tool_confirmation
-from sensai.interfaces.usage import format_usage
+from sensai.interfaces.usage import format_metrics, format_usage
 
 INDEX_PATH = Path(__file__).parent / "index.html"
 
@@ -79,10 +85,14 @@ class WebTurn:
 
     async def _render(self, events: AsyncIterator[Event]) -> None:
         usage: BudgetEvent | None = None
+        metrics = ""
         try:
             async for event in events:
                 if isinstance(event, BudgetEvent):
                     usage = event  # the engine reports it per chunk; show the last
+                    continue
+                if isinstance(event, UsageEvent):
+                    metrics = format_metrics(event)  # last call = the reply
                     continue
                 payload = event_payload(event)
                 if payload is not None:
@@ -92,6 +102,8 @@ class WebTurn:
                 await self.websocket.send_json(
                     {"type": "usage", "message": format_usage(usage)}
                 )
+            if metrics:
+                await self.websocket.send_json({"type": "usage", "message": metrics})
 
     async def _confirm_tool(self, tc: ToolCall) -> bool:
         question = tool_confirmation(tc)

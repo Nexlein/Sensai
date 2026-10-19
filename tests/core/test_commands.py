@@ -8,6 +8,7 @@ from sensai.core.commands import (
     dispatch_command,
     parse_commands,
 )
+from sensai.core.budget import BudgetConfig, ContextBudget
 from sensai.core.config import DEFAULT_MODEL, AppConfig, load_config
 from sensai.core.engine import ChatEngine
 from sensai.domain.events import Event
@@ -127,7 +128,8 @@ async def test_dispatch_help_lists_commands():
 /model - Switch model for subsequent turns
 /effort - Show or set the thinking effort
 /provider - Switch LLM provider
-/config - View or update runtime configuration"""
+/config - View or update runtime configuration
+/prompt - Show the full prompt of the last model call"""
     )
 
 
@@ -838,3 +840,22 @@ async def test_config_set_option_rejects_invalid_values(key, value):
 
     assert (result.message or "").startswith(f"Invalid {key}:")
     assert context.config.options.to_payload() == {}
+
+
+async def test_prompt_before_any_turn_says_nothing_was_sent():
+    result = await dispatch_command(ParsedCommand("prompt", ()), _context())
+
+    assert result.message == "No prompt sent yet."
+
+
+async def test_prompt_shows_the_last_model_call_against_the_budget():
+    context = _context()
+    context.engine.budget = ContextBudget(BudgetConfig(max_tokens=4096), None)
+    _ = [e async for e in context.engine.send("what is the plan?")]
+
+    result = await dispatch_command(ParsedCommand("prompt", ()), context)
+
+    message = result.message or ""
+    assert "user · history" in message
+    assert "what is the plan?" in message
+    assert message.endswith(" / 4096 tokens (estimate)")

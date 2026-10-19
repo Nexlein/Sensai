@@ -8,6 +8,7 @@ from sensai.domain.models import now_utc
 
 DEFAULT_LOG_PATH = Path("logs/turns.jsonl")
 DEFAULT_REPLIES_PATH = Path("logs/replies.jsonl")
+DEFAULT_PROMPTS_PATH = Path("logs/prompts.jsonl")
 
 
 def _append(path: Path, entry: dict[str, object]) -> None:
@@ -82,3 +83,16 @@ class ReplyLogger:
         if context:
             entry["context"] = context
         _append(self.path, entry)
+
+
+class PromptLogger:
+    """Appends every prompt sent to the model, as one JSON line per model call.
+
+    The file is only created by the first call, so with logging off it never exists.
+    """
+
+    def __init__(self, path: str | Path = DEFAULT_PROMPTS_PATH) -> None:
+        self.path = Path(path)
+
+    def record_prompt(self, entry: dict[str, object]) -> None:
+        _append(self.path, {"timestamp": now_utc().isoformat(), **entry})

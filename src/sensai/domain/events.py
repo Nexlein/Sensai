@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from sensai.domain.models import GuardrailAction
 
@@ -26,6 +26,47 @@ class BudgetEvent(Event):
     type: Literal["budget"] = "budget"
     used: int
     max_tokens: int
+
+
+class UsageEvent(Event):
+    """Real counters the server reports at the end of one model call.
+
+    Each field is None when the provider does not report it.
+    """
+
+    type: Literal["usage"] = "usage"
+    prompt_tokens: int | None = None
+    reply_tokens: int | None = None
+    prompt_seconds: float | None = None
+    reply_seconds: float | None = None
+    load_seconds: float | None = None
+    total_seconds: float | None = None
+
+    @computed_field
+    @property
+    def reply_rate(self) -> float | None:
+        """Generation speed in tokens per second."""
+        return _rate(self.reply_tokens, self.reply_seconds)
+
+    @computed_field
+    @property
+    def prompt_rate(self) -> float | None:
+        """Prompt reading (prefill) speed in tokens per second."""
+        return _rate(self.prompt_tokens, self.prompt_seconds)
+
+    @computed_field
+    @property
+    def first_token_seconds(self) -> float | None:
+        """Model load plus prompt reading: the wait before the first reply token."""
+        if self.prompt_seconds is None:
+            return None
+        return (self.load_seconds or 0.0) + self.prompt_seconds
+
+
+def _rate(tokens: int | None, seconds: float | None) -> float | None:
+    if tokens is None or not seconds:
+        return None
+    return tokens / seconds
 
 
 class ToolCallEvent(Event):

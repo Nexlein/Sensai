@@ -14,6 +14,7 @@ from sensai.core.config import (
     save_config,
 )
 from sensai.core.engine import ChatEngine
+from sensai.core.prompt import format_prompt
 from sensai.domain.errors import ProviderError
 from sensai.domain.events import Event
 from sensai.domain.models import Conversation, Fact, ModelOptions
@@ -327,6 +328,18 @@ async def handle_clear(
     return CommandResult(message="Conversation cleared.")
 
 
+async def handle_prompt(
+    context: CommandContext,
+    arguments: tuple[str, ...],
+) -> CommandResult:
+    """Show the prompt of the latest model call, message by message."""
+    engine = context.engine
+    if not engine.last_prompt:
+        return CommandResult(message="No prompt sent yet.")
+    max_tokens = engine.budget.config.max_tokens if engine.budget else None
+    return CommandResult(message=format_prompt(engine.last_prompt, max_tokens))
+
+
 async def handle_help(
     context: CommandContext,
     arguments: tuple[str, ...],
@@ -447,6 +460,7 @@ COMMANDS = {
     "effort": CommandSpec(handle_effort, "Show or set the thinking effort"),
     "provider": CommandSpec(handle_provider, "Switch LLM provider"),
     "config": CommandSpec(handle_config, "View or update runtime configuration"),
+    "prompt": CommandSpec(handle_prompt, "Show the full prompt of the last model call"),
 }
 
 
