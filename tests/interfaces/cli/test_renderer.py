@@ -16,6 +16,7 @@ from sensai.domain.events import (
     TextChunkEvent,
     ThoughtEvent,
     ToolCallEvent,
+    UsageEvent,
 )
 from sensai.domain.models import Conversation, ToolCall
 from sensai.interfaces.cli.renderer import CliRenderer, render_history, render_stream
@@ -135,6 +136,27 @@ async def test_render_stream_shows_usage_footer(capsys):
     out = capsys.readouterr().out
     assert "hi" in out
     assert "101 / 1.0k tokens (10%)" in out
+
+
+async def test_render_stream_shows_the_last_calls_real_counters(capsys):
+    await render_stream(
+        Console(),
+        _events(
+            UsageEvent(prompt_tokens=10, reply_tokens=1),
+            TextChunkEvent(content="hi"),
+            UsageEvent(prompt_tokens=90, reply_tokens=12),
+        ),
+    )
+
+    out = capsys.readouterr().out
+    assert "prompt 90 tok · reply 12 tok" in out
+    assert "prompt 10 tok" not in out
+
+
+async def test_render_stream_shows_no_counters_line_without_usage(capsys):
+    await render_stream(Console(), _events(TextChunkEvent(content="hi")))
+
+    assert " tok" not in capsys.readouterr().out
 
 
 async def test_render_stream_footer_shows_before_first_chunk(capsys):

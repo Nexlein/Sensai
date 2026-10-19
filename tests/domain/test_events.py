@@ -10,6 +10,7 @@ from sensai.domain.events import (
     TextChunkEvent,
     ThoughtEvent,
     ToolCallEvent,
+    UsageEvent,
 )
 
 
@@ -79,3 +80,26 @@ def test_max_steps_event_type_and_fields():
     assert event.type == "max_steps"
     assert event.max_steps == 5
     assert isinstance(event, Event)
+
+
+def test_usage_event_derives_rates_and_time_to_first_token():
+    event = UsageEvent(
+        prompt_tokens=1000,
+        reply_tokens=200,
+        prompt_seconds=2.0,
+        reply_seconds=16.0,
+        load_seconds=0.5,
+    )
+
+    assert event.reply_rate == 12.5
+    assert event.prompt_rate == 500.0
+    assert event.first_token_seconds == 2.5
+    assert event.model_dump()["reply_rate"] == 12.5
+
+
+def test_usage_event_without_counters_has_no_rates():
+    event = UsageEvent(reply_tokens=10, reply_seconds=0.0)
+
+    assert event.reply_rate is None
+    assert event.prompt_rate is None
+    assert event.first_token_seconds is None
