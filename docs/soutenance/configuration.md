@@ -42,7 +42,24 @@ log_replies = false
 replies_path = "logs/replies.jsonl"
 ```
 
-Le RAG s'active en ligne de commande uniquement :
+Le RAG et les outils web/sandbox se pilotent aussi depuis le fichier :
+
+```toml
+[rag]                              # R1, désactivé par défaut
+enabled = true
+dir = "data/collecte"
+model = "nomic-embed-text"
+db = "rag.db"
+top_k = 5                          # chunks injectés par question
+chunk_size = 500                   # caractères par chunk
+chunk_overlap = 50                 # doit rester < chunk_size
+
+[tools]
+web_search = true                  # T3, false = outil retiré du registre
+sandbox = true                     # T2 (run_python)
+```
+
+Les drapeaux CLI restent prioritaires sur le fichier ; `--rag-dir` active le RAG à lui seul :
 
 ```bash
 uv run sensai chat --rag-dir data/collecte --rag-model nomic-embed-text --rag-db rag.db
@@ -67,9 +84,9 @@ Modification en direct, sans redémarrer :
 | Outils fichiers (T4) | `[tools] fs_allowed_root = false` | —                                     |
 | MCP (T1)             | présence de `[mcp.servers.*]`     | —                                     |
 | Log des réponses     | `[eval] log_replies`              | —                                     |
-| RAG (R1)             | `--rag-dir` (CLI seulement)       | section `[rag]`                       |
-| Recherche web (T3)   | toujours enregistrée              | `[tools] web_search = false`          |
-| Sandbox (T2)         | toujours enregistrée              | `[tools] sandbox = false`             |
+| RAG (R1)             | `[rag] enabled` ou `--rag-dir`    | —                                     |
+| Recherche web (T3)   | `[tools] web_search = false`      | —                                     |
+| Sandbox (T2)         | `[tools] sandbox = false`         | —                                     |
 | Budget (M2)          | toujours actif                    | `[budget] enabled` (utile pour l'A/B) |
 
 ## Température et contexte (à implémenter)

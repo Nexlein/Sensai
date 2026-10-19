@@ -139,6 +139,91 @@ async def test_build_session_indexes_rag_documents(monkeypatch, tmp_path):
     assert isinstance(context.engine.conversation, Conversation)
 
 
+class _FakeEmbeddings:
+    models: list[str] = []
+
+    def __init__(self, base_url: str, model: str):
+        self.models.append(model)
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0] for _ in texts]
+
+
+def _rag_setup(monkeypatch, tmp_path, rag_section: str) -> Path:
+    monkeypatch.chdir(tmp_path)
+    _FakeEmbeddings.models = []
+    monkeypatch.setattr(
+        "sensai.core.bootstrap.OllamaEmbeddingProvider", _FakeEmbeddings
+    )
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "guide.md").write_text("alpha " * 60, encoding="utf-8")
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(f'provider = "mock"\n\n[rag]\n{rag_section}')
+    return config_path
+
+
+async def test_build_session_enables_rag_from_config(monkeypatch, tmp_path):
+    config_path = _rag_setup(
+        monkeypatch,
+        tmp_path,
+        'enabled = true\ndir = "docs"\nmodel = "embed-x"\ndb = "idx.db"\n'
+        "top_k = 2\nchunk_size = 100\nchunk_overlap = 10\n",
+    )
+
+    context = await build_session(config_path=config_path)
+
+    retriever = context.engine.retriever
+    assert retriever is not None
+    assert retriever.top_k == 2
+    assert _FakeEmbeddings.models == ["embed-x"]
+    chunks = SQLiteVectorStore("idx.db").search([1.0, 0.0], top_k=50)
+    assert len(chunks) > 1
+    assert all(len(chunk.text) <= 100 for chunk in chunks)
+    assert (await retriever.retrieve_context("q")).count("--- Source:") == 2
+
+
+async def test_build_session_keeps_rag_off_when_disabled(monkeypatch, tmp_path):
+    config_path = _rag_setup(monkeypatch, tmp_path, 'enabled = false\ndir = "docs"\n')
+
+    context = await build_session(config_path=config_path)
+
+    assert context.engine.retriever is None
+
+
+async def test_cli_rag_flags_override_the_config_file(monkeypatch, tmp_path):
+    config_path = _rag_setup(
+        monkeypatch,
+        tmp_path,
+        'enabled = false\ndir = "missing"\nmodel = "file-model"\n',
+    )
+
+    context = await build_session(
+        config_path=config_path, rag_dir="docs", rag_db="cli.db", rag_model="cli-model"
+    )
+
+    assert context.engine.retriever is not None
+    assert context.config.rag.dir == "docs"
+    assert _FakeEmbeddings.models == ["cli-model"]
+    assert (tmp_path / "cli.db").exists()
+
+
+async def test_build_session_drops_disabled_tools(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(
+        'provider = "mock"\n\n[tools]\nweb_search = false\nsandbox = false\n'
+    )
+
+    context = await build_session(config_path=config_path)
+
+    assert context.tool_registry.get("web_search") is None
+    assert context.tool_registry.get("run_python") is None
+    rebuilt = context.tool_registry_factory(".")
+    assert rebuilt.get("web_search") is None
+    assert rebuilt.get("run_python") is None
+
+
 async def test_build_session_reports_rag_failure(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 

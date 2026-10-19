@@ -20,6 +20,7 @@ from sensai.domain.protocols import Guardrail
 from sensai.eval.guardrails import RegexGuardrail
 from sensai.eval.logger import ReplyLogger
 from sensai.memory.manager import SqliteMemoryManager
+from sensai.memory.rag.chunker import TextChunker
 from sensai.memory.rag.retriever import RAGRetriever
 from sensai.memory.rag.store import SQLiteVectorStore
 from sensai.memory.session import SqliteMemoryStore
@@ -81,10 +82,13 @@ async def build_session(
     base_url: str | None = None,
     session_name: str | None = None,
     rag_dir: str | None = None,
-    rag_db: str = "rag.db",
-    rag_model: str = "nomic-embed-text",
+    rag_db: str | None = None,
+    rag_model: str | None = None,
 ) -> CommandContext:
-    """Resolve settings and construct the provider, memory, tools, and engine."""
+    """Resolve settings and construct the provider, memory, tools, and engine.
+
+    The `rag_*` arguments (CLI flags) override `[rag]`; `rag_dir` also enables it.
+    """
     config = load_config(
         config_path,
         interface=interface,
@@ -92,6 +96,14 @@ async def build_session(
         model=model,
         base_url=base_url,
     )
+    if rag_dir is not None:
+        config.rag.enabled = True
+        config.rag.dir = rag_dir
+    if rag_db is not None:
+        config.rag.db = rag_db
+    if rag_model is not None:
+        config.rag.model = rag_model
+    rag = config.rag
     provider = get_provider(
         config.provider,
         base_url=config.base_url,
@@ -107,13 +119,16 @@ async def build_session(
         conversation = Conversation(id=session_name) if session_name else Conversation()
 
     retriever = None
-    if rag_dir is not None:
+    if rag.enabled and rag.dir is not None:
         try:
             retriever = RAGRetriever(
-                OllamaEmbeddingProvider(base_url=config.base_url, model=rag_model),
-                SQLiteVectorStore(db_path=rag_db),
+                OllamaEmbeddingProvider(base_url=config.base_url, model=rag.model),
+                SQLiteVectorStore(db_path=rag.db),
+                top_k=rag.top_k,
             )
-            await retriever.index_directory(rag_dir)
+            await retriever.index_directory(
+                rag.dir, TextChunker(rag.chunk_size, rag.chunk_overlap)
+            )
         except (
             OSError,
             sqlite3.Error,
@@ -129,7 +144,11 @@ async def build_session(
     structured_memory = SqliteMemoryManager() if config.memory.enabled else None
     # The factory remembers the MCP tools so /config rebuilds keep them.
     registry_factory = partial(
-        build_default_registry, extra_tools=mcp_tools, memory=structured_memory
+        build_default_registry,
+        extra_tools=mcp_tools,
+        memory=structured_memory,
+        web_search=config.tools.web_search,
+        sandbox=config.tools.sandbox,
     )
     tool_registry = registry_factory(config.tools.fs_allowed_root)
 

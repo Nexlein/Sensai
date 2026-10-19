@@ -206,6 +206,22 @@ SQLite index. Each question retrieves the closest chunks and includes them in
 the model prompt. The retrieved text is not saved in conversation history.
 `--rag-dir` is optional; omit it to chat without document retrieval.
 
+The same settings live in `sensai.toml`, with the CLI flags taking precedence:
+
+```toml
+[rag]
+enabled = true
+dir = "./docs"
+model = "nomic-embed-text"
+db = "rag.db"
+top_k = 5
+chunk_size = 500
+chunk_overlap = 50
+```
+
+`[tools] web_search = false` and `[tools] sandbox = false` remove the web search
+and `run_python` tools, so the model no longer sees them.
+
 ### Privacy and content guardrails
 
 Guardrails are on by default, with no configuration needed. Tune or disable them in `sensai.toml`:

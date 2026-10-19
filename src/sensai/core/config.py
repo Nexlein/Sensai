@@ -4,7 +4,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 import tomllib
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from sensai.core.budget import BudgetConfig
 
@@ -24,6 +30,8 @@ class ConfigError(Exception):
 class ToolsConfig(BaseModel):
     # "." is resolved against the directory Sensai is launched from.
     fs_allowed_root: str | None = "."
+    web_search: bool = True
+    sandbox: bool = True
 
     @field_validator("fs_allowed_root", mode="before")
     @classmethod
@@ -96,6 +104,26 @@ class MemoryConfig(BaseModel):
     auto_inject: bool = True
 
 
+class RagConfig(BaseModel):
+    """Local document retrieval. Off by default; `--rag-dir` also turns it on."""
+
+    enabled: bool = False
+    dir: str | None = None
+    model: str = "nomic-embed-text"
+    db: str = "rag.db"
+    top_k: int = Field(default=5, ge=1)
+    chunk_size: int = Field(default=500, gt=0)
+    chunk_overlap: int = Field(default=50, ge=0)
+
+    @model_validator(mode="after")
+    def _coherent(self) -> "RagConfig":
+        if self.chunk_overlap >= self.chunk_size:
+            raise ValueError("chunk_overlap must be smaller than chunk_size")
+        if self.enabled and not self.dir:
+            raise ValueError("enabled RAG needs a dir")
+        return self
+
+
 class ReasoningConfig(BaseModel):
     """Visible reasoning loop: thoughts and steps between tool calls."""
 
@@ -119,6 +147,7 @@ class AppConfig(BaseModel):
     mcp: McpConfig = McpConfig()
     memory: MemoryConfig = MemoryConfig()
     reasoning: ReasoningConfig = ReasoningConfig()
+    rag: RagConfig = RagConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -188,6 +217,23 @@ def save_config(
                 "",
                 "[tools]",
                 "fs_allowed_root = " + json.dumps(fs_allowed_root, ensure_ascii=False),
+                f"web_search = {json.dumps(config.tools.web_search)}",
+                f"sandbox = {json.dumps(config.tools.sandbox)}",
+            ]
+        )
+
+    if config.rag != RagConfig():
+        rag = config.rag
+        lines.extend(["", "[rag]", f"enabled = {json.dumps(rag.enabled)}"])
+        if rag.dir is not None:
+            lines.append(f"dir = {json.dumps(rag.dir, ensure_ascii=False)}")
+        lines.extend(
+            [
+                f"model = {json.dumps(rag.model, ensure_ascii=False)}",
+                f"db = {json.dumps(rag.db, ensure_ascii=False)}",
+                f"top_k = {rag.top_k}",
+                f"chunk_size = {rag.chunk_size}",
+                f"chunk_overlap = {rag.chunk_overlap}",
             ]
         )
 

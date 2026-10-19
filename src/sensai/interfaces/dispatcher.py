@@ -33,10 +33,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     chat.add_argument(
         "--rag-dir", default=None, help="Directory of .txt and .md files to index"
     )
-    chat.add_argument("--rag-db", default="rag.db", help="Path to the local RAG index")
-    chat.add_argument(
-        "--rag-model", default="nomic-embed-text", help="Ollama embedding model"
-    )
+    # Unset flags fall back to [rag] in sensai.toml, then to its defaults.
+    chat.add_argument("--rag-db", default=None, help="Path to the local RAG index")
+    chat.add_argument("--rag-model", default=None, help="Ollama embedding model")
     chat.add_argument(
         "--session", default=None, help="Name of the session to resume or create"
     )
@@ -57,8 +56,8 @@ async def dispatch(argv: list[str]) -> int:
             base_url=getattr(args, "base_url", None),
             session_name=getattr(args, "session", None),
             rag_dir=getattr(args, "rag_dir", None),
-            rag_db=getattr(args, "rag_db", "rag.db"),
-            rag_model=getattr(args, "rag_model", "nomic-embed-text"),
+            rag_db=getattr(args, "rag_db", None),
+            rag_model=getattr(args, "rag_model", None),
         )
     except (BootstrapError, ConfigError, ProviderError) as exc:
         console.print(f"[bold red]✗ {exc}[/]")
