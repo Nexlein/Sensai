@@ -212,6 +212,7 @@ class ChatEngine:
                         tools=stream.tools_schema,
                         think=stream.config.think if self.reasoning else None,
                         options=_provider_options(self.provider),
+                        usage=stream.reply.usage,
                     )
                 )
 

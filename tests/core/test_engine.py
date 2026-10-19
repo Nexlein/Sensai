@@ -143,7 +143,7 @@ async def test_send_wraps_provider_connect_error_and_leaves_conversation_unchang
     assert conversation.messages == []
 
 
-from sensai.domain.events import TextChunkEvent, ToolCallEvent
+from sensai.domain.events import TextChunkEvent, ToolCallEvent, UsageEvent
 from sensai.providers.mock import MockToolCallingLLMProvider
 from sensai.tools.registry import ToolRegistry
 
@@ -1064,6 +1064,24 @@ async def test_prompt_log_holds_only_masked_personal_data():
     logged = json.dumps(recorder.entries)
     assert "john@example.com" not in logged
     assert "[EMAIL]" in logged
+
+
+@pytest.mark.asyncio
+async def test_prompt_log_holds_the_real_counts_and_the_estimate_error():
+    recorder = PromptListRecorder()
+    usage = UsageEvent(prompt_tokens=20, reply_tokens=2, reply_seconds=0.5)
+    engine = ChatEngine(
+        ScriptedProvider([*chunks("ok"), usage]),
+        Conversation(),
+        prompt_recorder=recorder,
+    )
+
+    _ = [e async for e in engine.send("hello")]
+
+    (entry,) = recorder.entries
+    assert entry["usage"]["prompt_tokens"] == 20
+    assert entry["usage"]["reply_rate"] == 4.0
+    assert entry["estimate_error"] == round((entry["estimated_tokens"] - 20) / 20, 3)
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ from sensai.core.budget import ContextBudget
 from sensai.core.budget.manager import SUMMARY_PREFIX
 from sensai.core.budget.tokens import count_message
 from sensai.core.turn import Turn
+from sensai.domain.events import UsageEvent
 from sensai.domain.models import Conversation, Message, Persona
 from sensai.domain.protocols import StructuredMemory
 
@@ -168,17 +169,29 @@ def prompt_entry(
     tools: list[dict[str, Any]] | None,
     think: bool | str | None,
     options: dict[str, Any] | None = None,
+    usage: UsageEvent | None = None,
 ) -> dict[str, Any]:
-    """One prompt-log line: the messages exactly as sent, with their sources."""
+    """One prompt-log line: the messages exactly as sent, with their sources.
+
+    With the server's real counters, `estimate_error` is how far the local
+    estimate was from the real prompt size (-0.2 = 20% under)."""
     messages = [_message_entry(part) for part in parts]
-    return {
+    estimated = sum(m["tokens"] for m in messages)
+    entry: dict[str, Any] = {
         "model": model,
         "options": options,
         "think": think,
         "tools": [tool["function"]["name"] for tool in tools or []],
         "messages": messages,
-        "estimated_tokens": sum(m["tokens"] for m in messages),
+        "estimated_tokens": estimated,
     }
+    if usage is not None:
+        entry["usage"] = usage.model_dump(exclude={"type", "timestamp"})
+        if usage.prompt_tokens:
+            entry["estimate_error"] = round(
+                (estimated - usage.prompt_tokens) / usage.prompt_tokens, 3
+            )
+    return entry
 
 
 def format_prompt(parts: list[PromptPart], max_tokens: int | None = None) -> str:
