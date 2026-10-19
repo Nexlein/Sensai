@@ -167,3 +167,38 @@ async def test_composer_injects_memory_only_when_enabled():
 
     assert any("likes tea" in m.content for m in on)
     assert not any("likes tea" in m.content for m in off)
+
+
+COLLECTE = Persona(
+    id="collecte", name="Collecte", description="", system_instruction="Tu es Collecte."
+)
+
+
+@pytest.mark.asyncio
+async def test_composer_puts_the_persona_before_every_other_system_message():
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+    composer = PromptComposer(conversation, persona=COLLECTE)
+
+    prompt = await composer.compose(
+        Turn("hello", rag_context="doc", masked=True), with_tools=True, step_limit=True
+    )
+
+    assert prompt[0].role == "system"
+    assert prompt[0].content == "Tu es Collecte."
+    assert [m.content for m in prompt[1:3]] == [STEP_LIMIT_NOTE, TOOL_USE_GUIDANCE]
+    assert sum(m.content == "Tu es Collecte." for m in prompt) == 1
+
+
+@pytest.mark.asyncio
+async def test_composer_without_persona_is_unchanged():
+    conversation = Conversation()
+    conversation.add_message("user", "hello")
+    turn = Turn("hello", rag_context="doc", masked=True)
+
+    with_persona = await PromptComposer(conversation, persona=COLLECTE).compose(
+        turn, with_tools=True
+    )
+    without = await PromptComposer(conversation).compose(turn, with_tools=True)
+
+    assert [m.content for m in with_persona[1:]] == [m.content for m in without]

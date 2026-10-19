@@ -76,11 +76,13 @@ class PromptComposer:
         budget: ContextBudget | None = None,
         memory: StructuredMemory | None = None,
         memory_auto_inject: bool = True,
+        persona: Persona | None = None,
     ) -> None:
         self.conversation = conversation
         self.budget = budget
         self.memory = memory
         self.memory_auto_inject = memory_auto_inject
+        self.persona = persona
 
     async def compose(
         self, turn: Turn, with_tools: bool, step_limit: bool = False
@@ -103,4 +105,9 @@ class PromptComposer:
             prompt.insert(0, Message(role="system", content=TOOL_USE_GUIDANCE))
         if step_limit:
             prompt.insert(0, Message(role="system", content=STEP_LIMIT_NOTE))
+        # Inserted last so it leads every other system message.
+        if self.persona is not None:
+            prompt.insert(
+                0, Message(role="system", content=self.persona.system_instruction)
+            )
         return prompt

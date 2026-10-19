@@ -72,7 +72,8 @@ temps avant le premier token plus long, contexte consommé plus vite. C'est le c
 ## A/B 2 : pré-prompt générique vs spécialisé
 
 Même jeu de questions, condition B (RAG activé), avec `TOOL_USE_GUIDANCE` seul vs la persona de
-[scenario.md](scenario.md#pré-prompt-proposé).
+[scenario.md](scenario.md#pré-prompt-proposé). Bascule en direct avec `/persona off` / `/persona on`,
+ou `[persona] enabled` dans le fichier.
 
 | Condition            | Exactitude | Source citée | Refus correct |
 | -------------------- | ---------- | ------------ | ------------- |

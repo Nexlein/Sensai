@@ -4,7 +4,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 import tomllib
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from sensai.core.budget import BudgetConfig
 
@@ -96,6 +102,24 @@ class MemoryConfig(BaseModel):
     auto_inject: bool = True
 
 
+class PersonaConfig(BaseModel):
+    """Domain system prompt placed first in every call. Off by default."""
+
+    enabled: bool = False
+    name: str = "Sensai"
+    instruction: str | None = None
+    # Path to a text file holding the instruction, resolved from the launch directory.
+    file: str | None = None
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "PersonaConfig":
+        if self.instruction is not None and self.file is not None:
+            raise ValueError("set either instruction or file, not both")
+        if self.enabled and self.instruction is None and self.file is None:
+            raise ValueError("enabled persona needs an instruction or a file")
+        return self
+
+
 class ReasoningConfig(BaseModel):
     """Visible reasoning loop: thoughts and steps between tool calls."""
 
@@ -119,6 +143,7 @@ class AppConfig(BaseModel):
     mcp: McpConfig = McpConfig()
     memory: MemoryConfig = MemoryConfig()
     reasoning: ReasoningConfig = ReasoningConfig()
+    persona: PersonaConfig = PersonaConfig()
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -246,6 +271,20 @@ def save_config(
         )
         if config.reasoning.think is not None:
             lines.append(f"think = {json.dumps(config.reasoning.think)}")
+
+    if config.persona != PersonaConfig():
+        persona = config.persona
+        lines.extend(
+            [
+                "",
+                "[persona]",
+                f"enabled = {json.dumps(persona.enabled)}",
+                f"name = {json.dumps(persona.name, ensure_ascii=False)}",
+            ]
+        )
+        for key in ("instruction", "file"):
+            if (value := getattr(persona, key)) is not None:
+                lines.append(f"{key} = {json.dumps(value, ensure_ascii=False)}")
 
     # save_config rewrites the whole file, so every section must be written back or
     # a runtime /model would silently delete the user's MCP servers.

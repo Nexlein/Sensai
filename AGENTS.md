@@ -68,7 +68,9 @@ Implemented:
 - `interfaces/`: CLI (rich), TUI (textual, `--ui tui`), shared dispatcher and notice wording.
 - `interfaces/web/` (X1): FastAPI app (`app.py`, `run_web` serves on 127.0.0.1:8000 with uvicorn) with one page (`index.html`) and one websocket `/ws` (`routes.py`). Each message goes through `process_input` on the shared session, so slash commands, guardrails and persistence behave as in the CLI. Wire format: client sends `message`, `confirm` (`approved`), `stop`; server sends `history`, `text_chunk`, `notice`, `usage` (last budget event of the turn only), `error`, `confirm`, `done`. One turn at a time per connection. Local use only: no auth, bound to localhost.
 
-Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`), `Persona` (`build_prompt` accepts one, nothing passes it).
+Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`).
+
+Persona: `[persona]` (`enabled`, `name`, `instruction` or `file`, not both) is loaded by `bootstrap.load_persona` into `ChatEngine.persona`, even when disabled, so `/persona on|off` can flip `engine.persona_enabled` (and `config.persona.enabled`) live. `PromptComposer` inserts it last at index 0, so it leads every system message; off gives exactly the persona-less prompt. Shipped prompt: `personas/collecte.md`.
 
 Empty stubs, not yet built: `tools/sandbox.py`.
 Empty stubs, not yet built: `core/budget.py`, `memory/manager.py`, `memory/artifact.py`.

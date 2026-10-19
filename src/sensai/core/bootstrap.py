@@ -12,10 +12,11 @@ from sensai.core.config import (
     GuardrailsConfig,
     McpConfig,
     McpServerConfig,
+    PersonaConfig,
     load_config,
 )
 from sensai.core.engine import ChatEngine
-from sensai.domain.models import Conversation
+from sensai.domain.models import Conversation, Persona
 from sensai.domain.protocols import Guardrail
 from sensai.eval.guardrails import RegexGuardrail
 from sensai.eval.logger import ReplyLogger
@@ -31,6 +32,28 @@ from sensai.tools.registry import build_default_registry
 
 class BootstrapError(Exception):
     """Raised when optional session components cannot be initialized."""
+
+
+def load_persona(config: PersonaConfig) -> Persona | None:
+    """Build the configured persona, reading its file if it has one."""
+    if config.file is not None:
+        try:
+            instruction = Path(config.file).read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise BootstrapError(f"Could not read persona file: {exc}") from exc
+        source = config.file
+    elif config.instruction is not None:
+        instruction, source = config.instruction.strip(), "sensai.toml"
+    else:
+        return None
+    if not instruction:
+        raise BootstrapError(f"Persona instruction is empty ({source}).")
+    return Persona(
+        id=config.name,
+        name=config.name,
+        description=f"from {source}",
+        system_instruction=instruction,
+    )
 
 
 def _build_guardrail(config: GuardrailsConfig) -> Guardrail | None:
@@ -99,6 +122,8 @@ async def build_session(
         api_key=config.api_key,
     )
 
+    persona = load_persona(config.persona)
+
     memory_store = SqliteMemoryStore()
     conversation = (
         await memory_store.load(session_name) if session_name is not None else None
@@ -148,6 +173,8 @@ async def build_session(
         split_thoughts=config.reasoning.show_thoughts,
         max_steps=config.reasoning.max_steps,
         think=config.reasoning.think,
+        persona=persona,
+        persona_enabled=config.persona.enabled,
     )
     engine.budget = ContextBudget(config.budget, LLMSummarizer(lambda: engine.provider))
     return CommandContext(

@@ -10,7 +10,7 @@ from sensai.core.prompt import PRIVACY_NOTE, TOOL_USE_GUIDANCE
 from sensai.core.tool_runner import TOOL_RESULT_WITHHELD
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import AssistantStartEvent, Event, GuardrailEvent
-from sensai.domain.models import Conversation, Message
+from sensai.domain.models import Conversation, Message, Persona
 from sensai.eval.guardrails import REFUSAL_TEXT, RegexGuardrail
 from sensai.providers.mock import MockLLMProvider
 
@@ -237,6 +237,25 @@ class RecordingLLMProvider:
     async def chat_stream(self, messages, tools=None):
         self.prompts.append(messages)
         yield TextChunkEvent(content="answer")
+
+
+@pytest.mark.asyncio
+async def test_send_leads_with_the_persona_only_while_enabled():
+    persona = Persona(
+        id="c", name="Collecte", description="", system_instruction="Tu es Collecte."
+    )
+    provider = RecordingLLMProvider()
+    engine = ChatEngine(
+        provider, Conversation(), retriever=FakeContextRetriever(), persona=persona
+    )
+
+    _ = [event async for event in engine.send("first")]
+    engine.persona_enabled = False
+    _ = [event async for event in engine.send("second")]
+
+    assert provider.prompts[0][0].content == "Tu es Collecte."
+    assert "verified fact" in provider.prompts[0][1].content
+    assert all(m.content != "Tu es Collecte." for m in provider.prompts[1])
 
 
 class FakeContextRetriever:
