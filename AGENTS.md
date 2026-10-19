@@ -68,6 +68,8 @@ Implemented:
 - `interfaces/`: CLI (rich), TUI (textual, `--ui tui`), shared dispatcher and notice wording.
 - `interfaces/web/` (X1): FastAPI app (`app.py`, `run_web` serves on 127.0.0.1:8000 with uvicorn) with one page (`index.html`) and one websocket `/ws` (`routes.py`). Each message goes through `process_input` on the shared session, so slash commands, guardrails and persistence behave as in the CLI. Wire format: client sends `message`, `confirm` (`approved`), `stop`; server sends `history`, `text_chunk`, `notice`, `usage` (last budget event of the turn only), `error`, `confirm`, `done`. One turn at a time per connection. Local use only: no auth, bound to localhost.
 
+Prompt log: `PromptComposer.compose_parts` returns `PromptPart`s (message + source: persona, step_limit, tools, privacy, memory, rag, summary, history). `ChatEngine._round` keeps them in `engine.last_prompt` (shown by `/prompt` via `format_prompt`) and, with `[eval] log_prompts`, hands `prompt_entry(...)` to a `PromptRecorder` (`eval/logger.PromptLogger`, `logs/prompts.jsonl`) in a `finally`, so failed calls are logged too. CLI command results print with `markup=False`.
+
 Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`), `Persona` (`build_prompt` accepts one, nothing passes it).
 
 Empty stubs, not yet built: `tools/sandbox.py`.

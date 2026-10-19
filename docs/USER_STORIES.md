@@ -443,3 +443,21 @@ Acceptance criteria:
 - The Stop button cancels the current reply and leaves no unanswered message in the history.
 - A second message sent while a reply is in progress is refused with a message, not queued.
 - A failing model server shows a one-line error in the page and the page stays usable.
+
+## Feature: Full Prompt Log
+
+As a developer debugging an answer, I want to see the full prompt Sensai sent to the model, so that I can tell which system notes, documents and history the model actually received.
+
+Acceptance criteria:
+
+- `/prompt` shows the prompt of the last model call in the CLI, TUI and web UI, one block per message with its role, its source (tools, privacy, memory, RAG, summary, history) and its estimated tokens.
+- The last line gives the estimated total against the context budget.
+- Before any message, `/prompt` says no prompt was sent yet.
+
+As a team member preparing the evaluation, I want every model call written to a log file, so that I can replay and compare what the model saw across a session.
+
+Acceptance criteria:
+
+- With `[eval] log_prompts = true`, each model call, tool rounds and failed calls included, adds one JSON line to `logs/prompts.jsonl` with the model, options, tool names and the messages exactly as sent.
+- A personal value masked by the guardrails appears only as its placeholder, such as `[EMAIL]`.
+- With logging off (the default), no file is created.
