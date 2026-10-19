@@ -444,6 +444,25 @@ Acceptance criteria:
 - A second message sent while a reply is in progress is refused with a message, not queued.
 - A failing model server shows a one-line error in the page and the page stays usable.
 
+## Feature: Feature Toggles in the Config File
+
+As a user setting up document retrieval, I want to enable RAG and tune it in `sensai.toml`, so that I do not have to repeat CLI flags at every start and can compare runs with RAG on and off.
+
+Acceptance criteria:
+
+- `[rag] enabled = true` with `dir = "data/collecte"` indexes and retrieves exactly like `--rag-dir data/collecte`.
+- `top_k`, `chunk_size` and `chunk_overlap` from the file change how many chunks are retrieved and how documents are split.
+- `--rag-dir`, `--rag-db` and `--rag-model` on the CLI override the file.
+- An invalid value (`top_k = 0`, an overlap not smaller than the chunk size, `enabled = true` without `dir`) stops startup with a config error.
+
+As a user who does not want the model to reach the web or run code, I want to switch off web search and the sandbox in `sensai.toml`, so that the model never sees those tools.
+
+Acceptance criteria:
+
+- `[tools] web_search = false` removes `web_search` from the tools sent to the model; `sandbox = false` does the same for `run_python`.
+- Without these keys both tools stay available, as before.
+- `/config save` keeps both settings.
+
 ## Feature: Loaded Model Memory
 
 As a user running models locally, I want to see how much RAM and VRAM each loaded model uses without leaving Sensai, so that I can tell whether my machine holds the model and its context.

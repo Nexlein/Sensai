@@ -103,3 +103,18 @@ def test_build_default_registry_with_memory(tmp_path):
     assert "remember_fact" in names
     assert "recall_memory" in names
     assert "forget_fact" in names
+
+
+def test_build_default_registry_registers_web_search_and_sandbox_by_default():
+    registry = build_default_registry(None)
+
+    assert registry.get("web_search") is not None
+    assert registry.get("run_python") is not None
+
+
+def test_build_default_registry_can_leave_out_web_search_and_sandbox():
+    registry = build_default_registry(None, web_search=False, sandbox=False)
+
+    names = {schema["function"]["name"] for schema in registry.get_tools_schema()}
+    assert "web_search" not in names
+    assert "run_python" not in names

@@ -11,6 +11,7 @@ from sensai.core.config import (
     McpConfig,
     McpServerConfig,
     MemoryConfig,
+    RagConfig,
     ReasoningConfig,
     ToolsConfig,
     load_config,
@@ -485,3 +486,70 @@ def test_save_config_omits_unset_options_section(tmp_path):
     save_config(AppConfig(), config_file)
 
     assert "[options]" not in config_file.read_text()
+
+
+def test_rag_is_off_by_default_and_tools_are_on():
+    config = AppConfig()
+
+    assert config.rag == RagConfig()
+    assert config.rag.enabled is False
+    assert (config.tools.web_search, config.tools.sandbox) == (True, True)
+
+
+def test_rag_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(
+        '[rag]\nenabled = true\ndir = "data/collecte"\ntop_k = 3\nchunk_size = 800\n'
+    )
+
+    rag = load_config(config_file).rag
+
+    assert rag == RagConfig(enabled=True, dir="data/collecte", top_k=3, chunk_size=800)
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        "[rag]\ntop_k = 0\n",
+        "[rag]\nchunk_size = 0\n",
+        "[rag]\nchunk_size = 100\nchunk_overlap = 100\n",
+        "[rag]\nenabled = true\n",
+        "[tools]\nsandbox = 3\n",
+    ],
+)
+def test_invalid_rag_or_tool_values_are_rejected(tmp_path, section):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(section)
+
+    with pytest.raises(ConfigError, match="Invalid config values"):
+        load_config(config_file)
+
+
+def test_save_config_round_trips_rag_and_tool_toggles(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(
+        rag=RagConfig(
+            enabled=True,
+            dir="data/collecte",
+            model="mxbai-embed-large",
+            db="collecte.db",
+            top_k=8,
+            chunk_size=1000,
+            chunk_overlap=100,
+        ),
+        tools=ToolsConfig(web_search=False, sandbox=False),
+    )
+
+    save_config(config, config_file)
+    loaded = load_config(config_file)
+
+    assert loaded.rag == config.rag
+    assert loaded.tools == config.tools
+
+
+def test_save_config_omits_default_rag_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[rag]" not in config_file.read_text()
