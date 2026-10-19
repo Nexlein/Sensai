@@ -275,15 +275,18 @@ async def test_no_max_steps_event_when_the_model_answers_in_time():
     assert len(provider.prompts) == 2
 
 
-async def test_cap_without_reasoning_ends_without_a_forced_answer():
+async def test_cap_without_reasoning_still_forces_a_silent_final_answer():
     provider = LoopingProvider()
     engine, conversation = build(provider, max_steps=2)
 
     events = await run(engine)
 
     assert of_type(events, MaxStepsEvent) == []
-    assert len(provider.tools_seen) == 2
-    assert [m.role for m in conversation.messages].count("assistant") == 2
+    assert len(provider.tools_seen) == 3
+    assert provider.tools_seen[2] is None
+    assert STEP_LIMIT_NOTE in [m.content for m in provider.prompts[2]]
+    assert conversation.messages[-1].content == "best effort"
+    assert shown_text(events).endswith("best effort")
 
 
 def test_max_steps_must_be_positive():

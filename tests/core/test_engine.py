@@ -206,8 +206,9 @@ async def test_infinite_tool_call_loop_caps_at_5():
 
     _ = [e async for e in engine.send("go")]
 
-    # 1 user + 5 pairs of (assistant tool_call, tool result) = 11 messages
-    assert len(conversation.messages) == 11
+    # 1 user + 5 pairs of (assistant tool_call, tool result) + forced answer
+    assert len(conversation.messages) == 12
+    assert conversation.messages[-1].role == "assistant"
     tool_messages = [m for m in conversation.messages if m.role == "tool"]
     assert len(tool_messages) == 5
 
@@ -948,3 +949,61 @@ async def test_engine_respects_memory_auto_inject_false(tmp_path):
     assert not any(
         "- user.preferred_language: Rust" in content for content in system_contents
     )
+
+
+class FailsAfterToolProvider:
+    """Calls the tool once, then fails on the follow-up request."""
+
+    def __init__(self, exc: BaseException | None = None) -> None:
+        self.calls = 0
+        self.exc = exc
+
+    async def chat_stream(self, messages, tools=None):
+        self.calls += 1
+        if self.calls == 1:
+            yield ToolCallEvent(tool_name="dummy", arguments={})
+            return
+        if self.exc is None:
+            await asyncio.sleep(60)
+        raise self.exc
+
+
+def _engine_with_history(provider):
+    conversation = Conversation()
+    conversation.add_message(role="user", content="earlier")
+    conversation.add_message(role="assistant", content="reply")
+    registry = ToolRegistry()
+    registry.register(DummyTool())
+    return ChatEngine(provider, conversation, registry), conversation
+
+
+@pytest.mark.asyncio
+async def test_provider_error_after_a_tool_round_rolls_back_the_whole_turn():
+    provider = FailsAfterToolProvider(RuntimeError("boom"))
+    engine, conversation = _engine_with_history(provider)
+
+    with pytest.raises(ProviderError):
+        _ = [e async for e in engine.send("go")]
+
+    assert provider.calls == 2
+    assert [m.content for m in conversation.messages] == ["earlier", "reply"]
+
+
+@pytest.mark.asyncio
+async def test_cancelling_after_a_tool_round_rolls_back_the_whole_turn():
+    provider = FailsAfterToolProvider()
+    engine, conversation = _engine_with_history(provider)
+
+    async def consume() -> None:
+        async for _ in engine.send("go"):
+            pass
+
+    task = asyncio.ensure_future(consume())
+    while provider.calls < 2:
+        await asyncio.sleep(0.01)
+    assert [m.role for m in conversation.messages][-2:] == ["assistant", "tool"]
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert [m.content for m in conversation.messages] == ["earlier", "reply"]
