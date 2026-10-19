@@ -6,7 +6,7 @@ import httpx
 from sensai.core.budget import ContextBudget
 from sensai.core.guard import guardrail_event
 from sensai.core.prompt import PromptComposer
-from sensai.core.streaming import RoundStream, RoundStreamer
+from sensai.core.streaming import RoundStreamer
 from sensai.core.tool_runner import ConfirmTool, ToolRunner
 from sensai.core.turn import Round, Turn
 from sensai.domain.errors import EmptyInputError, ProviderError
@@ -90,16 +90,13 @@ class ChatEngine:
     async def send(
         self, user_text: str, confirm_tool: ConfirmTool | None = None
     ) -> AsyncGenerator[Event]:
-        """Stream the events of one turn; a cancelled turn leaves no dangling question."""
+        """Stream the events of one turn; a failed or cancelled turn leaves history untouched."""
+        mark = len(self.conversation.messages)
         try:
             async for event in self._send(user_text, confirm_tool):
                 yield event
-        except asyncio.CancelledError:
-            if (
-                self.conversation.messages
-                and self.conversation.messages[-1].role == "user"
-            ):
-                self.conversation.messages.pop()
+        except (asyncio.CancelledError, ProviderError):
+            del self.conversation.messages[mark:]
             raise
 
     async def _send(
@@ -129,7 +126,7 @@ class ChatEngine:
                 yield StepEvent(index=step, max_steps=self.max_steps)
             prompt = await composer.compose(turn, bool(tools_schema))
             stream = streamer.open(prompt, tools_schema)
-            async for event in self._play(stream):
+            async for event in stream.events():
                 yield event
             reply = stream.reply
 
@@ -142,18 +139,8 @@ class ChatEngine:
             if turn.declined:
                 return
 
-        if self.reasoning:
-            async for event in self._conclude(turn):
-                yield event
-
-    async def _play(self, stream: RoundStream) -> AsyncGenerator[Event]:
-        """Forward a round's events; a failed provider call leaves no stray message."""
-        try:
-            async for event in stream.events():
-                yield event
-        except ProviderError:
-            self.conversation.messages.pop()
-            raise
+        async for event in self._conclude(turn):
+            yield event
 
     async def _run_tools(
         self, turn: Turn, reply: Round, confirm_tool: ConfirmTool | None
@@ -188,10 +175,11 @@ class ChatEngine:
 
     async def _conclude(self, turn: Turn) -> AsyncGenerator[Event]:
         """Force a tool-free answer once the step cap is reached."""
-        yield MaxStepsEvent(max_steps=self.max_steps)
+        if self.reasoning:
+            yield MaxStepsEvent(max_steps=self.max_steps)
         prompt = await self._composer.compose(turn, False, step_limit=True)
         stream = self._streamer.open(prompt, None)
-        async for event in self._play(stream):
+        async for event in stream.events():
             yield event
         self._finish(turn, stream.reply)
 
