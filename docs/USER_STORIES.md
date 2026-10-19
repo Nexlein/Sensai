@@ -463,3 +463,93 @@ Acceptance criteria:
 - `/persona on` brings it back; `/persona` alone shows the current state.
 - `/config save` keeps the chosen state in `sensai.toml`.
 - Without a configured persona, `/persona` says none is configured and changes nothing.
+
+## Feature: Feature Toggles in the Config File
+
+As a user setting up document retrieval, I want to enable RAG and tune it in `sensai.toml`, so that I do not have to repeat CLI flags at every start and can compare runs with RAG on and off.
+
+Acceptance criteria:
+
+- `[rag] enabled = true` with `dir = "data/collecte"` indexes and retrieves exactly like `--rag-dir data/collecte`.
+- `top_k`, `chunk_size` and `chunk_overlap` from the file change how many chunks are retrieved and how documents are split.
+- `--rag-dir`, `--rag-db` and `--rag-model` on the CLI override the file.
+- An invalid value (`top_k = 0`, an overlap not smaller than the chunk size, `enabled = true` without `dir`) stops startup with a config error.
+
+As a user who does not want the model to reach the web or run code, I want to switch off web search and the sandbox in `sensai.toml`, so that the model never sees those tools.
+
+Acceptance criteria:
+
+- `[tools] web_search = false` removes `web_search` from the tools sent to the model; `sandbox = false` does the same for `run_python`.
+- Without these keys both tools stay available, as before.
+- `/config save` keeps both settings.
+
+## Feature: Loaded Model Memory
+
+As a user running models locally, I want to see how much RAM and VRAM each loaded model uses without leaving Sensai, so that I can tell whether my machine holds the model and its context.
+
+Acceptance criteria:
+
+- `/ps` prints one line per loaded model, embedding model included, for example `qwen3.5:4b · 4.1 GB · 100% CPU · ctx 8192`.
+- Size and CPU/GPU split match `ollama ps` for the same models.
+- With no model loaded, `/ps` says so.
+
+As a user on a provider or server that cannot report memory, I want `/ps` to explain why it shows nothing, so that the session is not broken by the command.
+
+Acceptance criteria:
+
+- With the Groq provider, `/ps` answers "not available for this provider".
+- With Ollama unreachable or failing, `/ps` prints one readable line, never a traceback, and the session stays usable.
+
+## Feature: Model Options
+
+As a user tuning answers for a given model, I want to set the temperature and the context size in `sensai.toml`, so that the model gets the window and sampling I chose instead of Ollama's defaults.
+
+Acceptance criteria:
+
+- `[options]` accepts `temperature`, `num_ctx`, `top_p`, `seed` and `num_predict`; each one set is sent in the `options` field of `/api/chat`, and `num_ctx` shows in the `CONTEXT` column of `ollama ps`.
+- Without an `[options]` section the request is unchanged.
+- `budget.max_tokens` above `num_ctx - num_predict` is rejected at startup with a one-line config error.
+- `temperature = 0` with `seed = 42` gives the same reply twice for the same prompt.
+
+As a user demonstrating the effect of a setting, I want to change a model option during a session, so that I can replay the same question and compare the replies.
+
+Acceptance criteria:
+
+- `/config set options.temperature 1.2` applies from the next turn without restarting.
+- `/config set options.<key> none` removes the option; an invalid or incoherent value is refused with a message and leaves the setting unchanged.
+- `/config save` writes the `[options]` section, and it is loaded back on the next start.
+
+## Feature: Full Prompt Log
+
+As a developer debugging an answer, I want to see the full prompt Sensai sent to the model, so that I can tell which system notes, documents and history the model actually received.
+
+Acceptance criteria:
+
+- `/prompt` shows the prompt of the last model call in the CLI, TUI and web UI, one block per message with its role, its source (tools, privacy, memory, RAG, summary, history) and its estimated tokens.
+- The last line gives the estimated total against the context budget.
+- Before any message, `/prompt` says no prompt was sent yet.
+
+As a team member preparing the evaluation, I want every model call written to a log file, so that I can replay and compare what the model saw across a session.
+
+Acceptance criteria:
+
+- With `[eval] log_prompts = true`, each model call, tool rounds and failed calls included, adds one JSON line to `logs/prompts.jsonl` with the model, options, tool names and the messages exactly as sent.
+- A personal value masked by the guardrails appears only as its placeholder, such as `[EMAIL]`.
+- With logging off (the default), no file is created.
+
+## Feature: Real Token Counts and Throughput
+
+As a user running a model on my own machine, I want to see the real token counts and speed after each reply, so that I know how fast my hardware generates and how big my prompts really are.
+
+Acceptance criteria:
+
+- After each reply, the CLI, TUI and web UI show one line such as `prompt 1 024 tok · reply 187 tok · 11.4 tok/s · first token 2.1 s · total 18.5 s`.
+- The counts and the rate match `ollama run <model> --verbose` for the same prompt, within rounding.
+- A provider that reports no counters shows no such line, never zeros or an error.
+
+As a team member explaining the token budget, I want the gap between the estimated and the real prompt size logged, so that I can say how far our estimate is off.
+
+Acceptance criteria:
+
+- With `[eval] log_prompts = true`, each prompt-log line holds the real counts, the rates and `estimate_error`.
+- The estimate keeps driving the budget, so behaviour does not change with a provider that sends no counters.

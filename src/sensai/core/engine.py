@@ -1,12 +1,13 @@
 import asyncio
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
 
 from sensai.core.budget import ContextBudget
 from sensai.core.guard import guardrail_event
-from sensai.core.prompt import PromptComposer
-from sensai.core.streaming import RoundStreamer
+from sensai.core.prompt import PromptComposer, PromptPart, prompt_entry
+from sensai.core.streaming import RoundStream, RoundStreamer
 from sensai.core.tool_runner import ConfirmTool, ToolRunner
 from sensai.core.turn import Round, Turn
 from sensai.domain.errors import EmptyInputError, ProviderError
@@ -23,12 +24,19 @@ from sensai.domain.protocols import (
     ContextRetriever,
     Guardrail,
     LLMProvider,
+    PromptRecorder,
     ReplyRecorder,
     StructuredMemory,
     ToolRegistry,
 )
 
 MAX_TOOL_ROUNDS = 5
+
+
+def _provider_options(provider: LLMProvider) -> dict[str, Any] | None:
+    """Sampling options a provider sends with each call, if it has any."""
+    options = getattr(provider, "options", None)
+    return options.model_dump(exclude_none=True) if options is not None else None
 
 
 class ChatEngine:
@@ -49,6 +57,7 @@ class ChatEngine:
         split_thoughts: bool = True,
         max_steps: int = MAX_TOOL_ROUNDS,
         think: bool | str | None = None,
+        prompt_recorder: PromptRecorder | None = None,
         persona: Persona | None = None,
         persona_enabled: bool = True,
     ) -> None:
@@ -67,6 +76,9 @@ class ChatEngine:
         self.split_thoughts = split_thoughts
         self.max_steps = max_steps
         self.think = think
+        self.prompt_recorder = prompt_recorder
+        # Prompt of the latest model call, for /prompt.
+        self.last_prompt: list[PromptPart] = []
         # Kept when disabled so `/persona on` can bring it back.
         self.persona = persona
         self.persona_enabled = persona_enabled
@@ -133,9 +145,9 @@ class ChatEngine:
         for step in range(1, self.max_steps + 1):
             if self.reasoning:
                 yield StepEvent(index=step, max_steps=self.max_steps)
-            prompt = await composer.compose(turn, bool(tools_schema))
-            stream = streamer.open(prompt, tools_schema)
-            async for event in stream.events():
+            parts = await composer.compose_parts(turn, bool(tools_schema))
+            stream = streamer.open([part.message for part in parts], tools_schema)
+            async for event in self._round(stream, parts):
                 yield event
             reply = stream.reply
 
@@ -186,11 +198,32 @@ class ChatEngine:
         """Force a tool-free answer once the step cap is reached."""
         if self.reasoning:
             yield MaxStepsEvent(max_steps=self.max_steps)
-        prompt = await self._composer.compose(turn, False, step_limit=True)
-        stream = self._streamer.open(prompt, None)
-        async for event in stream.events():
+        parts = await self._composer.compose_parts(turn, False, step_limit=True)
+        stream = self._streamer.open([part.message for part in parts], None)
+        async for event in self._round(stream, parts):
             yield event
         self._finish(turn, stream.reply)
+
+    async def _round(
+        self, stream: RoundStream, parts: list[PromptPart]
+    ) -> AsyncGenerator[Event]:
+        """Stream one model call and keep its prompt, even if the call fails."""
+        self.last_prompt = parts
+        try:
+            async for event in stream.events():
+                yield event
+        finally:
+            if self.prompt_recorder is not None:
+                self.prompt_recorder.record_prompt(
+                    prompt_entry(
+                        parts,
+                        model=getattr(self.provider, "model", None),
+                        tools=stream.tools_schema,
+                        think=stream.config.think if self.reasoning else None,
+                        options=_provider_options(self.provider),
+                        usage=stream.reply.usage,
+                    )
+                )
 
     async def _retrieve(self, user_text: str) -> str:
         if self.retriever is None:

@@ -7,7 +7,7 @@ from sensai.core.budget import BudgetConfig, ContextBudget
 from sensai.core.commands import CommandContext
 from sensai.core.config import AppConfig
 from sensai.core.engine import ChatEngine
-from sensai.domain.events import TextChunkEvent, ToolCallEvent
+from sensai.domain.events import TextChunkEvent, ToolCallEvent, UsageEvent
 from sensai.domain.models import Conversation, Message
 from sensai.interfaces.web.app import build_app
 from sensai.providers import get_provider
@@ -124,6 +124,27 @@ def test_usage_is_sent_once_per_turn_not_per_chunk():
     assert len([m for m in seen if m["type"] == "text_chunk"]) > 1
     assert len([m for m in seen if m["type"] == "usage"]) == 1
     assert seen[-2]["type"] == "usage"
+
+
+class CountingProvider:
+    async def chat_stream(self, messages, tools=None, **options):
+        yield TextChunkEvent(content="hello")
+        yield UsageEvent(prompt_tokens=42, reply_tokens=3)
+
+
+def test_real_counters_are_sent_after_the_budget_line():
+    context = _context(CountingProvider())
+    context.engine.budget = ContextBudget(BudgetConfig(max_tokens=1000), None)
+    client = TestClient(build_app(context))
+
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "message", "text": "hi"})
+        seen = _until(ws, "done")
+
+    usage = [m["message"] for m in seen if m["type"] == "usage"]
+    assert len(usage) == 2
+    assert usage[1] == "prompt 42 tok · reply 3 tok"
 
 
 def test_history_replays_the_resumed_conversation():

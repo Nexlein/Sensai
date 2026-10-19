@@ -61,6 +61,11 @@ async def test_index_directory_embeds_and_replaces_stale_documents(tmp_path):
     assert await retriever.index_directory(str(docs), TextChunker(chunk_size=100)) == 2
     assert "apple facts" in await retriever.retrieve_context("apple question", top_k=1)
 
+    one = RAGRetriever(KeywordEmbeddingProvider(), store, top_k=1)
+    assert await one.retrieve_context("apple question") == (
+        await retriever.retrieve_context("apple question", top_k=1)
+    )
+
     apple.unlink()
     assert await retriever.index_directory(str(docs), TextChunker(chunk_size=100)) == 1
     assert "apple facts" not in await retriever.retrieve_context("apple question")

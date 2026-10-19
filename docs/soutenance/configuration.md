@@ -42,7 +42,24 @@ log_replies = false
 replies_path = "logs/replies.jsonl"
 ```
 
-Le RAG s'active en ligne de commande uniquement :
+Le RAG et les outils web/sandbox se pilotent aussi depuis le fichier :
+
+```toml
+[rag]                              # R1, désactivé par défaut
+enabled = true
+dir = "data/collecte"
+model = "nomic-embed-text"
+db = "rag.db"
+top_k = 5                          # chunks injectés par question
+chunk_size = 500                   # caractères par chunk
+chunk_overlap = 50                 # doit rester < chunk_size
+
+[tools]
+web_search = true                  # T3, false = outil retiré du registre
+sandbox = true                     # T2 (run_python)
+```
+
+Les drapeaux CLI restent prioritaires sur le fichier ; `--rag-dir` active le RAG à lui seul :
 
 ```bash
 uv run sensai chat --rag-dir data/collecte --rag-model nomic-embed-text --rag-db rag.db
@@ -67,23 +84,25 @@ Modification en direct, sans redémarrer :
 | Outils fichiers (T4) | `[tools] fs_allowed_root = false` | —                                     |
 | MCP (T1)             | présence de `[mcp.servers.*]`     | —                                     |
 | Log des réponses     | `[eval] log_replies`              | —                                     |
-| RAG (R1)             | `--rag-dir` (CLI seulement)       | section `[rag]`                       |
-| Recherche web (T3)   | toujours enregistrée              | `[tools] web_search = false`          |
-| Sandbox (T2)         | toujours enregistrée              | `[tools] sandbox = false`             |
+| RAG (R1)             | `[rag] enabled` ou `--rag-dir`    | —                                     |
+| Recherche web (T3)   | `[tools] web_search = false`      | —                                     |
+| Sandbox (T2)         | `[tools] sandbox = false`         | —                                     |
 | Budget (M2)          | toujours actif                    | `[budget] enabled` (utile pour l'A/B) |
 
-## Température et contexte (à implémenter)
+## Température et contexte
 
-**Aujourd'hui, `OllamaLLMProvider.chat_stream` n'envoie aucun champ `options`**. Ollama applique
-alors les valeurs du Modelfile du modèle, ou ses défauts. Conséquence concrète : notre budget
-suppose 8192 tokens, alors que le `num_ctx` par défaut d'Ollama est plus petit selon la version
-(2048 ou 4096). Au-delà, **Ollama tronque silencieusement le début du prompt**, c'est-à-dire
-nos messages système (persona, RAG, privacy note). Le modèle « oublie » ses règles sans erreur.
+Sans champ `options`, Ollama applique les valeurs du Modelfile du modèle, ou ses défauts. Or notre
+budget suppose 8192 tokens, alors que le `num_ctx` par défaut d'Ollama est plus petit selon la
+version (2048 ou 4096). Au-delà, **Ollama tronque silencieusement le début du prompt**,
+c'est-à-dire nos messages système (persona, RAG, privacy note). Le modèle « oublie » ses règles
+sans erreur.
 
-Section à ajouter :
+Section `[options]` (le nom `[model]` est impossible : la clé `model = "..."` existe déjà au
+niveau racine du TOML). Chaque clé est facultative ; une clé absente n'est pas envoyée, et sans
+section la requête est inchangée :
 
 ```toml
-[model]
+[options]
 temperature = 0.2     # 0 = déterministe, 1+ = créatif
 num_ctx = 8192        # taille de la fenêtre de contexte, en tokens
 top_p = 0.9
@@ -102,8 +121,12 @@ Envoyée telle quelle dans la requête :
 }
 ```
 
-Règle de cohérence : `budget.max_tokens` doit valoir au plus `model.num_ctx - num_predict`, sinon
-la réponse n'a plus de place. À valider dans `AppConfig` (une `ConfigError` si incohérent).
+Groq reçoit `temperature`, `top_p`, `seed` et `num_predict` (en `max_tokens`) ; il gère seul sa
+fenêtre, `num_ctx` ne lui est pas envoyé.
+
+Règle de cohérence : `budget.max_tokens` doit valoir au plus `options.num_ctx - num_predict`, sinon
+la réponse n'a plus de place. `AppConfig` le vérifie au chargement (`ConfigError` en une ligne) et
+`/config set options.*` refuse une valeur incohérente.
 
 ### Observer l'impact (à montrer au jury)
 
@@ -115,8 +138,10 @@ la réponse n'a plus de place. À valider dans `AppConfig` (une `ConfigError` si
 | `num_ctx`     | Mesure mémoire                                          | Le cache KV grossit linéairement avec `num_ctx` (calcul dans [modeles.md](modeles.md#cache-kv-et-taille-du-contexte)) |
 | `num_ctx`     | Temps avant le premier token avec un long prompt        | Plus de contexte = plus de `prompt_eval_duration`                                                                     |
 
-Pour la démo, prévoir `/config set model.temperature 1.2` et `/config set model.num_ctx 2048`
-en direct, puis rejouer la même question.
+Pour la démo, prévoir `/config set options.temperature 1.2` et `/config set options.num_ctx 2048`
+en direct (avec `budget.max_tokens` ≤ 2048), puis rejouer la même question. Le changement
+s'applique au tour suivant ; `/config set options.<clé> none` le retire, `/config save` l'écrit
+dans `sensai.toml`.
 
 ## Profils par modèle
 

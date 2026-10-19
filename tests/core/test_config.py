@@ -12,11 +12,13 @@ from sensai.core.config import (
     McpServerConfig,
     MemoryConfig,
     PersonaConfig,
+    RagConfig,
     ReasoningConfig,
     ToolsConfig,
     load_config,
     save_config,
 )
+from sensai.domain.models import ModelOptions
 
 
 def test_missing_config_file_falls_back_to_defaults(tmp_path):
@@ -261,7 +263,14 @@ def test_eval_config_from_file(tmp_path):
 
 def test_save_config_round_trips_eval(tmp_path):
     config_file = tmp_path / "sensai.toml"
-    config = AppConfig(eval=EvalConfig(log_replies=True, replies_path="out/r.jsonl"))
+    config = AppConfig(
+        eval=EvalConfig(
+            log_replies=True,
+            replies_path="out/r.jsonl",
+            log_prompts=True,
+            prompts_path="out/p.jsonl",
+        )
+    )
 
     save_config(config, config_file)
 
@@ -406,6 +415,145 @@ def test_save_config_round_trips_reasoning(tmp_path):
     save_config(config, config_file)
 
     assert load_config(config_file).reasoning == config.reasoning
+
+
+def test_options_are_unset_by_default():
+    assert AppConfig().options.to_payload() == {}
+
+
+def test_options_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(
+        'model = "qwen3.5:4b"\n\n[options]\ntemperature = 0\nseed = 42\nnum_ctx = 8192\n'
+    )
+
+    options = load_config(config_file).options
+
+    assert options.to_payload() == {"temperature": 0, "seed": 42, "num_ctx": 8192}
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        "[options]\nnum_ctx = 4096\n",
+        "[options]\nnum_ctx = 8192\nnum_predict = 512\n",
+        "[budget]\nmax_tokens = 9000\n[options]\nnum_ctx = 8192\n",
+    ],
+)
+def test_budget_larger_than_context_is_a_one_line_error(tmp_path, section):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(section)
+
+    with pytest.raises(ConfigError, match="budget.max_tokens") as exc:
+        load_config(config_file)
+
+    assert "\n" not in str(exc.value)
+
+
+def test_budget_within_context_is_accepted(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(
+        "[budget]\nmax_tokens = 3584\n[options]\nnum_ctx = 4096\nnum_predict = 512\n"
+    )
+
+    assert load_config(config_file).options.num_ctx == 4096
+
+
+@pytest.mark.parametrize(
+    "section", ["temperature = -1", "top_p = 0", "num_ctx = 0", "num_predict = 0"]
+)
+def test_invalid_option_values_are_rejected(tmp_path, section):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(f"[options]\n{section}\n")
+
+    with pytest.raises(ConfigError, match="Invalid config values"):
+        load_config(config_file)
+
+
+def test_save_config_round_trips_options(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(
+        options=ModelOptions(temperature=1.2, top_p=0.9, seed=42, num_ctx=16384)
+    )
+
+    save_config(config, config_file)
+
+    assert load_config(config_file).options == config.options
+
+
+def test_save_config_omits_unset_options_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[options]" not in config_file.read_text()
+
+
+def test_rag_is_off_by_default_and_tools_are_on():
+    config = AppConfig()
+
+    assert config.rag == RagConfig()
+    assert config.rag.enabled is False
+    assert (config.tools.web_search, config.tools.sandbox) == (True, True)
+
+
+def test_rag_config_from_file(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(
+        '[rag]\nenabled = true\ndir = "data/collecte"\ntop_k = 3\nchunk_size = 800\n'
+    )
+
+    rag = load_config(config_file).rag
+
+    assert rag == RagConfig(enabled=True, dir="data/collecte", top_k=3, chunk_size=800)
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        "[rag]\ntop_k = 0\n",
+        "[rag]\nchunk_size = 0\n",
+        "[rag]\nchunk_size = 100\nchunk_overlap = 100\n",
+        "[rag]\nenabled = true\n",
+        "[tools]\nsandbox = 3\n",
+    ],
+)
+def test_invalid_rag_or_tool_values_are_rejected(tmp_path, section):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(section)
+
+    with pytest.raises(ConfigError, match="Invalid config values"):
+        load_config(config_file)
+
+
+def test_save_config_round_trips_rag_and_tool_toggles(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+    config = AppConfig(
+        rag=RagConfig(
+            enabled=True,
+            dir="data/collecte",
+            model="mxbai-embed-large",
+            db="collecte.db",
+            top_k=8,
+            chunk_size=1000,
+            chunk_overlap=100,
+        ),
+        tools=ToolsConfig(web_search=False, sandbox=False),
+    )
+
+    save_config(config, config_file)
+    loaded = load_config(config_file)
+
+    assert loaded.rag == config.rag
+    assert loaded.tools == config.tools
+
+
+def test_save_config_omits_default_rag_section(tmp_path):
+    config_file = tmp_path / "sensai.toml"
+
+    save_config(AppConfig(), config_file)
+
+    assert "[rag]" not in config_file.read_text()
 
 
 def test_persona_is_off_by_default():

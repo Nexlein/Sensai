@@ -5,7 +5,7 @@ import pytest
 
 from sensai.eval.judge.__main__ import load_items
 from sensai.eval.judge.models import JudgeInput
-from sensai.eval.logger import ReplyLogger, TurnLogger
+from sensai.eval.logger import PromptLogger, ReplyLogger, TurnLogger
 
 
 def _read_lines(path):
@@ -111,3 +111,23 @@ def test_reply_logger_failure_never_raises(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "mkdir", _raise)
 
     logger.record("q", "a", "")
+
+
+def test_prompt_logger_appends_one_timestamped_line_per_call(tmp_path):
+    path = tmp_path / "logs" / "prompts.jsonl"
+    logger = PromptLogger(path)
+
+    logger.record_prompt({"model": "m", "messages": [{"role": "user"}]})
+    logger.record_prompt({"model": "m", "messages": []})
+
+    lines = [json.loads(line) for line in path.read_text().splitlines()]
+    assert len(lines) == 2
+    assert lines[0]["model"] == "m"
+    assert lines[0]["messages"] == [{"role": "user"}]
+    assert "timestamp" in lines[0]
+
+
+def test_prompt_logger_creates_nothing_until_it_records(tmp_path):
+    PromptLogger(tmp_path / "logs" / "prompts.jsonl")
+
+    assert not (tmp_path / "logs").exists()

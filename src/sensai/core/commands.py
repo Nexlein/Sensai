@@ -3,20 +3,26 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import httpx
+from pydantic import ValidationError
+
 from sensai.core.config import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_EFFORT,
     AppConfig,
     ConfigError,
+    check_context_fits,
     save_config,
 )
 from sensai.core.engine import ChatEngine
+from sensai.core.prompt import format_prompt
 from sensai.domain.errors import ProviderError
 from sensai.domain.events import Event
-from sensai.domain.models import Conversation, Fact
+from sensai.domain.models import Conversation, Fact, LoadedModel, ModelOptions
 from sensai.domain.protocols import (
     LLMProvider,
     MemoryStore,
+    ModelInspector,
     StructuredMemory,
     ToolRegistry,
 )
@@ -87,6 +93,7 @@ async def handle_provider(
             model=context.config.model,
             base_url=context.config.base_url,
             api_key=context.config.api_key,
+            options=context.config.options,
         )
     except ProviderError as exc:
         return CommandResult(message=str(exc))
@@ -110,6 +117,7 @@ async def handle_model(
             model=model_name,
             base_url=context.config.base_url,
             api_key=context.config.api_key,
+            options=context.config.options,
         )
     except ProviderError as exc:
         return CommandResult(message=f"Could not switch model: {exc}")
@@ -204,6 +212,7 @@ async def handle_base_url(
             model=context.config.model,
             base_url=base_url,
             api_key=context.config.api_key,
+            options=context.config.options,
         )
     except ProviderError as exc:
         return CommandResult(message=f"Could not update base_url: {exc}")
@@ -232,11 +241,41 @@ async def handle_fs_allowed_root(
     return CommandResult(message=f"tools.fs_allowed_root = {allowed_root}")
 
 
+def _option_setter(name: str) -> CommandHandler:
+    async def handle_option(
+        context: CommandContext,
+        arguments: tuple[str, ...],
+    ) -> CommandResult:
+        if len(arguments) != 1:
+            return CommandResult(message=f"Usage: /config set options.{name} <v|none>")
+
+        value = arguments[0]
+        options = context.config.options
+        try:
+            candidate = options.model_validate(
+                {
+                    **options.model_dump(),
+                    name: None if value.lower() == "none" else value,
+                }
+            )
+            check_context_fits(context.config.budget, candidate)
+        except ValueError as exc:
+            reason = exc.errors()[0]["msg"] if isinstance(exc, ValidationError) else exc
+            return CommandResult(message=f"Invalid options.{name}: {reason}")
+
+        # Mutate in place: the provider holds this same object.
+        setattr(options, name, getattr(candidate, name))
+        return CommandResult(message=f"options.{name} = {getattr(options, name)}")
+
+    return handle_option
+
+
 CONFIG_SETTERS = {
     "model": handle_model,
     "provider": handle_provider,
     "base_url": handle_base_url,
     "tools.fs_allowed_root": handle_fs_allowed_root,
+    **{f"options.{name}": _option_setter(name) for name in ModelOptions.model_fields},
 }
 
 
@@ -316,6 +355,65 @@ async def handle_clear(
     context.engine.conversation.messages.clear()
     await context.memory_store.save(context.engine.conversation)
     return CommandResult(message="Conversation cleared.")
+
+
+def _human_bytes(size: int) -> str:
+    """Decimal units, rounded like `ollama ps`."""
+    value, unit = float(size), "B"
+    for next_unit in ("KB", "MB", "GB", "TB"):
+        if value < 1000:
+            break
+        value, unit = value / 1000, next_unit
+    if value >= 10 or value == int(value):
+        return f"{int(value)} {unit}"
+    return f"{value:.1f} {unit}"
+
+
+def _processor(model: LoadedModel) -> str:
+    if model.size_vram == 0:
+        return "100% CPU"
+    if model.size_vram == model.size:
+        return "100% GPU"
+    if model.size_vram > model.size:
+        return "unknown"
+    cpu = round((model.size - model.size_vram) / model.size * 100)
+    return f"{cpu}%/{100 - cpu}% CPU/GPU"
+
+
+def format_loaded_model(model: LoadedModel) -> str:
+    parts = [model.name, _human_bytes(model.size), _processor(model)]
+    if model.context_length:
+        parts.append(f"ctx {model.context_length}")
+    return " · ".join(parts)
+
+
+async def handle_ps(
+    context: CommandContext,
+    arguments: tuple[str, ...],
+) -> CommandResult:
+    """Show the RAM/VRAM held by each model the server has loaded."""
+    provider = context.engine.provider
+    if not isinstance(provider, ModelInspector):
+        return CommandResult(message="/ps is not available for this provider.")
+    try:
+        models = await provider.loaded_models()
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        return CommandResult(message=f"Could not read loaded models: {exc}")
+    if not models:
+        return CommandResult(message="No model loaded.")
+    return CommandResult(message="\n".join(map(format_loaded_model, models)))
+
+
+async def handle_prompt(
+    context: CommandContext,
+    arguments: tuple[str, ...],
+) -> CommandResult:
+    """Show the prompt of the latest model call, message by message."""
+    engine = context.engine
+    if not engine.last_prompt:
+        return CommandResult(message="No prompt sent yet.")
+    max_tokens = engine.budget.config.max_tokens if engine.budget else None
+    return CommandResult(message=format_prompt(engine.last_prompt, max_tokens))
 
 
 async def handle_help(
@@ -439,6 +537,8 @@ COMMANDS = {
     "provider": CommandSpec(handle_provider, "Switch LLM provider"),
     "persona": CommandSpec(handle_persona, "Show or switch the domain persona"),
     "config": CommandSpec(handle_config, "View or update runtime configuration"),
+    "prompt": CommandSpec(handle_prompt, "Show the full prompt of the last model call"),
+    "ps": CommandSpec(handle_ps, "Show RAM/VRAM used by the loaded models"),
 }
 
 

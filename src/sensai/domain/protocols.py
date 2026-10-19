@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from sensai.domain.events import Event
 from sensai.domain.models import (
@@ -8,6 +8,7 @@ from sensai.domain.models import (
     Fact,
     GuardrailFinding,
     GuardrailVerdict,
+    LoadedModel,
     Message,
     ScoredChunk,
 )
@@ -20,6 +21,13 @@ class LLMProvider(Protocol):
         tools: list[dict[str, Any]] | None = None,
         think: bool | str | None = None,
     ) -> AsyncGenerator[Event]: ...
+
+
+@runtime_checkable
+class ModelInspector(Protocol):
+    """A provider that can report the models its server holds in memory."""
+
+    async def loaded_models(self) -> list[LoadedModel]: ...
 
 
 class BaseTool(Protocol):
@@ -93,6 +101,12 @@ class ReplyRecorder(Protocol):
     """Keeps each final reply with its question and RAG context, for later grading."""
 
     def record(self, question: str, answer: str, context: str) -> None: ...
+
+
+class PromptRecorder(Protocol):
+    """Keeps each prompt exactly as sent to the model, one entry per model call."""
+
+    def record_prompt(self, entry: dict[str, Any]) -> None: ...
 
 
 class StructuredMemory(Protocol):

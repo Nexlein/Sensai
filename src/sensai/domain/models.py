@@ -62,6 +62,28 @@ class Persona(BaseModel):
     system_instruction: str
 
 
+class LoadedModel(BaseModel):
+    """A model held in memory by the server, as `ollama ps` reports it."""
+
+    name: str
+    size: int  # bytes: weights + KV cache + buffers
+    size_vram: int = 0  # bytes of `size` held in GPU memory
+    context_length: int | None = None
+
+
+class ModelOptions(BaseModel):
+    """Sampling and context options sent to the model; unset keys are not sent."""
+
+    temperature: float | None = Field(default=None, ge=0)
+    num_ctx: int | None = Field(default=None, gt=0)
+    top_p: float | None = Field(default=None, gt=0, le=1)
+    seed: int | None = None
+    num_predict: int | None = Field(default=None, gt=0)
+
+    def to_payload(self) -> dict[str, Any]:
+        return self.model_dump(exclude_none=True)
+
+
 GuardrailAction = Literal["allow", "redact", "block", "flag"]
 
 

@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -142,7 +143,7 @@ async def test_send_wraps_provider_connect_error_and_leaves_conversation_unchang
     assert conversation.messages == []
 
 
-from sensai.domain.events import TextChunkEvent, ToolCallEvent
+from sensai.domain.events import TextChunkEvent, ToolCallEvent, UsageEvent
 from sensai.providers.mock import MockToolCallingLLMProvider
 from sensai.tools.registry import ToolRegistry
 
@@ -1026,3 +1027,93 @@ async def test_cancelling_after_a_tool_round_rolls_back_the_whole_turn():
         await task
 
     assert [m.content for m in conversation.messages] == ["earlier", "reply"]
+
+
+class PromptListRecorder:
+    def __init__(self):
+        self.entries = []
+
+    def record_prompt(self, entry):
+        self.entries.append(entry)
+
+
+@pytest.mark.asyncio
+async def test_every_model_round_is_logged_with_its_full_prompt():
+    provider = ScriptedProvider(
+        [ToolCallEvent(tool_name="dummy", arguments={})], chunks("done")
+    )
+    registry = ToolRegistry()
+    registry.register(DummyTool(return_val="tool output"))
+    recorder = PromptListRecorder()
+    engine = ChatEngine(
+        provider,
+        Conversation(),
+        registry,
+        retriever=FakeContextRetriever(),
+        prompt_recorder=recorder,
+    )
+
+    _ = [e async for e in engine.send("question")]
+
+    assert len(recorder.entries) == 2
+    first, second = recorder.entries
+    assert first["tools"] == ["dummy"]
+    assert [m["source"] for m in first["messages"]] == ["tools", "rag", "history"]
+    assert [m["content"] for m in first["messages"]] == [
+        m.content for m in provider.prompts[0]
+    ]
+    assert "tool output" in [m["content"] for m in second["messages"]]
+    assert [p.message.content for p in engine.last_prompt] == [
+        m.content for m in provider.prompts[1]
+    ]
+
+
+@pytest.mark.asyncio
+async def test_prompt_log_holds_only_masked_personal_data():
+    recorder = PromptListRecorder()
+    engine = ChatEngine(
+        ScriptedProvider(chunks("ok")),
+        Conversation(),
+        guardrail=RegexGuardrail(),
+        prompt_recorder=recorder,
+    )
+
+    _ = [e async for e in engine.send("my mail is john@example.com")]
+
+    logged = json.dumps(recorder.entries)
+    assert "john@example.com" not in logged
+    assert "[EMAIL]" in logged
+
+
+@pytest.mark.asyncio
+async def test_prompt_log_holds_the_real_counts_and_the_estimate_error():
+    recorder = PromptListRecorder()
+    usage = UsageEvent(prompt_tokens=20, reply_tokens=2, reply_seconds=0.5)
+    engine = ChatEngine(
+        ScriptedProvider([*chunks("ok"), usage]),
+        Conversation(),
+        prompt_recorder=recorder,
+    )
+
+    _ = [e async for e in engine.send("hello")]
+
+    (entry,) = recorder.entries
+    assert entry["usage"]["prompt_tokens"] == 20
+    assert entry["usage"]["reply_rate"] == 4.0
+    assert entry["estimate_error"] == round((entry["estimated_tokens"] - 20) / 20, 3)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_model_call_is_still_logged():
+    recorder = PromptListRecorder()
+    engine = ChatEngine(
+        FailingLLMProvider(RuntimeError("down")),
+        Conversation(),
+        prompt_recorder=recorder,
+    )
+
+    with pytest.raises(ProviderError):
+        _ = [e async for e in engine.send("hello")]
+
+    assert len(recorder.entries) == 1
+    assert recorder.entries[0]["messages"][-1]["content"] == "hello"
