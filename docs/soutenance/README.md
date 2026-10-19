@@ -38,7 +38,7 @@ Les user stories restent dans [`../USER_STORIES.md`](../USER_STORIES.md).
 | Meilleur pré-prompt / IA spécialisée               | ⚠️   | `TOOL_USE_GUIDANCE` générique, `Persona` non branché. Proposition : [scenario.md](scenario.md#pré-prompt-proposé)                       |
 | Exemples dans le README partout                    | ⚠️   | Exemples présents par feature ; ajouter ceux de cette doc une fois les features faites                                                  |
 | Débit (tokens/s) : le voir, le savoir, l'expliquer | ⚠️   | Affiché après chaque réponse ; tableau des machines à remplir dans [observabilite.md](observabilite.md#débit-tokenss)                   |
-| Consommation RAM / VRAM                            | ❌   | [observabilite.md](observabilite.md#ram-et-vram)                                                                                        |
+| Consommation RAM / VRAM                            | ✅   | `/ps` (taille, CPU/GPU, contexte). Voir [observabilite.md](observabilite.md#ram-et-vram)                                                |
 | Prompts de test                                    | ⚠️   | [prompts-de-test.md](prompts-de-test.md), à jouer et remplir                                                                            |
 | Tableau des modèles + benchmarks                   | ❌   | Gabarit dans [modeles.md](modeles.md#tableau-des-modèles-testés), mesures à faire sur nos machines                                      |
 

@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import httpx
 from pydantic import ValidationError
 
 from sensai.core.config import (
@@ -17,10 +18,11 @@ from sensai.core.engine import ChatEngine
 from sensai.core.prompt import format_prompt
 from sensai.domain.errors import ProviderError
 from sensai.domain.events import Event
-from sensai.domain.models import Conversation, Fact, ModelOptions
+from sensai.domain.models import Conversation, Fact, LoadedModel, ModelOptions
 from sensai.domain.protocols import (
     LLMProvider,
     MemoryStore,
+    ModelInspector,
     StructuredMemory,
     ToolRegistry,
 )
@@ -328,6 +330,53 @@ async def handle_clear(
     return CommandResult(message="Conversation cleared.")
 
 
+def _human_bytes(size: int) -> str:
+    """Decimal units, rounded like `ollama ps`."""
+    value, unit = float(size), "B"
+    for next_unit in ("KB", "MB", "GB", "TB"):
+        if value < 1000:
+            break
+        value, unit = value / 1000, next_unit
+    if value >= 10 or value == int(value):
+        return f"{int(value)} {unit}"
+    return f"{value:.1f} {unit}"
+
+
+def _processor(model: LoadedModel) -> str:
+    if model.size_vram == 0:
+        return "100% CPU"
+    if model.size_vram == model.size:
+        return "100% GPU"
+    if model.size_vram > model.size:
+        return "unknown"
+    cpu = round((model.size - model.size_vram) / model.size * 100)
+    return f"{cpu}%/{100 - cpu}% CPU/GPU"
+
+
+def format_loaded_model(model: LoadedModel) -> str:
+    parts = [model.name, _human_bytes(model.size), _processor(model)]
+    if model.context_length:
+        parts.append(f"ctx {model.context_length}")
+    return " · ".join(parts)
+
+
+async def handle_ps(
+    context: CommandContext,
+    arguments: tuple[str, ...],
+) -> CommandResult:
+    """Show the RAM/VRAM held by each model the server has loaded."""
+    provider = context.engine.provider
+    if not isinstance(provider, ModelInspector):
+        return CommandResult(message="/ps is not available for this provider.")
+    try:
+        models = await provider.loaded_models()
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        return CommandResult(message=f"Could not read loaded models: {exc}")
+    if not models:
+        return CommandResult(message="No model loaded.")
+    return CommandResult(message="\n".join(map(format_loaded_model, models)))
+
+
 async def handle_prompt(
     context: CommandContext,
     arguments: tuple[str, ...],
@@ -461,6 +510,7 @@ COMMANDS = {
     "provider": CommandSpec(handle_provider, "Switch LLM provider"),
     "config": CommandSpec(handle_config, "View or update runtime configuration"),
     "prompt": CommandSpec(handle_prompt, "Show the full prompt of the last model call"),
+    "ps": CommandSpec(handle_ps, "Show RAM/VRAM used by the loaded models"),
 }
 
 
