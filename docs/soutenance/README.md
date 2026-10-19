@@ -34,10 +34,10 @@ Les user stories restent dans [`../USER_STORIES.md`](../USER_STORIES.md).
 | Adapter la config au modèle                        | ⚠️   | `budget.max_tokens` (8192) indépendant du `num_ctx` réel d'Ollama : voir [configuration.md](configuration.md#profils-par-modèle)        |
 | Aucune erreur visible (exceptions interceptées)    | ✅   | `ProviderError`, `ConfigError`, erreurs d'outils en texte. Voir [securite-rgpd.md](securite-rgpd.md#gestion-des-erreurs)                |
 | Afficher le prompt complet reconstitué (logs)      | ✅   | `/prompt` et `[eval] log_prompts` (`logs/prompts.jsonl`). Voir [observabilite.md](observabilite.md#logs-du-prompt-complet)              |
-| Compteur de tokens                                 | ✅   | Estimation en direct + vrais comptes Ollama (`prompt_eval_count`, `eval_count`) après chaque réponse, écart loggé                      |
+| Compteur de tokens                                 | ✅   | Estimation en direct + vrais comptes Ollama (`prompt_eval_count`, `eval_count`) après chaque réponse, écart loggé                       |
 | Meilleur pré-prompt / IA spécialisée               | ⚠️   | `TOOL_USE_GUIDANCE` générique, `Persona` non branché. Proposition : [scenario.md](scenario.md#pré-prompt-proposé)                       |
 | Exemples dans le README partout                    | ⚠️   | Exemples présents par feature ; ajouter ceux de cette doc une fois les features faites                                                  |
-| Débit (tokens/s) : le voir, le savoir, l'expliquer | ⚠️   | Affiché après chaque réponse ; tableau des machines à remplir dans [observabilite.md](observabilite.md#débit-tokenss)                  |
+| Débit (tokens/s) : le voir, le savoir, l'expliquer | ⚠️   | Affiché après chaque réponse ; tableau des machines à remplir dans [observabilite.md](observabilite.md#débit-tokenss)                   |
 | Consommation RAM / VRAM                            | ❌   | [observabilite.md](observabilite.md#ram-et-vram)                                                                                        |
 | Prompts de test                                    | ⚠️   | [prompts-de-test.md](prompts-de-test.md), à jouer et remplir                                                                            |
 | Tableau des modèles + benchmarks                   | ❌   | Gabarit dans [modeles.md](modeles.md#tableau-des-modèles-testés), mesures à faire sur nos machines                                      |
