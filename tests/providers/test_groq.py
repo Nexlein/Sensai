@@ -4,8 +4,8 @@ import httpx
 import pytest
 
 from sensai.domain.errors import ProviderError
-from sensai.domain.events import TextChunkEvent, ToolCallEvent
-from sensai.domain.models import Message, ToolCall
+from sensai.domain.events import TextChunkEvent, ToolCallEvent, UsageEvent
+from sensai.domain.models import Message, ModelOptions, ToolCall
 from sensai.providers.groq import GroqLLMProvider
 
 
@@ -242,3 +242,71 @@ async def test_unreadable_stream_raises_provider_error():
     )
     with pytest.raises(ProviderError, match="unreadable"):
         await _collect(provider)
+
+
+async def test_maps_sampling_options_and_skips_num_ctx():
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, text=_sse("[DONE]"))
+
+    provider = _provider(handler)
+    provider.options = ModelOptions(
+        temperature=0.2, top_p=0.9, seed=7, num_predict=256, num_ctx=4096
+    )
+    await _collect(provider)
+
+    assert bodies[0]["temperature"] == 0.2
+    assert bodies[0]["top_p"] == 0.9
+    assert bodies[0]["seed"] == 7
+    assert bodies[0]["max_tokens"] == 256
+    assert "num_ctx" not in bodies[0]
+    assert "options" not in bodies[0]
+
+
+async def test_sends_no_sampling_keys_without_options():
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, text=_sse("[DONE]"))
+
+    await _collect(_provider(handler))
+
+    assert set(bodies[0]) == {"model", "messages", "stream"}
+
+
+async def test_final_chunk_usage_becomes_a_usage_event():
+    usage = {
+        "prompt_tokens": 50,
+        "completion_tokens": 20,
+        "prompt_time": 0.01,
+        "completion_time": 0.08,
+        "total_time": 0.09,
+    }
+    provider = _provider(
+        lambda request: httpx.Response(
+            200,
+            text=_sse(
+                _delta(content="hi"),
+                {"choices": [], "x_groq": {"usage": usage}},
+                "[DONE]",
+            ),
+        )
+    )
+
+    events = await _collect(provider)
+
+    assert isinstance(events[-1], UsageEvent)
+    assert (events[-1].prompt_tokens, events[-1].reply_tokens) == (50, 20)
+    assert events[-1].reply_rate == pytest.approx(250.0)
+    assert events[-1].total_seconds == 0.09
+
+
+async def test_no_usage_event_when_groq_sends_no_counters():
+    provider = _provider(
+        lambda request: httpx.Response(200, text=_sse(_delta(content="hi"), "[DONE]"))
+    )
+
+    assert not any(isinstance(e, UsageEvent) for e in await _collect(provider))

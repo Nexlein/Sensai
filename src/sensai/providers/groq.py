@@ -7,8 +7,8 @@ from typing import Any
 import httpx
 
 from sensai.domain.errors import ProviderError
-from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
-from sensai.domain.models import Message
+from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent, UsageEvent
+from sensai.domain.models import Message, ModelOptions
 from sensai.providers.base import BaseHTTPProvider
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
@@ -23,6 +23,7 @@ class GroqLLMProvider(BaseHTTPProvider):
         model: str = "openai/gpt-oss-120b",
         api_key: str | None = None,
         timeout: float = 60.0,
+        options: ModelOptions | None = None,
     ) -> None:
         key = api_key or os.environ.get(GROQ_API_KEY_ENV)
         if not key:
@@ -31,7 +32,19 @@ class GroqLLMProvider(BaseHTTPProvider):
             )
         super().__init__(base_url=GROQ_BASE_URL, timeout=timeout)
         self.model = model
+        self.options = options or ModelOptions()
         self._api_key = key
+
+    def _sampling(self) -> dict[str, Any]:
+        """Map the options Groq understands; it sizes the context itself."""
+        options = self.options
+        sampling = {
+            "temperature": options.temperature,
+            "top_p": options.top_p,
+            "seed": options.seed,
+            "max_tokens": options.num_predict,
+        }
+        return {key: value for key, value in sampling.items() if value is not None}
 
     def _get_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -103,6 +116,7 @@ class GroqLLMProvider(BaseHTTPProvider):
     async def _stream_response(self, payload: dict[str, Any]) -> AsyncGenerator[Event]:
         # Tool calls arrive as fragments keyed by index; emit them once complete.
         calls: dict[int, dict[str, str]] = {}
+        usage: UsageEvent | None = None
         try:
             async with (
                 self._get_client() as client,
@@ -123,6 +137,10 @@ class GroqLLMProvider(BaseHTTPProvider):
                     if "error" in chunk:
                         message = chunk["error"].get("message", chunk["error"])
                         raise ProviderError(f"Groq error: {message}")
+                    if counters := (
+                        chunk.get("usage") or (chunk.get("x_groq") or {}).get("usage")
+                    ):
+                        usage = self._usage(counters)
                     for choice in chunk.get("choices") or []:
                         delta = choice.get("delta") or {}
                         if content := delta.get("content"):
@@ -143,6 +161,19 @@ class GroqLLMProvider(BaseHTTPProvider):
 
         for index in sorted(calls):
             yield self._tool_call_event(calls[index])
+        if usage is not None:
+            yield usage
+
+    @staticmethod
+    def _usage(counters: dict[str, Any]) -> UsageEvent:
+        """OpenAI-style `usage`; Groq adds its timings in seconds."""
+        return UsageEvent(
+            prompt_tokens=counters.get("prompt_tokens"),
+            reply_tokens=counters.get("completion_tokens"),
+            prompt_seconds=counters.get("prompt_time"),
+            reply_seconds=counters.get("completion_time"),
+            total_seconds=counters.get("total_time"),
+        )
 
     async def chat_stream(
         self,
@@ -155,6 +186,7 @@ class GroqLLMProvider(BaseHTTPProvider):
             "messages": self._format_messages(messages),
             "stream": True,
             **({"tools": tools} if tools else {}),
+            **self._sampling(),
         }
         async for event in self._stream_response(payload):
             yield event

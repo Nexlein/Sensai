@@ -103,6 +103,12 @@ class ReplyRecorder(Protocol):
     def record(self, question: str, answer: str, context: str) -> None: ...
 
 
+class PromptRecorder(Protocol):
+    """Keeps each prompt exactly as sent to the model, one entry per model call."""
+
+    def record_prompt(self, entry: dict[str, Any]) -> None: ...
+
+
 class StructuredMemory(Protocol):
     """External structured memory (M3): CRUD over entities and facts across sessions."""
 
