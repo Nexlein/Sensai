@@ -461,3 +461,20 @@ Acceptance criteria:
 - With `[eval] log_prompts = true`, each model call, tool rounds and failed calls included, adds one JSON line to `logs/prompts.jsonl` with the model, options, tool names and the messages exactly as sent.
 - A personal value masked by the guardrails appears only as its placeholder, such as `[EMAIL]`.
 - With logging off (the default), no file is created.
+
+## Feature: Real Token Counts and Throughput
+
+As a user running a model on my own machine, I want to see the real token counts and speed after each reply, so that I know how fast my hardware generates and how big my prompts really are.
+
+Acceptance criteria:
+
+- After each reply, the CLI, TUI and web UI show one line such as `prompt 1 024 tok · reply 187 tok · 11.4 tok/s · first token 2.1 s · total 18.5 s`.
+- The counts and the rate match `ollama run <model> --verbose` for the same prompt, within rounding.
+- A provider that reports no counters shows no such line, never zeros or an error.
+
+As a team member explaining the token budget, I want the gap between the estimated and the real prompt size logged, so that I can say how far our estimate is off.
+
+Acceptance criteria:
+
+- With `[eval] log_prompts = true`, each prompt-log line holds the real counts, the rates and `estimate_error`.
+- The estimate keeps driving the budget, so behaviour does not change with a provider that sends no counters.

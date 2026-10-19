@@ -67,14 +67,23 @@ l'anglais ; l'écart peut dépasser 20 %.
 | `load_duration`        | temps de chargement du modèle en mémoire (ns) |
 | `total_duration`       | total (ns)                                    |
 
-**À implémenter** : `OllamaLLMProvider._parse_line` ignore ces champs. Émettre un `UsageEvent`
-quand `done` est vrai, l'afficher après chaque réponse, et comparer estimation vs réel (bon sujet
-à l'oral : « notre estimation se trompe de X % en français »).
+`OllamaLLMProvider._parse_line` transforme ces champs en `UsageEvent` (durées converties en
+secondes) quand `done` est vrai ; Groq fait de même avec `usage` / `x_groq.usage` du dernier
+chunk. Après chaque réponse, les trois UI affichent une ligne sous le budget, avec les compteurs
+du dernier appel modèle (celui qui a produit la réponse) :
 
 ```text
 sensai: ... (réponse)
-  ↳ prompt 1 024 tok · réponse 187 tok · 11,4 tok/s · 1er token 2,1 s · total 18,5 s
+4.1k / 8.2k tokens (50%)
+prompt 1 024 tok · reply 187 tok · 11.4 tok/s · first token 2.1 s · total 18.5 s
 ```
+
+Un provider qui ne renvoie aucun compteur n'affiche rien (pas de zéros). L'estimation reste
+utilisée pour les décisions du budget. Avec `[eval] log_prompts = true`, chaque ligne de
+`logs/prompts.jsonl` contient `usage` (compteurs, débits, 1er token) et `estimate_error` :
+`(estimé - réel) / réel` sur la taille du prompt, -0,2 = estimation 20 % trop basse. Bon sujet à
+l'oral : « notre estimation se trompe de X % en français ». L'estimation ne compte pas le schéma
+des outils, que le modèle reçoit aussi.
 
 Le compte de `prompt_eval_count` peut être inférieur au prompt quand Ollama réutilise le cache
 d'un tour précédent (préfixe identique).
@@ -87,7 +96,9 @@ d'un tour précédent (préfixe identique).
 ollama run qwen3.5:4b --verbose "Explique le tri des biodéchets en 5 lignes."
 ```
 
-Ollama affiche `prompt eval rate` et `eval rate` (tokens/s). Calcul identique depuis l'API :
+Ollama affiche `prompt eval rate` et `eval rate` (tokens/s). Sensai affiche le même débit de
+génération (`tok/s`) après chaque réponse ; le débit prompt est dans le log. Calcul identique
+depuis l'API :
 
 ```text
 débit génération = eval_count / eval_duration × 10⁹
