@@ -4,7 +4,12 @@ import os
 import httpx
 import pytest
 
-from sensai.domain.events import TextChunkEvent, ThoughtEvent, ToolCallEvent
+from sensai.domain.events import (
+    TextChunkEvent,
+    ThoughtEvent,
+    ToolCallEvent,
+    UsageEvent,
+)
 from sensai.domain.models import Message, ToolCall
 from sensai.providers.ollama import OllamaLLMProvider
 
@@ -101,6 +106,44 @@ def test_parse_line_tool_calls():
     assert isinstance(events[0], ToolCallEvent)
     assert events[0].tool_name == "search"
     assert events[0].arguments == {"q": "x"}
+
+
+def test_parse_line_final_object_yields_usage_in_seconds():
+    provider = OllamaLLMProvider()
+    line = json.dumps(
+        {
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "prompt_eval_count": 1024,
+            "prompt_eval_duration": 2_000_000_000,
+            "eval_count": 187,
+            "eval_duration": 16_400_000_000,
+            "load_duration": 100_000_000,
+            "total_duration": 18_500_000_000,
+        }
+    )
+
+    (usage,) = provider._parse_line(line)
+
+    assert isinstance(usage, UsageEvent)
+    assert (usage.prompt_tokens, usage.reply_tokens) == (1024, 187)
+    assert usage.reply_seconds == pytest.approx(16.4)
+    assert usage.reply_rate == pytest.approx(187 / 16.4)
+    assert usage.first_token_seconds == pytest.approx(2.1)
+    assert usage.total_seconds == pytest.approx(18.5)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"message": {"content": "hi"}, "done": False, "eval_count": 3},
+        {"message": {"content": ""}, "done": True},
+    ],
+)
+def test_parse_line_without_final_counters_yields_no_usage(data):
+    events = OllamaLLMProvider()._parse_line(json.dumps(data))
+
+    assert not any(isinstance(event, UsageEvent) for event in events)
 
 
 def test_parse_line_empty_content_yields_no_text_event():
