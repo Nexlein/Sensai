@@ -62,6 +62,15 @@ class Persona(BaseModel):
     system_instruction: str
 
 
+class LoadedModel(BaseModel):
+    """A model held in memory by the server, as `ollama ps` reports it."""
+
+    name: str
+    size: int  # bytes: weights + KV cache + buffers
+    size_vram: int = 0  # bytes of `size` held in GPU memory
+    context_length: int | None = None
+
+
 GuardrailAction = Literal["allow", "redact", "block", "flag"]
 
 

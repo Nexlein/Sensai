@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from sensai.domain.events import TextChunkEvent, ThoughtEvent, ToolCallEvent
-from sensai.domain.models import Message, ToolCall
+from sensai.domain.models import LoadedModel, Message, ToolCall
 from sensai.providers.ollama import OllamaLLMProvider
 
 
@@ -331,6 +331,56 @@ async def test_chat_stream_does_not_retry_server_errors_mentioning_think():
             pass
 
     assert len(bodies) == 1
+
+
+async def test_loaded_models_reads_api_ps():
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={
+                "models": [
+                    {
+                        "name": "qwen3.5:4b",
+                        "size": 4_100_000_000,
+                        "size_vram": 0,
+                        "context_length": 8192,
+                        "details": {"family": "qwen3"},
+                    },
+                    {"name": "nomic-embed-text:latest", "size": 300_000_000},
+                ]
+            },
+        )
+
+    provider = OllamaLLMProvider()
+    _patch_client(provider, httpx.MockTransport(handler))
+
+    models = await provider.loaded_models()
+
+    assert paths == ["/api/ps"]
+    assert models == [
+        LoadedModel(
+            name="qwen3.5:4b", size=4_100_000_000, size_vram=0, context_length=8192
+        ),
+        LoadedModel(name="nomic-embed-text:latest", size=300_000_000),
+    ]
+
+
+async def test_loaded_models_empty_when_nothing_is_loaded():
+    provider = OllamaLLMProvider()
+    _patch_client(provider, httpx.MockTransport(lambda _: httpx.Response(200, json={})))
+
+    assert await provider.loaded_models() == []
+
+
+async def test_loaded_models_raises_on_http_error():
+    provider = OllamaLLMProvider()
+    _patch_client(provider, httpx.MockTransport(lambda _: httpx.Response(500)))
+
+    with pytest.raises(RuntimeError, match="500"):
+        await provider.loaded_models()
 
 
 async def test_embedding_provider_calls_embed_endpoint():

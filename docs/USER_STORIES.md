@@ -443,3 +443,20 @@ Acceptance criteria:
 - The Stop button cancels the current reply and leaves no unanswered message in the history.
 - A second message sent while a reply is in progress is refused with a message, not queued.
 - A failing model server shows a one-line error in the page and the page stays usable.
+
+## Feature: Loaded Model Memory
+
+As a user running models locally, I want to see how much RAM and VRAM each loaded model uses without leaving Sensai, so that I can tell whether my machine holds the model and its context.
+
+Acceptance criteria:
+
+- `/ps` prints one line per loaded model, embedding model included, for example `qwen3.5:4b · 4.1 GB · 100% CPU · ctx 8192`.
+- Size and CPU/GPU split match `ollama ps` for the same models.
+- With no model loaded, `/ps` says so.
+
+As a user on a provider or server that cannot report memory, I want `/ps` to explain why it shows nothing, so that the session is not broken by the command.
+
+Acceptance criteria:
+
+- With the Groq provider, `/ps` answers "not available for this provider".
+- With Ollama unreachable or failing, `/ps` prints one readable line, never a traceback, and the session stays usable.

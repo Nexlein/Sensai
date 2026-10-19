@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from sensai.domain.events import Event, TextChunkEvent, ThoughtEvent, ToolCallEvent
-from sensai.domain.models import Message
+from sensai.domain.models import LoadedModel, Message
 from sensai.providers.base import BaseHTTPProvider
 
 Think = bool | str
@@ -20,6 +20,21 @@ class OllamaLLMProvider(BaseHTTPProvider):
         super().__init__(base_url=base_url, timeout=timeout, wait_forever=True)
         self.model = model
         self.think_unsupported = False
+
+    async def loaded_models(self) -> list[LoadedModel]:
+        """Models the server holds in memory (`GET /api/ps`), embeddings included."""
+        async with self._get_client() as client:
+            response = await client.get("/api/ps")
+            await self._check_response_status(response)
+            return [
+                LoadedModel(
+                    name=entry.get("name", ""),
+                    size=entry.get("size", 0),
+                    size_vram=entry.get("size_vram", 0),
+                    context_length=entry.get("context_length"),
+                )
+                for entry in response.json().get("models") or []
+            ]
 
     def _format_message(self, msg: Message) -> dict[str, Any]:
         payload: dict[str, Any] = {"role": msg.role, "content": msg.content}

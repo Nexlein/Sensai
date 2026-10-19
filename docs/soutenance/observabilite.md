@@ -126,6 +126,17 @@ Mesure : `ollama run <modèle> --verbose` sur le même prompt, 3 essais, médian
 
 ### Le mesurer
 
+Dans Sensai (CLI, TUI ou web), sans quitter la session :
+
+```text
+/ps
+qwen3.5:4b · 4.1 GB · 100% CPU · ctx 8192
+nomic-embed-text:latest · 300 MB · 100% CPU
+```
+
+`/ps` lit `GET /api/ps` et applique les mêmes arrondis que `ollama ps`. Avec Groq, il répond
+« not available for this provider ». Hors de Sensai :
+
 ```bash
 ollama ps
 ```
@@ -147,8 +158,13 @@ mémoire ≈ poids (paramètres × octets/paramètre) + cache KV (croît avec nu
 
 Calcul détaillé et exemples 7B vs 70B : [modeles.md](modeles.md#paramètres-et-empreinte-mémoire).
 
-Expérience à montrer : relever `ollama ps` avec `num_ctx = 2048` puis `8192` ; seule la part cache
-KV change.
+Expérience à montrer : relever `/ps` avec `num_ctx = 2048` puis `8192` (relancer un prompt entre
+les deux pour que le modèle soit rechargé) ; seule la part cache KV change.
+
+| `num_ctx` | Sortie de `/ps` |
+| --------- | --------------- |
+| 2048      | _à relever_     |
+| 8192      | _à relever_     |
 
 Le modèle d'embedding (`nomic-embed-text`, ~0,3 Go) est chargé en plus pendant l'indexation et
 chaque recherche RAG.

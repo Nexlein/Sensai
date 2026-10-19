@@ -1,17 +1,19 @@
 from collections.abc import AsyncIterator
 
+import httpx
 import pytest
 
 from sensai.core.commands import (
     CommandContext,
     ParsedCommand,
     dispatch_command,
+    format_loaded_model,
     parse_commands,
 )
 from sensai.core.config import DEFAULT_MODEL, AppConfig, load_config
 from sensai.core.engine import ChatEngine
 from sensai.domain.events import Event
-from sensai.domain.models import Conversation
+from sensai.domain.models import Conversation, LoadedModel
 from sensai.domain.protocols import LLMProvider
 from sensai.providers import get_provider
 from sensai.providers.mock import MockLLMProvider
@@ -127,7 +129,8 @@ async def test_dispatch_help_lists_commands():
 /model - Switch model for subsequent turns
 /effort - Show or set the thinking effort
 /provider - Switch LLM provider
-/config - View or update runtime configuration"""
+/config - View or update runtime configuration
+/ps - Show RAM/VRAM used by the loaded models"""
     )
 
 
@@ -789,3 +792,85 @@ async def test_effort_default_is_no_longer_a_level():
     )
 
     assert "Usage: /effort [low|medium|high|off]" in (result.message or "")
+
+
+class FakeInspector(MockLLMProvider):
+    def __init__(self, models=None, error: Exception | None = None) -> None:
+        super().__init__()
+        self.models = models or []
+        self.error = error
+
+    async def loaded_models(self) -> list[LoadedModel]:
+        if self.error is not None:
+            raise self.error
+        return self.models
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        (
+            LoadedModel(name="qwen3.5:4b", size=4_100_000_000, context_length=8192),
+            "qwen3.5:4b · 4.1 GB · 100% CPU · ctx 8192",
+        ),
+        (
+            LoadedModel(name="big", size=12_400_000_000, size_vram=12_400_000_000),
+            "big · 12 GB · 100% GPU",
+        ),
+        (
+            LoadedModel(name="split", size=8_000_000_000, size_vram=6_000_000_000),
+            "split · 8 GB · 25%/75% CPU/GPU",
+        ),
+        (
+            LoadedModel(name="nomic-embed-text", size=300_000_000),
+            "nomic-embed-text · 300 MB · 100% CPU",
+        ),
+    ],
+)
+def test_format_loaded_model_matches_ollama_ps(model, expected):
+    assert format_loaded_model(model) == expected
+
+
+async def test_ps_lists_one_line_per_loaded_model():
+    context = _context()
+    context.engine.provider = FakeInspector(
+        [
+            LoadedModel(name="qwen3.5:4b", size=4_100_000_000, context_length=8192),
+            LoadedModel(name="nomic-embed-text", size=300_000_000),
+        ]
+    )
+
+    result = await dispatch_command(ParsedCommand(name="ps", arguments=()), context)
+
+    assert result.message == (
+        "qwen3.5:4b · 4.1 GB · 100% CPU · ctx 8192\n"
+        "nomic-embed-text · 300 MB · 100% CPU"
+    )
+
+
+async def test_ps_reports_no_loaded_model():
+    context = _context()
+    context.engine.provider = FakeInspector()
+
+    result = await dispatch_command(ParsedCommand(name="ps", arguments=()), context)
+
+    assert result.message == "No model loaded."
+
+
+@pytest.mark.parametrize(
+    "error", [httpx.ConnectError("refused"), RuntimeError("HTTP Provider Error [500]")]
+)
+async def test_ps_turns_server_errors_into_one_line(error):
+    context = _context()
+    context.engine.provider = FakeInspector(error=error)
+
+    result = await dispatch_command(ParsedCommand(name="ps", arguments=()), context)
+
+    assert (result.message or "").startswith("Could not read loaded models:")
+    assert "\n" not in (result.message or "")
+
+
+async def test_ps_is_unavailable_for_providers_without_it():
+    result = await dispatch_command(ParsedCommand(name="ps", arguments=()), _context())
+
+    assert result.message == "/ps is not available for this provider."
