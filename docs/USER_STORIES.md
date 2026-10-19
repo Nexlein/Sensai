@@ -444,6 +444,25 @@ Acceptance criteria:
 - A second message sent while a reply is in progress is refused with a message, not queued.
 - A failing model server shows a one-line error in the page and the page stays usable.
 
+## Feature: Model Options
+
+As a user tuning answers for a given model, I want to set the temperature and the context size in `sensai.toml`, so that the model gets the window and sampling I chose instead of Ollama's defaults.
+
+Acceptance criteria:
+
+- `[options]` accepts `temperature`, `num_ctx`, `top_p`, `seed` and `num_predict`; each one set is sent in the `options` field of `/api/chat`, and `num_ctx` shows in the `CONTEXT` column of `ollama ps`.
+- Without an `[options]` section the request is unchanged.
+- `budget.max_tokens` above `num_ctx - num_predict` is rejected at startup with a one-line config error.
+- `temperature = 0` with `seed = 42` gives the same reply twice for the same prompt.
+
+As a user demonstrating the effect of a setting, I want to change a model option during a session, so that I can replay the same question and compare the replies.
+
+Acceptance criteria:
+
+- `/config set options.temperature 1.2` applies from the next turn without restarting.
+- `/config set options.<key> none` removes the option; an invalid or incoherent value is refused with a message and leaves the setting unchanged.
+- `/config save` writes the `[options]` section, and it is loaded back on the next start.
+
 ## Feature: Full Prompt Log
 
 As a developer debugging an answer, I want to see the full prompt Sensai sent to the model, so that I can tell which system notes, documents and history the model actually received.

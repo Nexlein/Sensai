@@ -118,7 +118,7 @@ delta       +75 pts   +50 pts  +3.4 s   +1.9 s      +620
 ```
 
 Contraintes : passe par `build_session` (même pipeline que la CLI), `temperature = 0` et `seed` fixés
-(dépend de `[model]`, voir [configuration.md](configuration.md)), écrit aussi les réponses au format
+(dépend de `[options]`, voir [configuration.md](configuration.md)), écrit aussi les réponses au format
 du juge pour enchaîner `python -m sensai.eval.judge`. Code de sortie non nul si une condition échoue
 complètement (Ollama absent → message une ligne, pas de trace).
 

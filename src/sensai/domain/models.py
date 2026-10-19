@@ -62,6 +62,19 @@ class Persona(BaseModel):
     system_instruction: str
 
 
+class ModelOptions(BaseModel):
+    """Sampling and context options sent to the model; unset keys are not sent."""
+
+    temperature: float | None = Field(default=None, ge=0)
+    num_ctx: int | None = Field(default=None, gt=0)
+    top_p: float | None = Field(default=None, gt=0, le=1)
+    seed: int | None = None
+    num_predict: int | None = Field(default=None, gt=0)
+
+    def to_payload(self) -> dict[str, Any]:
+        return self.model_dump(exclude_none=True)
+
+
 GuardrailAction = Literal["allow", "redact", "block", "flag"]
 
 

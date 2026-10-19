@@ -97,6 +97,7 @@ async def build_session(
         base_url=config.base_url,
         model=config.model,
         api_key=config.api_key,
+        options=config.options,
     )
 
     memory_store = SqliteMemoryStore()

@@ -10,7 +10,7 @@ from sensai.domain.events import (
     ToolCallEvent,
     UsageEvent,
 )
-from sensai.domain.models import Message
+from sensai.domain.models import Message, ModelOptions
 from sensai.providers.base import BaseHTTPProvider
 
 Think = bool | str
@@ -22,9 +22,12 @@ class OllamaLLMProvider(BaseHTTPProvider):
         base_url: str = "http://localhost:11434",
         model: str = "qwen3.5:4b",
         timeout: float = 60.0,
+        options: ModelOptions | None = None,
     ) -> None:
         super().__init__(base_url=base_url, timeout=timeout, wait_forever=True)
         self.model = model
+        # Shared with AppConfig, so `/config set options.*` applies on the next turn.
+        self.options = options or ModelOptions()
         self.think_unsupported = False
 
     def _format_message(self, msg: Message) -> dict[str, Any]:
@@ -119,12 +122,14 @@ class OllamaLLMProvider(BaseHTTPProvider):
         repeated once without `think`, and `think` is ignored from then on.
         """
         use_think = think is not None and not self.think_unsupported
+        options = self.options.to_payload()
         payload = {
             "model": self.model,
             "messages": self._format_messages(messages),
             "stream": True,
             **({"tools": tools} if tools else {}),
             **({"think": think} if use_think else {}),
+            **({"options": options} if options else {}),
         }
         started = False
         try:

@@ -12,7 +12,7 @@ from sensai.core.budget import BudgetConfig, ContextBudget
 from sensai.core.config import DEFAULT_MODEL, AppConfig, load_config
 from sensai.core.engine import ChatEngine
 from sensai.domain.events import Event
-from sensai.domain.models import Conversation
+from sensai.domain.models import Conversation, ModelOptions
 from sensai.domain.protocols import LLMProvider
 from sensai.providers import get_provider
 from sensai.providers.mock import MockLLMProvider
@@ -176,6 +176,7 @@ async def test_dispatch_model_switches_provider_and_preserves_conversation():
                 "model": "llama3.2:latest",
                 "base_url": "http://localhost:11434",
                 "api_key": None,
+                "options": ModelOptions(),
             },
         )
     ]
@@ -230,6 +231,7 @@ async def test_dispatch_provider_switches_provider_and_preserves_conversation():
                 "model": DEFAULT_MODEL,
                 "base_url": "http://localhost:11434",
                 "api_key": None,
+                "options": ModelOptions(),
             },
         )
     ]
@@ -350,6 +352,7 @@ async def test_dispatch_config_set_model_reuses_model_handler():
                 "model": "mistral",
                 "base_url": "http://localhost:11434",
                 "api_key": None,
+                "options": ModelOptions(),
             },
         )
     ]
@@ -387,6 +390,7 @@ async def test_dispatch_config_set_base_url_rebuilds_provider():
                 "model": DEFAULT_MODEL,
                 "base_url": "http://ollama.example:11434",
                 "api_key": None,
+                "options": ModelOptions(),
             },
         )
     ]
@@ -791,6 +795,51 @@ async def test_effort_default_is_no_longer_a_level():
     )
 
     assert "Usage: /effort [low|medium|high|off]" in (result.message or "")
+
+
+async def test_config_set_option_updates_the_live_provider(tmp_path):
+    context = _context()
+    context.config.provider = "ollama"
+    context.engine.provider = get_provider("ollama", options=context.config.options)
+
+    result = await dispatch_command(
+        ParsedCommand(name="config", arguments=("set", "options.temperature", "1.2")),
+        context,
+    )
+
+    assert result.message == "options.temperature = 1.2"
+    assert context.engine.provider.options.temperature == 1.2
+
+    context.config_path = tmp_path / "sensai.toml"
+    await dispatch_command(ParsedCommand(name="config", arguments=("save",)), context)
+    assert load_config(context.config_path).options.temperature == 1.2
+
+
+async def test_config_set_option_none_unsets_it():
+    context = _context()
+    context.config.options.seed = 42
+
+    await dispatch_command(
+        ParsedCommand(name="config", arguments=("set", "options.seed", "none")),
+        context,
+    )
+
+    assert context.config.options.seed is None
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("options.temperature", "hot"), ("options.num_ctx", "1024")],
+)
+async def test_config_set_option_rejects_invalid_values(key, value):
+    context = _context()
+
+    result = await dispatch_command(
+        ParsedCommand(name="config", arguments=("set", key, value)), context
+    )
+
+    assert (result.message or "").startswith(f"Invalid {key}:")
+    assert context.config.options.to_payload() == {}
 
 
 async def test_prompt_before_any_turn_says_nothing_was_sent():
