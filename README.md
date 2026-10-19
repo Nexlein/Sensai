@@ -7,6 +7,8 @@
 - [Project Subject & Constraints](docs/SUBJECT.md)
 - [Features Catalog](docs/CATALOGUE.md)
 - [Evaluation (adversarial suite, LLM-as-judge)](docs/evaluation.md)
+- [Préparation soutenance (scénario, démo, benchmarks, RGPD, décisions)](docs/soutenance/README.md)
+- [Jeu de données du scénario (Régie de collecte, fictif)](data/collecte/)
 
 ## 🚀 Getting Started for Developers
 
