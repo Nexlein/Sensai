@@ -4,8 +4,13 @@ import os
 import httpx
 import pytest
 
-from sensai.domain.events import TextChunkEvent, ThoughtEvent, ToolCallEvent
-from sensai.domain.models import Message, ToolCall
+from sensai.domain.events import (
+    TextChunkEvent,
+    ThoughtEvent,
+    ToolCallEvent,
+    UsageEvent,
+)
+from sensai.domain.models import LoadedModel, Message, ModelOptions, ToolCall
 from sensai.providers.ollama import OllamaLLMProvider
 
 
@@ -101,6 +106,44 @@ def test_parse_line_tool_calls():
     assert isinstance(events[0], ToolCallEvent)
     assert events[0].tool_name == "search"
     assert events[0].arguments == {"q": "x"}
+
+
+def test_parse_line_final_object_yields_usage_in_seconds():
+    provider = OllamaLLMProvider()
+    line = json.dumps(
+        {
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "prompt_eval_count": 1024,
+            "prompt_eval_duration": 2_000_000_000,
+            "eval_count": 187,
+            "eval_duration": 16_400_000_000,
+            "load_duration": 100_000_000,
+            "total_duration": 18_500_000_000,
+        }
+    )
+
+    (usage,) = provider._parse_line(line)
+
+    assert isinstance(usage, UsageEvent)
+    assert (usage.prompt_tokens, usage.reply_tokens) == (1024, 187)
+    assert usage.reply_seconds == pytest.approx(16.4)
+    assert usage.reply_rate == pytest.approx(187 / 16.4)
+    assert usage.first_token_seconds == pytest.approx(2.1)
+    assert usage.total_seconds == pytest.approx(18.5)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"message": {"content": "hi"}, "done": False, "eval_count": 3},
+        {"message": {"content": ""}, "done": True},
+    ],
+)
+def test_parse_line_without_final_counters_yields_no_usage(data):
+    events = OllamaLLMProvider()._parse_line(json.dumps(data))
+
+    assert not any(isinstance(event, UsageEvent) for event in events)
 
 
 def test_parse_line_empty_content_yields_no_text_event():
@@ -265,6 +308,42 @@ async def test_chat_stream_omits_think_key_when_not_given():
     assert "think" not in bodies[0]
 
 
+async def test_chat_stream_sends_only_the_options_that_are_set():
+    options = ModelOptions(temperature=0, num_ctx=4096, seed=42)
+    provider = OllamaLLMProvider(options=options)
+    bodies: list[dict] = []
+    _patch_client(provider, _capturing_transport(bodies, [httpx.Response(200)]))
+
+    async for _ in provider.chat_stream(messages=[]):
+        pass
+
+    assert bodies[0]["options"] == {"temperature": 0, "num_ctx": 4096, "seed": 42}
+
+
+async def test_chat_stream_omits_options_key_when_none_are_set():
+    provider = OllamaLLMProvider()
+    bodies: list[dict] = []
+    _patch_client(provider, _capturing_transport(bodies, [httpx.Response(200)]))
+
+    async for _ in provider.chat_stream(messages=[]):
+        pass
+
+    assert "options" not in bodies[0]
+
+
+async def test_chat_stream_reads_options_changed_after_creation():
+    options = ModelOptions()
+    provider = OllamaLLMProvider(options=options)
+    bodies: list[dict] = []
+    _patch_client(provider, _capturing_transport(bodies, [httpx.Response(200)]))
+
+    options.temperature = 1.2
+    async for _ in provider.chat_stream(messages=[]):
+        pass
+
+    assert bodies[0]["options"] == {"temperature": 1.2}
+
+
 async def test_chat_stream_yields_thought_then_text():
     provider = OllamaLLMProvider()
     transport = _lines_response(
@@ -331,6 +410,56 @@ async def test_chat_stream_does_not_retry_server_errors_mentioning_think():
             pass
 
     assert len(bodies) == 1
+
+
+async def test_loaded_models_reads_api_ps():
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={
+                "models": [
+                    {
+                        "name": "qwen3.5:4b",
+                        "size": 4_100_000_000,
+                        "size_vram": 0,
+                        "context_length": 8192,
+                        "details": {"family": "qwen3"},
+                    },
+                    {"name": "nomic-embed-text:latest", "size": 300_000_000},
+                ]
+            },
+        )
+
+    provider = OllamaLLMProvider()
+    _patch_client(provider, httpx.MockTransport(handler))
+
+    models = await provider.loaded_models()
+
+    assert paths == ["/api/ps"]
+    assert models == [
+        LoadedModel(
+            name="qwen3.5:4b", size=4_100_000_000, size_vram=0, context_length=8192
+        ),
+        LoadedModel(name="nomic-embed-text:latest", size=300_000_000),
+    ]
+
+
+async def test_loaded_models_empty_when_nothing_is_loaded():
+    provider = OllamaLLMProvider()
+    _patch_client(provider, httpx.MockTransport(lambda _: httpx.Response(200, json={})))
+
+    assert await provider.loaded_models() == []
+
+
+async def test_loaded_models_raises_on_http_error():
+    provider = OllamaLLMProvider()
+    _patch_client(provider, httpx.MockTransport(lambda _: httpx.Response(500)))
+
+    with pytest.raises(RuntimeError, match="500"):
+        await provider.loaded_models()
 
 
 async def test_embedding_provider_calls_embed_endpoint():

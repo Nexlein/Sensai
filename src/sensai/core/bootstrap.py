@@ -18,7 +18,7 @@ from sensai.core.engine import ChatEngine
 from sensai.domain.models import Conversation
 from sensai.domain.protocols import Guardrail
 from sensai.eval.guardrails import RegexGuardrail
-from sensai.eval.logger import ReplyLogger
+from sensai.eval.logger import PromptLogger, ReplyLogger
 from sensai.memory.manager import SqliteMemoryManager
 from sensai.memory.rag.chunker import TextChunker
 from sensai.memory.rag.retriever import RAGRetriever
@@ -109,6 +109,7 @@ async def build_session(
         base_url=config.base_url,
         model=config.model,
         api_key=config.api_key,
+        options=config.options,
     )
 
     memory_store = SqliteMemoryStore()
@@ -160,6 +161,9 @@ async def build_session(
         guardrail=_build_guardrail(config.guardrails),
         recorder=(
             ReplyLogger(config.eval.replies_path) if config.eval.log_replies else None
+        ),
+        prompt_recorder=(
+            PromptLogger(config.eval.prompts_path) if config.eval.log_prompts else None
         ),
         memory=structured_memory,
         memory_auto_inject=config.memory.auto_inject,

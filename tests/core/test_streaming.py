@@ -8,6 +8,7 @@ from sensai.domain.events import (
     TextChunkEvent,
     ThoughtEvent,
     ToolCallEvent,
+    UsageEvent,
 )
 from sensai.domain.models import Message
 from sensai.eval.guardrails import RegexGuardrail
@@ -159,3 +160,14 @@ async def test_budget_events_track_usage():
     budgets = [e for e in events if isinstance(e, BudgetEvent)]
     assert len(budgets) == 2
     assert budgets[1].used > budgets[0].used
+
+
+@pytest.mark.asyncio
+async def test_usage_is_passed_on_and_kept_on_the_reply():
+    usage = UsageEvent(prompt_tokens=10, reply_tokens=2)
+    provider = Scripted(TextChunkEvent(content="ok"), usage)
+
+    events, reply = await _run(RoundStreamer(provider))
+
+    assert usage in events
+    assert reply.usage is usage

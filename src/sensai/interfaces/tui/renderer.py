@@ -20,6 +20,7 @@ from sensai.domain.events import (
     StepEvent,
     TextChunkEvent,
     ThoughtEvent,
+    UsageEvent,
 )
 from sensai.domain.models import ToolCall
 from sensai.interfaces.diff import diff_text
@@ -32,7 +33,7 @@ from sensai.interfaces.notices import (
 from sensai.interfaces.prompts import Question, tool_confirmation, tool_decision
 from sensai.interfaces.thinking import Thinking, format_thinking
 from sensai.interfaces.tui.question import QuestionPrompt
-from sensai.interfaces.usage import format_usage
+from sensai.interfaces.usage import format_metrics, format_usage
 
 T = TypeVar("T")
 
@@ -281,13 +282,14 @@ class ChatApp(App[None]):
             content = ""
             usage: UsageLabel | None = None
             usage_text = ""
+            metrics_text = ""
 
             async def show_usage() -> None:
                 nonlocal usage
                 if usage is None:
                     usage = UsageLabel()
                     await history.mount(usage)
-                usage.update(usage_text)
+                usage.update("\n".join(t for t in (usage_text, metrics_text) if t))
 
             try:
                 async for streamed in thinking.watch(events):
@@ -319,6 +321,10 @@ class ChatApp(App[None]):
                     elif isinstance(streamed, BudgetEvent):
                         usage_text = format_usage(streamed)
                         if reply is not None:
+                            await show_usage()
+                    elif isinstance(streamed, UsageEvent):
+                        metrics_text = format_metrics(streamed)
+                        if reply is not None and metrics_text:
                             await show_usage()
                     elif isinstance(streamed, GuardrailEvent):
                         await history.mount(

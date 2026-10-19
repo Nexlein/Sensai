@@ -13,6 +13,7 @@ from sensai.domain.events import (
     TextChunkEvent,
     ThoughtEvent,
     ToolCallEvent,
+    UsageEvent,
 )
 from sensai.domain.models import Message, ToolCall
 from sensai.domain.protocols import Guardrail, LLMProvider
@@ -105,6 +106,9 @@ class RoundStream:
                     handled = self._on_tool_call(event)
                 elif isinstance(event, TextChunkEvent):
                     handled = self._on_text(event)
+                elif isinstance(event, UsageEvent):
+                    self.reply.usage = event
+                    handled = [event]
                 else:
                     handled = [event]
                 for out in handled:

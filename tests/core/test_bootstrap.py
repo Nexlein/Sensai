@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from sensai.domain.events import GuardrailEvent
 from sensai.domain.models import Conversation
 from sensai.eval.guardrails import RegexGuardrail
 from sensai.eval.judge.__main__ import load_items
-from sensai.eval.logger import ReplyLogger
+from sensai.eval.logger import PromptLogger, ReplyLogger
 from sensai.memory.rag.store import SQLiteVectorStore
 
 
@@ -308,6 +309,32 @@ async def test_build_session_logs_replies_when_enabled(monkeypatch, tmp_path):
 
     assert isinstance(context.engine.recorder, ReplyLogger)
     assert [item.question for item in load_items(replies)] == ["hello"]
+
+
+async def test_build_session_logs_prompts_when_enabled(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    prompts = tmp_path / "logs" / "prompts.jsonl"
+    config_path = tmp_path / "sensai.toml"
+    config_path.write_text(
+        f'provider = "mock"\n[eval]\nlog_prompts = true\nprompts_path = "{prompts}"\n'
+    )
+
+    context = await build_session(config_path=config_path)
+    _ = [e async for e in context.engine.send("hello")]
+
+    assert isinstance(context.engine.prompt_recorder, PromptLogger)
+    (line,) = prompts.read_text(encoding="utf-8").splitlines()
+    assert json.loads(line)["messages"][-1]["content"] == "hello"
+
+
+async def test_build_session_writes_no_prompt_log_by_default(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    context = await build_session(provider_name="mock")
+    _ = [e async for e in context.engine.send("hello")]
+
+    assert context.engine.prompt_recorder is None
+    assert not (tmp_path / "logs" / "prompts.jsonl").exists()
 
 
 async def test_build_session_builds_guardrail_from_config(monkeypatch, tmp_path):

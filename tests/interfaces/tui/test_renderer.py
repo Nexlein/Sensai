@@ -15,6 +15,7 @@ from sensai.domain.events import (
     TextChunkEvent,
     ThoughtEvent,
     ToolCallEvent,
+    UsageEvent,
 )
 from sensai.interfaces.tui.renderer import (
     AssistantMessage,
@@ -177,6 +178,27 @@ async def test_budget_events_update_a_single_usage_label():
         assert len(labels) == 1
         assert "101 / 1.0k tokens (10%)" in str(labels.first().content)
         assert app.query(AssistantMessage).first().source == "hi"
+
+
+@pytest.mark.asyncio
+async def test_real_counters_join_the_usage_label():
+    app = ChatApp(
+        _process_events(
+            BudgetEvent(used=100, max_tokens=1000),
+            TextChunkEvent(content="hi"),
+            UsageEvent(prompt_tokens=90, reply_tokens=12),
+        )
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        (label,) = app.query(UsageLabel)
+        text = str(label.content)
+        assert "100 / 1.0k tokens (10%)" in text
+        assert "prompt 90 tok · reply 12 tok" in text
 
 
 @pytest.mark.asyncio

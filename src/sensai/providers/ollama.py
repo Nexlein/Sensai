@@ -3,8 +3,14 @@ from collections import deque
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from sensai.domain.events import Event, TextChunkEvent, ThoughtEvent, ToolCallEvent
-from sensai.domain.models import Message
+from sensai.domain.events import (
+    Event,
+    TextChunkEvent,
+    ThoughtEvent,
+    ToolCallEvent,
+    UsageEvent,
+)
+from sensai.domain.models import LoadedModel, Message, ModelOptions
 from sensai.providers.base import BaseHTTPProvider
 
 Think = bool | str
@@ -16,10 +22,28 @@ class OllamaLLMProvider(BaseHTTPProvider):
         base_url: str = "http://localhost:11434",
         model: str = "qwen3.5:4b",
         timeout: float = 60.0,
+        options: ModelOptions | None = None,
     ) -> None:
         super().__init__(base_url=base_url, timeout=timeout, wait_forever=True)
         self.model = model
+        # Shared with AppConfig, so `/config set options.*` applies on the next turn.
+        self.options = options or ModelOptions()
         self.think_unsupported = False
+
+    async def loaded_models(self) -> list[LoadedModel]:
+        """Models the server holds in memory (`GET /api/ps`), embeddings included."""
+        async with self._get_client() as client:
+            response = await client.get("/api/ps")
+            await self._check_response_status(response)
+            return [
+                LoadedModel(
+                    name=entry.get("name", ""),
+                    size=entry.get("size", 0),
+                    size_vram=entry.get("size_vram", 0),
+                    context_length=entry.get("context_length"),
+                )
+                for entry in response.json().get("models") or []
+            ]
 
     def _format_message(self, msg: Message) -> dict[str, Any]:
         payload: dict[str, Any] = {"role": msg.role, "content": msg.content}
@@ -43,8 +67,31 @@ class OllamaLLMProvider(BaseHTTPProvider):
             formatted.append(payload)
         return formatted
 
+    @staticmethod
+    def _usage(data: dict[str, Any]) -> UsageEvent | None:
+        """Counters of the final (`done`) object; durations come in nanoseconds."""
+        if not data.get("done"):
+            return None
+
+        def seconds(key: str) -> float | None:
+            value = data.get(key)
+            return value / 1e9 if isinstance(value, int | float) else None
+
+        counters = {
+            "prompt_tokens": data.get("prompt_eval_count"),
+            "reply_tokens": data.get("eval_count"),
+            "prompt_seconds": seconds("prompt_eval_duration"),
+            "reply_seconds": seconds("eval_duration"),
+            "load_seconds": seconds("load_duration"),
+            "total_seconds": seconds("total_duration"),
+        }
+        if all(value is None for value in counters.values()):
+            return None
+        return UsageEvent(**counters)
+
     def _parse_line(self, line: str) -> list[Event]:
-        msg = json.loads(line).get("message", {})
+        data = json.loads(line)
+        msg = data.get("message", {})
         events: list[Event] = []
         if thinking := msg.get("thinking"):
             events.append(ThoughtEvent(content=thinking, source="native"))
@@ -57,6 +104,8 @@ class OllamaLLMProvider(BaseHTTPProvider):
         ]
         if content := msg.get("content"):
             events.append(TextChunkEvent(content=content))
+        if usage := self._usage(data):
+            events.append(usage)
         return events
 
     async def _stream_response(self, payload: dict[str, Any]) -> AsyncGenerator[Event]:
@@ -88,12 +137,14 @@ class OllamaLLMProvider(BaseHTTPProvider):
         repeated once without `think`, and `think` is ignored from then on.
         """
         use_think = think is not None and not self.think_unsupported
+        options = self.options.to_payload()
         payload = {
             "model": self.model,
             "messages": self._format_messages(messages),
             "stream": True,
             **({"tools": tools} if tools else {}),
             **({"think": think} if use_think else {}),
+            **({"options": options} if options else {}),
         }
         started = False
         try:
