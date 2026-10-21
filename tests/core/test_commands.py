@@ -1,3 +1,4 @@
+import re
 from collections.abc import AsyncIterator
 
 import httpx
@@ -85,7 +86,6 @@ async def test_dispatch_exit_requests_repl_exit():
 
 
 async def test_dispatch_unknown_command_reports_error_and_continues():
-    # output = []
 
     result = await dispatch_command(
         ParsedCommand(name="unknown", arguments=()),
@@ -97,7 +97,6 @@ async def test_dispatch_unknown_command_reports_error_and_continues():
 
 
 async def test_dispatch_clear_empties_current_conversation():
-    # output = []
     context = _context()
     context.engine.conversation.add_message(role="user", content="hello")
 
@@ -114,7 +113,6 @@ async def test_dispatch_clear_empties_current_conversation():
 
 
 async def test_dispatch_help_lists_commands():
-    # output = []
 
     result = await dispatch_command(
         ParsedCommand(name="help", arguments=()),
@@ -134,14 +132,13 @@ async def test_dispatch_help_lists_commands():
 /effort - Show or set the thinking effort
 /provider - Switch LLM provider
 /persona - Show or switch the domain persona
-/config - View or update runtime configuration
+/config - Show, change, reset or save settings
 /prompt - Show the full prompt of the last model call
 /ps - Show RAM/VRAM used by the loaded models"""
     )
 
 
 async def test_dispatch_model_requires_exactly_one_name():
-    # output = []
     context = _context()
     original_provider = context.engine.provider
 
@@ -156,7 +153,6 @@ async def test_dispatch_model_requires_exactly_one_name():
 
 
 async def test_dispatch_model_switches_provider_and_preserves_conversation():
-    # output = []
     replacement = MockLLMProvider(default_response="new model")
     calls: list[tuple[str, dict[str, str]]] = []
 
@@ -195,7 +191,6 @@ async def test_dispatch_model_switches_provider_and_preserves_conversation():
 
 
 async def test_dispatch_provider_requires_exactly_one_name():
-    # output = []
     context = _context()
     original_provider = context.engine.provider
 
@@ -211,7 +206,6 @@ async def test_dispatch_provider_requires_exactly_one_name():
 
 
 async def test_dispatch_provider_switches_provider_and_preserves_conversation():
-    # output = []
     replacement = MockLLMProvider(default_response="replacement")
     calls: list[tuple[str, dict[str, str]]] = []
 
@@ -251,7 +245,6 @@ async def test_dispatch_provider_switches_provider_and_preserves_conversation():
 
 
 async def test_dispatch_unknown_provider_preserves_current_provider():
-    # output = []
     context = _context()
     original_provider = context.engine.provider
 
@@ -270,16 +263,19 @@ async def test_dispatch_unknown_provider_preserves_current_provider():
 
 
 async def test_dispatch_config_gets_all_values():
-    # output = []
     context = _context()
 
-    result = await dispatch_command(
-        ParsedCommand(name="config", arguments=("get",)),
-        context,
-    )
+    for arguments in ((), ("get",), ("show",)):
+        result = await dispatch_command(
+            ParsedCommand(name="config", arguments=arguments), context
+        )
 
-    assert not result.should_exit
-    assert result.message == str(context.config.model_dump())
+        message = result.message or ""
+        assert not result.should_exit
+        assert message.startswith("No config file")
+        assert f'model = "{DEFAULT_MODEL}"' in message
+        assert "[options]" in message
+        assert "temperature = (unset)" in message
 
 
 async def test_dispatch_config_masks_api_key():
@@ -312,7 +308,6 @@ async def test_dispatch_provider_passes_api_key_to_factory():
 
 
 async def test_dispatch_config_gets_one_value():
-    # output = []
 
     result = await dispatch_command(
         ParsedCommand(name="config", arguments=("get", "model")),
@@ -320,11 +315,10 @@ async def test_dispatch_config_gets_one_value():
     )
 
     assert not result.should_exit
-    assert result.message == f"model = {DEFAULT_MODEL}"
+    assert result.message == f'model = "{DEFAULT_MODEL}"'
 
 
 async def test_dispatch_config_rejects_unknown_key():
-    # output = []
 
     result = await dispatch_command(
         ParsedCommand(name="config", arguments=("get", "missing")),
@@ -335,8 +329,7 @@ async def test_dispatch_config_rejects_unknown_key():
     assert result.message == "Unknown config key: missing"
 
 
-async def test_dispatch_config_set_model_reuses_model_handler():
-    # output = []
+async def test_dispatch_config_set_model_rebuilds_provider():
     replacement = MockLLMProvider(default_response="replacement")
     calls: list[tuple[str, dict[str, str]]] = []
 
@@ -366,11 +359,10 @@ async def test_dispatch_config_set_model_reuses_model_handler():
     ]
     assert context.engine.provider is replacement
     assert context.config.model == "mistral"
-    assert result.message == "Model switched to mistral."
+    assert result.message == 'model = "mistral"'
 
 
 async def test_dispatch_config_set_base_url_rebuilds_provider():
-    # output = []
     replacement = MockLLMProvider(default_response="replacement")
     calls: list[tuple[str, dict[str, str]]] = []
 
@@ -405,11 +397,10 @@ async def test_dispatch_config_set_base_url_rebuilds_provider():
     assert context.engine.provider is replacement
     assert context.engine.conversation is conversation
     assert context.config.base_url == "http://ollama.example:11434"
-    assert result.message == "base_url = http://ollama.example:11434"
+    assert result.message == 'base_url = "http://ollama.example:11434"'
 
 
 async def test_dispatch_config_set_rejects_unknown_key():
-    # output = []
 
     result = await dispatch_command(
         ParsedCommand(name="config", arguments=("set", "missing", "value")),
@@ -421,7 +412,6 @@ async def test_dispatch_config_set_rejects_unknown_key():
 
 
 async def test_dispatch_config_rejects_invalid_usage():
-    # output = []
 
     result = await dispatch_command(
         ParsedCommand(name="config", arguments=("set", "model")),
@@ -433,7 +423,6 @@ async def test_dispatch_config_rejects_invalid_usage():
 
 
 async def test_dispatch_config_save_persists_current_config(tmp_path):
-    # output = []
     context = _context()
     context.config.model = "mistral"
     context.config.tools.fs_allowed_root = "/tmp/project"
@@ -450,7 +439,6 @@ async def test_dispatch_config_save_persists_current_config(tmp_path):
 
 
 async def test_dispatch_config_save_rejects_arguments(tmp_path):
-    # output = []
     context = _context()
     context.config_path = tmp_path / "sensai.toml"
 
@@ -465,7 +453,6 @@ async def test_dispatch_config_save_rejects_arguments(tmp_path):
 
 
 async def test_dispatch_config_gets_nested_tool_value():
-    # output = []
     context = _context()
     context.config.tools.fs_allowed_root = "/tmp/project"
 
@@ -478,11 +465,10 @@ async def test_dispatch_config_gets_nested_tool_value():
     )
 
     assert not result.should_exit
-    assert result.message == "tools.fs_allowed_root = /tmp/project"
+    assert result.message == 'tools.fs_allowed_root = "/tmp/project"'
 
 
 async def test_dispatch_config_set_fs_root_replaces_active_registry():
-    # output = []
     context = _context()
     original_registry = context.tool_registry
     replacement = ToolRegistry()
@@ -508,11 +494,10 @@ async def test_dispatch_config_set_fs_root_replaces_active_registry():
     assert context.engine.registry is replacement
     assert context.tool_registry is not original_registry
     assert context.config.tools.fs_allowed_root == "/tmp/project"
-    assert result.message == "tools.fs_allowed_root = /tmp/project"
+    assert result.message == 'tools.fs_allowed_root = "/tmp/project"'
 
 
 async def test_dispatch_config_set_fs_root_none_disables_tools():
-    # output = []
     context = _context()
     replacement = ToolRegistry()
     context.tool_registry_factory = lambda _: replacement
@@ -528,11 +513,10 @@ async def test_dispatch_config_set_fs_root_none_disables_tools():
     assert not result.should_exit
     assert context.config.tools.fs_allowed_root is None
     assert context.engine.registry is replacement
-    assert result.message == "tools.fs_allowed_root = None"
+    assert result.message == "tools.fs_allowed_root = false"
 
 
 async def test_dispatch_new_persists_and_activates_fresh_conversation():
-    # output = []
     context = _context()
     previous = context.engine.conversation
     previous.add_message(role="user", content="old history")
@@ -555,7 +539,6 @@ async def test_dispatch_new_persists_and_activates_fresh_conversation():
 
 
 async def test_dispatch_new_rejects_arguments():
-    # output = []
     context = _context()
     previous = context.engine.conversation
     store = context.memory_store
@@ -811,6 +794,7 @@ def _persona_context(enabled: bool = True) -> CommandContext:
         id="c", name="Collecte", description="", system_instruction="Tu es Collecte."
     )
     context.engine.persona_enabled = enabled
+    context.config.persona.instruction = "Tu es Collecte."
     context.config.persona.enabled = enabled
     return context
 
@@ -1065,3 +1049,162 @@ async def test_config_save_reports_a_write_failure(tmp_path):
 
     assert result.message
     assert "saved" not in result.message.lower()
+COMMENTED_FILE = '# team settings\nmodel = "qwen3.5:4b"  # default model\n'
+
+
+def _saved_context(tmp_path, text: str = COMMENTED_FILE) -> CommandContext:
+    context = _context()
+    context.config_path = tmp_path / "sensai.toml"
+    context.config_path.write_text(text)
+    return context
+
+
+async def _config(context: CommandContext, *arguments: str) -> str:
+    result = await dispatch_command(ParsedCommand("config", arguments), context)
+    return result.message or ""
+
+
+async def test_config_set_saves_the_key_and_keeps_comments(tmp_path):
+    context = _saved_context(tmp_path)
+
+    message = await _config(context, "set", "options.temperature", "0.7")
+
+    assert message == f"options.temperature = 0.7 (saved to {context.config_path})"
+    text = context.config_path.read_text()
+    assert "# team settings" in text
+    assert "# default model" in text
+    assert load_config(context.config_path).options.temperature == 0.7
+
+
+async def test_config_set_accepts_values_with_spaces(tmp_path):
+    context = _saved_context(tmp_path)
+
+    await _config(context, "set", "persona.name", "Sensai", "Collecte")
+
+    assert context.config.persona.name == "Sensai Collecte"
+    assert load_config(context.config_path).persona.name == "Sensai Collecte"
+
+
+async def test_config_set_any_documented_key(tmp_path):
+    context = _saved_context(tmp_path)
+
+    await _config(context, "set", "guardrails.injection", "flag")
+    await _config(context, "set", "budget.keep_recent_turns", "6")
+
+    saved = load_config(context.config_path)
+    assert saved.guardrails.injection == "flag"
+    assert saved.budget.keep_recent_turns == 6
+    assert context.engine.guardrail is not None
+
+
+async def test_invalid_value_changes_neither_session_nor_file(tmp_path):
+    context = _saved_context(tmp_path)
+
+    message = await _config(context, "set", "budget.threshold", "2")
+
+    assert message.startswith("Invalid budget.threshold:")
+    assert context.config.budget.threshold == 0.8
+    assert context.config_path.read_text() == COMMENTED_FILE
+
+
+async def test_failed_provider_switch_keeps_the_previous_model(tmp_path):
+    context = _saved_context(tmp_path)
+
+    message = await _config(context, "set", "provider", "nowhere")
+
+    assert message.startswith("Unknown provider 'nowhere'")
+    assert context.config.provider == "ollama"
+    assert "provider" not in context.config_path.read_text()
+
+
+async def test_config_reset_restores_the_default_and_drops_the_key(tmp_path):
+    context = _saved_context(tmp_path, "[options]\nseed = 7\n# note\nnum_predict = 9\n")
+    context.config.options.seed = 7
+
+    message = await _config(context, "reset", "options.seed")
+
+    assert message == f"options.seed = (unset) (saved to {context.config_path})"
+    assert context.config.options.seed is None
+    assert "seed" not in context.config_path.read_text()
+    assert "num_predict = 9" in context.config_path.read_text()
+
+
+async def test_autosave_off_keeps_changes_in_the_session(tmp_path):
+    context = _saved_context(tmp_path)
+
+    await _config(context, "set", "autosave", "false")
+    message = await _config(context, "set", "options.seed", "3")
+
+    assert message == "options.seed = 3 (not saved, /config save keeps it)"
+    assert load_config(context.config_path).options.seed is None
+    assert load_config(context.config_path).autosave is False
+    assert "unsaved: options.seed" in await _config(context)
+
+    await _config(context, "save")
+    assert load_config(context.config_path).options.seed == 3
+    assert context.unsaved == set()
+
+
+async def test_config_show_tags_each_value_with_its_source(tmp_path):
+    context = _saved_context(tmp_path, "[options]\ntemperature = 0.2\n")
+    context.config.options.temperature = 0.2
+    context.config.model = "from-a-flag"
+
+    message = await _config(context, "show")
+
+    assert message.startswith(f"Config file: {context.config_path} · autosave on")
+    assert re.search(r"temperature = 0\.2 +file", message)
+    assert re.search(r'model = "from-a-flag" +flag', message)
+    assert re.search(r"seed = \(unset\) +default", message)
+
+
+async def test_config_get_of_a_section_shows_only_that_section():
+    message = await _config(_context(), "get", "guardrails")
+
+    assert "[guardrails]" in message
+    assert "[options]" not in message
+
+
+async def test_config_keys_describes_settings():
+    message = await _config(_context(), "keys", "options.num_ctx")
+
+    assert message.startswith("options.num_ctx: int | none > 0 = (unset)")
+    assert "Context window" in message
+    assert (await _config(_context(), "keys", "nope")) == "Unknown config key: nope"
+
+
+async def test_config_without_a_file_never_writes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    context = _context()
+
+    message = await _config(context, "set", "options.seed", "1")
+
+    assert message == "options.seed = 1"
+    assert list(tmp_path.iterdir()) == []
+    assert (await _config(context, "save")) == "No config file to save to."
+
+
+async def test_config_rejects_unknown_actions():
+    assert (await _config(_context(), "explode")).startswith("Usage: /config")
+
+
+async def test_model_effort_and_persona_changes_are_saved(tmp_path):
+    context = _saved_context(tmp_path)
+    context.engine.persona = Persona(
+        id="c", name="Collecte", description="", system_instruction="Tu es Collecte."
+    )
+    context.config.persona.instruction = "Tu es Collecte."
+    context.provider_factory = lambda name, **config: MockLLMProvider()
+
+    model = await dispatch_command(ParsedCommand("model", ("llama3.2",)), context)
+    effort = await dispatch_command(ParsedCommand("effort", ("high",)), context)
+    persona = await dispatch_command(ParsedCommand("persona", ("on",)), context)
+
+    note = f"(saved to {context.config_path})"
+    assert model.message == f"Model switched to llama3.2. {note}"
+    assert effort.message == f"Effort set to high. {note}"
+    assert persona.message == f"Persona Collecte: on. {note}"
+    saved = load_config(context.config_path)
+    assert saved.model == "llama3.2"
+    assert saved.reasoning.think == "high"
+    assert saved.persona.enabled is True

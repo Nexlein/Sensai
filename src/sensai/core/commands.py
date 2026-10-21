@@ -4,21 +4,31 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import httpx
-from pydantic import ValidationError
 
+from sensai.core.components import BootstrapError, apply_setting
 from sensai.core.config import (
-    DEFAULT_CONFIG_PATH,
     DEFAULT_EFFORT,
     AppConfig,
     ConfigError,
-    check_context_fits,
     save_config,
+    to_file_value,
 )
 from sensai.core.engine import ChatEngine
 from sensai.core.prompt import format_prompt
+from sensai.core.settings import (
+    SETTINGS,
+    assign,
+    format_keys,
+    format_settings,
+    format_value,
+    get_value,
+    save_setting,
+    sources,
+    validated,
+)
 from sensai.domain.errors import ProviderError
 from sensai.domain.events import Event
-from sensai.domain.models import Conversation, Fact, LoadedModel, ModelOptions
+from sensai.domain.models import Conversation, Fact, LoadedModel
 from sensai.domain.protocols import (
     LLMProvider,
     MemoryStore,
@@ -51,6 +61,14 @@ class CommandResult:
 
 @dataclass
 class CommandContext:
+    """Everything a slash command may read or change in the running session.
+
+    `config_path` is the file `/config` edits (None: nothing is ever written),
+    `unsaved` the keys changed while autosave was off, `startup_warnings` the
+    non-fatal problems met while building the session, and `closers` what to
+    await when it ends (MCP server processes).
+    """
+
     config: AppConfig
     engine: ChatEngine
     provider_factory: ProviderFactory
@@ -58,12 +76,11 @@ class CommandContext:
     tool_registry_factory: ToolRegistryFactory
     memory_store: MemoryStore
     structured_memory: StructuredMemory | None = None
-    config_path: Path = DEFAULT_CONFIG_PATH
-    # Non-fatal problems found while building the session, shown once at startup.
+    config_path: Path | None = None
     startup_warnings: list[str] = field(default_factory=list)
-    # Awaited when the session ends, e.g. to stop MCP server processes.
     closers: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
     choose: ChoiceFn | None = None
+    unsaved: set[str] = field(default_factory=set)
 
     async def aclose(self) -> None:
         await asyncio.gather(*(close() for close in self.closers))
@@ -78,6 +95,54 @@ class CommandSpec:
     description: str
 
 
+class SettingError(Exception):
+    """A setting could not be changed; the message says why, in one line."""
+
+
+def _persist(context: CommandContext, key: str, reset: bool) -> str | None:
+    """Write `key` to the config file when autosave is on; the note to show."""
+    path, config = context.config_path, context.config
+    if path is None:
+        return None
+    if not config.autosave and key != "autosave":
+        context.unsaved.add(key)
+        return "not saved, /config save keeps it"
+    try:
+        save_setting(config, key, path, reset)
+    except ConfigError as exc:
+        context.unsaved.add(key)
+        return f"not saved: {exc}"
+    context.unsaved.discard(key)
+    return f"saved to {path}"
+
+
+def change_setting(context: CommandContext, key: str, raw: str | None) -> list[str]:
+    """Validate, apply to the running session, then save one setting.
+
+    `raw` is user text parsed like a TOML value; None resets the default. On any
+    failure the previous value stays in place and SettingError explains why.
+    Returns the notes to show after the new value.
+    """
+    config = context.config
+    try:
+        candidate = validated(config, key, raw)
+    except ConfigError as exc:
+        raise SettingError(str(exc)) from exc
+    previous = config.model_copy(deep=True)
+    assign(config, key, candidate)
+    try:
+        note = apply_setting(context, key)
+    except (ProviderError, BootstrapError) as exc:
+        assign(config, key, previous)
+        raise SettingError(str(exc)) from exc
+    saved = _persist(context, key, reset=raw is None)
+    return [text for text in (note, saved) if text]
+
+
+def _with_notes(message: str, notes: list[str]) -> str:
+    return f"{message} ({'; '.join(notes)})" if notes else message
+
+
 async def handle_provider(
     context: CommandContext,
     arguments: tuple[str, ...],
@@ -86,21 +151,13 @@ async def handle_provider(
         return CommandResult(message="Usage: /provider <name>")
 
     provider_name = arguments[0].lower()
-
     try:
-        new_provider = context.provider_factory(
-            provider_name,
-            model=context.config.model,
-            base_url=context.config.base_url,
-            api_key=context.config.api_key,
-            options=context.config.options,
-        )
-    except ProviderError as exc:
+        notes = change_setting(context, "provider", provider_name)
+    except SettingError as exc:
         return CommandResult(message=str(exc))
-
-    context.engine.provider = new_provider
-    context.config.provider = provider_name
-    return CommandResult(message=f"Provider switched to {provider_name}.")
+    return CommandResult(
+        message=_with_notes(f"Provider switched to {provider_name}.", notes)
+    )
 
 
 async def handle_model(
@@ -112,18 +169,10 @@ async def handle_model(
 
     model_name = arguments[0]
     try:
-        new_provider = context.provider_factory(
-            context.config.provider,
-            model=model_name,
-            base_url=context.config.base_url,
-            api_key=context.config.api_key,
-            options=context.config.options,
-        )
-    except ProviderError as exc:
+        notes = change_setting(context, "model", model_name)
+    except SettingError as exc:
         return CommandResult(message=f"Could not switch model: {exc}")
-    context.engine.provider = new_provider
-    context.config.model = model_name
-    return CommandResult(message=f"Model switched to {model_name}.")
+    return CommandResult(message=_with_notes(f"Model switched to {model_name}.", notes))
 
 
 EFFORT_LEVELS = ("low", "medium", "high", "off")
@@ -165,10 +214,12 @@ async def handle_effort(
 
     if name not in EFFORT_LEVELS:
         return CommandResult(message=EFFORT_USAGE)
-    reasoning.think = False if name == "off" else name
-    context.engine.think = reasoning.think
+    try:
+        notes = change_setting(context, "reasoning.think", f'"{name}"')
+    except SettingError as exc:
+        return CommandResult(message=str(exc))
     note = "" if reasoning.enabled else " Reasoning is disabled, so it has no effect."
-    return CommandResult(message=f"Effort set to {name}.{note}")
+    return CommandResult(message=_with_notes(f"Effort set to {name}.{note}", notes))
 
 
 PERSONA_USAGE = "Usage: /persona [on|off]"
@@ -187,152 +238,110 @@ async def handle_persona(
             message="No persona configured: set [persona] instruction or file."
         )
 
+    notes: list[str] = []
     if arguments:
         choice = arguments[0].lower()
         if choice not in {"on", "off"}:
             return CommandResult(message=PERSONA_USAGE)
-        engine.persona_enabled = choice == "on"
-        context.config.persona.enabled = engine.persona_enabled
+        try:
+            notes = change_setting(
+                context, "persona.enabled", "true" if choice == "on" else "false"
+            )
+        except SettingError as exc:
+            return CommandResult(message=str(exc))
 
     state = "on" if engine.persona_enabled else "off"
-    return CommandResult(message=f"Persona {engine.persona.name}: {state}.")
+    return CommandResult(
+        message=_with_notes(f"Persona {engine.persona.name}: {state}.", notes)
+    )
 
 
-async def handle_base_url(
-    context: CommandContext,
-    arguments: tuple[str, ...],
-) -> CommandResult:
-    if len(arguments) != 1:
-        return CommandResult(message="Usage: /config set base_url <url>")
+CONFIG_USAGE = (
+    "Usage: /config [show [key]] | get <key> | set <key> <value> | reset <key> "
+    "| keys [key] | save"
+)
 
-    base_url = arguments[0]
+
+def _config_header(context: CommandContext) -> str:
+    path = context.config_path
+    if path is None:
+        return "No config file: changes last for this session only."
+    autosave = "on" if context.config.autosave else "off"
+    header = f"Config file: {path} · autosave {autosave}"
+    if context.unsaved:
+        header += f" · unsaved: {', '.join(sorted(context.unsaved))}"
+    return header
+
+
+def _show(context: CommandContext, prefix: str | None) -> CommandResult:
+    found = sources(context.config, context.config_path, context.unsaved)
     try:
-        new_provider = context.provider_factory(
-            context.config.provider,
-            model=context.config.model,
-            base_url=base_url,
-            api_key=context.config.api_key,
-            options=context.config.options,
-        )
-    except ProviderError as exc:
-        return CommandResult(message=f"Could not update base_url: {exc}")
-
-    context.engine.provider = new_provider
-    context.config.base_url = base_url
-    return CommandResult(message=f"base_url = {base_url}")
+        body = format_settings(context.config, found, prefix)
+    except ConfigError as exc:
+        return CommandResult(message=str(exc))
+    return CommandResult(message=f"{_config_header(context)}\n\n{body}")
 
 
-async def handle_fs_allowed_root(
-    context: CommandContext,
-    arguments: tuple[str, ...],
-) -> CommandResult:
-    if len(arguments) != 1:
-        return CommandResult(
-            message="Usage: /config set tools.fs_allowed_root <path|none>"
-        )
-
-    value = arguments[0]
-    allowed_root = None if value.lower() in {"none", "null", "off"} else value
-    registry = context.tool_registry_factory(allowed_root)
-
-    context.tool_registry = registry
-    context.engine.registry = registry
-    context.config.tools.fs_allowed_root = allowed_root
-    return CommandResult(message=f"tools.fs_allowed_root = {allowed_root}")
+def _get(context: CommandContext, key: str) -> CommandResult:
+    if key not in SETTINGS:
+        return _show(context, key)
+    value = get_value(context.config, key)
+    return CommandResult(
+        message=f"{key} = {format_value(key, to_file_value(key, value))}"
+    )
 
 
-def _option_setter(name: str) -> CommandHandler:
-    async def handle_option(
-        context: CommandContext,
-        arguments: tuple[str, ...],
-    ) -> CommandResult:
-        if len(arguments) != 1:
-            return CommandResult(message=f"Usage: /config set options.{name} <v|none>")
-
-        value = arguments[0]
-        options = context.config.options
-        try:
-            candidate = options.model_validate(
-                {
-                    **options.model_dump(),
-                    name: None if value.lower() == "none" else value,
-                }
-            )
-            check_context_fits(context.config.budget, candidate)
-        except ValueError as exc:
-            reason = exc.errors()[0]["msg"] if isinstance(exc, ValidationError) else exc
-            return CommandResult(message=f"Invalid options.{name}: {reason}")
-
-        # Mutate in place: the provider holds this same object.
-        setattr(options, name, getattr(candidate, name))
-        return CommandResult(message=f"options.{name} = {getattr(options, name)}")
-
-    return handle_option
+def _set(context: CommandContext, key: str, raw: str | None) -> CommandResult:
+    try:
+        notes = change_setting(context, key, raw)
+    except SettingError as exc:
+        return CommandResult(message=str(exc))
+    value = to_file_value(key, get_value(context.config, key))
+    return CommandResult(
+        message=_with_notes(f"{key} = {format_value(key, value)}", notes)
+    )
 
 
-CONFIG_SETTERS = {
-    "model": handle_model,
-    "provider": handle_provider,
-    "base_url": handle_base_url,
-    "tools.fs_allowed_root": handle_fs_allowed_root,
-    **{f"options.{name}": _option_setter(name) for name in ModelOptions.model_fields},
-}
+def _save(context: CommandContext) -> CommandResult:
+    if context.config_path is None:
+        return CommandResult(message="No config file to save to.")
+    try:
+        save_config(context.config, context.config_path)
+    except ConfigError as exc:
+        return CommandResult(message=str(exc))
+    context.unsaved.clear()
+    return CommandResult(message=f"Config saved to {context.config_path}.")
 
 
 async def handle_config(
     context: CommandContext,
     arguments: tuple[str, ...],
 ) -> CommandResult:
-    values = context.config.model_dump()
-    if values["api_key"]:
-        values["api_key"] = "***"
+    """Show, explain, change, reset or save settings by dotted key."""
+    action, rest = (arguments[0].lower(), arguments[1:]) if arguments else ("show", ())
 
-    if not arguments:
-        return CommandResult(message=str(values))
-
-    action = arguments[0]
-    action_arguments = arguments[1:]
-
-    if action == "get":
-        if not action_arguments:
-            return CommandResult(message=str(values))
-        if len(action_arguments) != 1:
-            return CommandResult(message="Usage: /config get [key]")
-
-        key = action_arguments[0]
-        value: object = values
-        for part in key.split("."):
-            if not isinstance(value, dict) or part not in value:
-                return CommandResult(message=f"Unknown config key: {key}")
-            value = value[part]
-
-        return CommandResult(message=f"{key} = {value}")
-
-    if action == "save":
-        if action_arguments:
-            return CommandResult(message="Usage: /config save")
-
+    if action in {"show", "get"} and len(rest) <= 1:
+        if action == "get" and rest:
+            return _get(context, rest[0])
+        return _show(context, rest[0] if rest else None)
+    if action == "keys" and len(rest) <= 1:
         try:
-            save_config(context.config, context.config_path)
+            return CommandResult(message=format_keys(rest[0] if rest else None))
         except ConfigError as exc:
             return CommandResult(message=str(exc))
-
-        return CommandResult(message=f"Config saved to {context.config_path}.")
-
     if action == "set":
-        if len(action_arguments) != 2:
+        if len(rest) < 2:
             return CommandResult(message="Usage: /config set <key> <value>")
-
-        key, value = action_arguments
-        setter = CONFIG_SETTERS.get(key)
-        if setter is None:
-            return CommandResult(message=f"Unknown config key: {key}")
-
-        return await setter(context, (value,))
-
-    return CommandResult(
-        message="Usage: /config get [key] | /config set <key> <value> | /config save"
-    )
+        return _set(context, rest[0], " ".join(rest[1:]))
+    if action == "reset":
+        if len(rest) != 1:
+            return CommandResult(message="Usage: /config reset <key>")
+        return _set(context, rest[0], None)
+    if action == "save":
+        if rest:
+            return CommandResult(message="Usage: /config save")
+        return _save(context)
+    return CommandResult(message=CONFIG_USAGE)
 
 
 async def handle_new(
@@ -536,7 +545,7 @@ COMMANDS = {
     "effort": CommandSpec(handle_effort, "Show or set the thinking effort"),
     "provider": CommandSpec(handle_provider, "Switch LLM provider"),
     "persona": CommandSpec(handle_persona, "Show or switch the domain persona"),
-    "config": CommandSpec(handle_config, "View or update runtime configuration"),
+    "config": CommandSpec(handle_config, "Show, change, reset or save settings"),
     "prompt": CommandSpec(handle_prompt, "Show the full prompt of the last model call"),
     "ps": CommandSpec(handle_ps, "Show RAM/VRAM used by the loaded models"),
 }

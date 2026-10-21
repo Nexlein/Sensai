@@ -1,24 +1,23 @@
 import asyncio
 import sqlite3
-from functools import partial
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx
 
 from sensai.core.budget import ContextBudget, LLMSummarizer
 from sensai.core.commands import CommandContext
+from sensai.core.components import BootstrapError, build_guardrail, load_persona
 from sensai.core.config import (
     DEFAULT_CONFIG_PATH,
-    GuardrailsConfig,
+    AppConfig,
     McpConfig,
     McpServerConfig,
-    PersonaConfig,
     load_config,
 )
 from sensai.core.engine import ChatEngine
-from sensai.domain.models import Conversation, Persona
-from sensai.domain.protocols import Guardrail
-from sensai.eval.guardrails import RegexGuardrail
+from sensai.domain.models import Conversation
+from sensai.domain.protocols import StructuredMemory
 from sensai.eval.logger import PromptLogger, ReplyLogger
 from sensai.memory.manager import SqliteMemoryManager
 from sensai.memory.rag.chunker import TextChunker
@@ -28,39 +27,9 @@ from sensai.memory.session import SqliteMemoryStore
 from sensai.providers import get_provider
 from sensai.providers.ollama import OllamaEmbeddingProvider
 from sensai.tools.mcp import McpClient, McpError, McpTool
-from sensai.tools.registry import build_default_registry
+from sensai.tools.registry import ToolRegistry, build_default_registry
 
-
-class BootstrapError(Exception):
-    """Raised when optional session components cannot be initialized."""
-
-
-def load_persona(config: PersonaConfig) -> Persona | None:
-    """Build the configured persona, reading its file if it has one."""
-    if config.file is not None:
-        try:
-            instruction = Path(config.file).read_text(encoding="utf-8").strip()
-        except OSError as exc:
-            raise BootstrapError(f"Could not read persona file: {exc}") from exc
-        source = config.file
-    elif config.instruction is not None:
-        instruction, source = config.instruction.strip(), "sensai.toml"
-    else:
-        return None
-    if not instruction:
-        raise BootstrapError(f"Persona instruction is empty ({source}).")
-    return Persona(
-        id=config.name,
-        name=config.name,
-        description=f"from {source}",
-        system_instruction=instruction,
-    )
-
-
-def _build_guardrail(config: GuardrailsConfig) -> Guardrail | None:
-    if not config.enabled:
-        return None
-    return RegexGuardrail(injection_action=config.injection, pii_action=config.pii)
+__all__ = ["BootstrapError", "build_session", "load_persona"]
 
 
 async def _start_mcp_server(
@@ -94,6 +63,29 @@ async def _start_mcp_servers(
             clients.append(outcome[0])
             tools.extend(outcome[1])
     return clients, tools, warnings
+
+
+def _registry_factory(
+    config: AppConfig,
+    mcp_tools: list[McpTool],
+    memory: StructuredMemory | None,
+) -> Callable[[str | None], ToolRegistry]:
+    """Builds the tool registry from the live `[tools]` settings.
+
+    It keeps the MCP tools and the memory, so a `/config set tools.*` rebuild only
+    changes what the setting controls.
+    """
+
+    def build(allowed_root: str | None) -> ToolRegistry:
+        return build_default_registry(
+            allowed_root,
+            extra_tools=mcp_tools,
+            memory=memory,
+            web_search=config.tools.web_search,
+            sandbox=config.tools.sandbox,
+        )
+
+    return build
 
 
 async def build_session(
@@ -168,14 +160,7 @@ async def build_session(
     # stopped by context.aclose(), so nothing after this may raise.
     mcp_clients, mcp_tools, warnings = await _start_mcp_servers(config.mcp)
     structured_memory = SqliteMemoryManager() if config.memory.enabled else None
-    # The factory remembers the MCP tools so /config rebuilds keep them.
-    registry_factory = partial(
-        build_default_registry,
-        extra_tools=mcp_tools,
-        memory=structured_memory,
-        web_search=config.tools.web_search,
-        sandbox=config.tools.sandbox,
-    )
+    registry_factory = _registry_factory(config, mcp_tools, structured_memory)
     tool_registry = registry_factory(config.tools.fs_allowed_root)
 
     engine = ChatEngine(
@@ -183,7 +168,7 @@ async def build_session(
         conversation,
         tool_registry,
         retriever,
-        guardrail=_build_guardrail(config.guardrails),
+        guardrail=build_guardrail(config.guardrails),
         recorder=(
             ReplyLogger(config.eval.replies_path) if config.eval.log_replies else None
         ),

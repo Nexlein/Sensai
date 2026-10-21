@@ -1,4 +1,10 @@
-import json
+"""Sensai settings: the schema, loading with precedence, and saving.
+
+Precedence is CLI flag > config file (`sensai.toml`) > built-in default. Every field
+carries a description, which `/config keys`, `sensai config init` and the docs use.
+A field marked `restart` only takes effect when Sensai starts again.
+"""
+
 import re
 from pathlib import Path
 from typing import Any, Literal
@@ -7,7 +13,22 @@ import tomllib
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from sensai.core.budget import BudgetConfig
+from sensai.core.config_file import ConfigError, flatten, read_document, update_file
 from sensai.domain.models import ModelOptions
+
+__all__ = [
+    "DEFAULT_BASE_URL",
+    "DEFAULT_CONFIG_PATH",
+    "DEFAULT_EFFORT",
+    "DEFAULT_INTERFACE",
+    "DEFAULT_MODEL",
+    "DEFAULT_PROVIDER",
+    "AppConfig",
+    "ConfigError",
+    "check_context_fits",
+    "load_config",
+    "save_config",
+]
 
 DEFAULT_INTERFACE = "cli"
 DEFAULT_PROVIDER = "ollama"
@@ -15,42 +36,63 @@ DEFAULT_MODEL = "qwen3.5:4b"
 DEFAULT_BASE_URL = "http://localhost:11434"
 DEFAULT_CONFIG_PATH = Path("sensai.toml")
 DEFAULT_EFFORT = "low"
+RESTART = {"restart": True}
 _SERVER_NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 
-class ConfigError(Exception):
-    """Raised when a config file exists but cannot be parsed or validated."""
-
-
 class ToolsConfig(BaseModel):
-    # "." is resolved against the directory Sensai is launched from.
-    fs_allowed_root: str | None = "."
-    web_search: bool = True
-    sandbox: bool = True
+    """Built-in tools the model may call."""
+
+    fs_allowed_root: str | None = Field(
+        default=".",
+        description="Root of read_file/list_dir/write_file, relative to the launch "
+        "directory; false turns the file tools off",
+    )
+    web_search: bool = Field(
+        default=True, description="Register web_search (local SearXNG on :8888)"
+    )
+    sandbox: bool = Field(
+        default=True, description="Register run_python (throwaway Docker container)"
+    )
 
     @field_validator("fs_allowed_root", mode="before")
     @classmethod
     def _false_disables_fs_tools(cls, value: Any) -> Any:
-        # TOML has no null: `fs_allowed_root = false` turns the fs tools off.
+        """TOML has no null, so `fs_allowed_root = false` turns the fs tools off."""
         return None if value is False else value
 
 
 class GuardrailsConfig(BaseModel):
     """Privacy/content guardrails (EV2). On by default; `enabled = false` opts out."""
 
-    enabled: bool = True
-    injection: Literal["block", "flag"] = "block"
-    pii: Literal["redact", "block"] = "redact"
+    enabled: bool = Field(
+        default=True, description="Filter input, replies and tool results"
+    )
+    injection: Literal["block", "flag"] = Field(
+        default="block", description="On a prompt-injection match: block or warn only"
+    )
+    pii: Literal["redact", "block"] = Field(
+        default="redact", description="On personal data: mask it or refuse the text"
+    )
 
 
 class EvalConfig(BaseModel):
     """Opt-in logs: replies (EV1, graded with `python -m sensai.eval.judge`) and the
     full prompt of every model call."""
 
-    log_replies: bool = False
-    replies_path: str = "logs/replies.jsonl"
-    log_prompts: bool = False
-    prompts_path: str = "logs/prompts.jsonl"
+    log_replies: bool = Field(
+        default=False, description="Append each final reply to replies_path"
+    )
+    replies_path: str = Field(
+        default="logs/replies.jsonl", description="JSONL file of replies"
+    )
+    log_prompts: bool = Field(
+        default=False,
+        description="Append every prompt sent to the model to prompts_path",
+    )
+    prompts_path: str = Field(
+        default="logs/prompts.jsonl", description="JSONL file of prompts"
+    )
 
 
 class McpServerConfig(BaseModel):
@@ -79,14 +121,18 @@ class McpServerConfig(BaseModel):
 class McpConfig(BaseModel):
     """`[mcp.servers.<name>]` tables. The name prefixes the server's tool names."""
 
-    servers: dict[str, McpServerConfig] = {}
+    servers: dict[str, McpServerConfig] = Field(
+        default={},
+        description="MCP servers started at launch; edit them in the file",
+        json_schema_extra=RESTART,
+    )
 
     @field_validator("servers")
     @classmethod
     def _names_are_identifiers(
         cls, servers: dict[str, McpServerConfig]
     ) -> dict[str, McpServerConfig]:
-        # Tool names reach the model as `<name>__<tool>`; keep them function-safe.
+        """Tool names reach the model as `<name>__<tool>`, so keep them function-safe."""
         for name in servers:
             if not _SERVER_NAME.fullmatch(name):
                 raise ValueError(
@@ -98,18 +144,30 @@ class McpConfig(BaseModel):
 class MemoryConfig(BaseModel):
     """Structured long-term memory (M3). On by default; `enabled = false` opts out."""
 
-    enabled: bool = True
-    auto_inject: bool = True
+    enabled: bool = Field(
+        default=True,
+        description="Structured memory tools and /memory",
+        json_schema_extra=RESTART,
+    )
+    auto_inject: bool = Field(
+        default=True, description="Put the remembered facts in every prompt"
+    )
 
 
 class PersonaConfig(BaseModel):
     """Domain system prompt placed first in every call. Off by default."""
 
-    enabled: bool = False
-    name: str = "Sensai"
-    instruction: str | None = None
-    # Path to a text file holding the instruction, resolved from the launch directory.
-    file: str | None = None
+    enabled: bool = Field(
+        default=False, description="Lead every prompt with the persona"
+    )
+    name: str = Field(default="Sensai", description="Name shown by /persona")
+    instruction: str | None = Field(
+        default=None, description="Persona text (or use file, not both)"
+    )
+    file: str | None = Field(
+        default=None,
+        description="Text file holding the persona, relative to the launch directory",
+    )
 
     @model_validator(mode="after")
     def _one_source(self) -> "PersonaConfig":
@@ -123,13 +181,39 @@ class PersonaConfig(BaseModel):
 class RagConfig(BaseModel):
     """Local document retrieval. Off by default; `--rag-dir` also turns it on."""
 
-    enabled: bool = False
-    dir: str | None = None
-    model: str = "nomic-embed-text"
-    db: str = "rag.db"
-    top_k: int = Field(default=5, ge=1)
-    chunk_size: int = Field(default=500, gt=0)
-    chunk_overlap: int = Field(default=50, ge=0)
+    enabled: bool = Field(
+        default=False,
+        description="Index dir at launch and retrieve per question",
+        json_schema_extra=RESTART,
+    )
+    dir: str | None = Field(
+        default=None,
+        description="Directory of .md/.txt files",
+        json_schema_extra=RESTART,
+    )
+    model: str = Field(
+        default="nomic-embed-text",
+        description="Ollama embedding model",
+        json_schema_extra=RESTART,
+    )
+    db: str = Field(
+        default="rag.db", description="SQLite index file", json_schema_extra=RESTART
+    )
+    top_k: int = Field(
+        default=5,
+        ge=1,
+        description="Chunks added to each prompt",
+        json_schema_extra=RESTART,
+    )
+    chunk_size: int = Field(
+        default=500, gt=0, description="Characters per chunk", json_schema_extra=RESTART
+    )
+    chunk_overlap: int = Field(
+        default=50,
+        ge=0,
+        description="Characters shared by consecutive chunks (< chunk_size)",
+        json_schema_extra=RESTART,
+    )
 
     @model_validator(mode="after")
     def _coherent(self) -> "RagConfig":
@@ -143,19 +227,48 @@ class RagConfig(BaseModel):
 class ReasoningConfig(BaseModel):
     """Visible reasoning loop: thoughts and steps between tool calls."""
 
-    enabled: bool = True
-    show_thoughts: bool = False
-    max_steps: int = Field(default=5, ge=1)
-    think: bool | str | None = DEFAULT_EFFORT
+    enabled: bool = Field(
+        default=True, description="Step and thought events, think effort"
+    )
+    show_thoughts: bool = Field(
+        default=False,
+        description="Show thoughts and steps (answers then appear per round)",
+        json_schema_extra=RESTART,
+    )
+    max_steps: int = Field(
+        default=5, ge=1, description="Tool rounds before a forced tool-free answer"
+    )
+    think: bool | Literal["low", "medium", "high"] | None = Field(
+        default=DEFAULT_EFFORT,
+        description='Thinking effort: "low", "medium", "high", false (off) or true',
+    )
+
+    @field_validator("think", mode="before")
+    @classmethod
+    def _off_means_false(cls, value: Any) -> Any:
+        """`/effort off` and `think = "off"` both mean no thinking."""
+        return False if isinstance(value, str) and value.lower() == "off" else value
 
 
 class AppConfig(BaseModel):
-    interface: Literal["cli", "tui", "web"] = DEFAULT_INTERFACE
-    provider: str = DEFAULT_PROVIDER
-    model: str = DEFAULT_MODEL
-    base_url: str = DEFAULT_BASE_URL
-    # Only providers that need a key (Groq) read it; GROQ_API_KEY works too.
-    api_key: str | None = None
+    """Everything `sensai.toml` can set."""
+
+    interface: Literal["cli", "tui", "web"] = Field(
+        default=DEFAULT_INTERFACE,
+        description="Interface started by `sensai chat`",
+        json_schema_extra=RESTART,
+    )
+    provider: str = Field(default=DEFAULT_PROVIDER, description="ollama, groq or mock")
+    model: str = Field(default=DEFAULT_MODEL, description="Model name for the provider")
+    base_url: str = Field(default=DEFAULT_BASE_URL, description="Ollama server URL")
+    api_key: str | None = Field(
+        default=None, description="Groq key (prefer the GROQ_API_KEY variable)"
+    )
+    autosave: bool = Field(
+        default=True,
+        description="Write each change made in a session (/config set, /model, "
+        "/provider, /effort, /persona) to the config file at once",
+    )
     tools: ToolsConfig = ToolsConfig()
     budget: BudgetConfig = BudgetConfig()
     guardrails: GuardrailsConfig = GuardrailsConfig()
@@ -183,6 +296,16 @@ def check_context_fits(budget: BudgetConfig, options: ModelOptions) -> None:
             f"budget.max_tokens ({budget.max_tokens}) must not exceed "
             f"options.num_ctx - options.num_predict ({room})"
         )
+
+
+def validation_reasons(exc: ValidationError) -> str:
+    """Pydantic errors as one line: `options.num_ctx: Input should be greater than 0`."""
+    reasons = []
+    for err in exc.errors():
+        message = err["msg"].removeprefix("Value error, ")
+        location = ".".join(map(str, err["loc"]))
+        reasons.append(f"{location}: {message}" if location else message)
+    return "; ".join(reasons)
 
 
 def _read_config_file(path: Path) -> dict[str, Any]:
@@ -214,169 +337,54 @@ def load_config(
         if path.exists():
             file_data = _read_config_file(path)
 
-    merged = {**file_data}
-    if interface is not None:
-        merged["interface"] = interface
-    if provider is not None:
-        merged["provider"] = provider
-    if model is not None:
-        merged["model"] = model
-    if base_url is not None:
-        merged["base_url"] = base_url
+    overrides = {
+        "interface": interface,
+        "provider": provider,
+        "model": model,
+        "base_url": base_url,
+    }
+    merged = {**file_data, **{k: v for k, v in overrides.items() if v is not None}}
 
     try:
         return AppConfig(**merged)
     except ValidationError as exc:
-        reasons = "; ".join(
-            ".".join(map(str, err["loc"])) + f": {err['msg']}"
-            if err["loc"]
-            else err["msg"]
-            for err in exc.errors()
-        )
-        raise ConfigError(f"Invalid config values: {reasons}") from exc
+        raise ConfigError(f"Invalid config values: {validation_reasons(exc)}") from exc
+
+
+def to_file_value(key: str, value: Any) -> Any:
+    """How a value is written to TOML; None means the key is left out."""
+    if key == "tools.fs_allowed_root" and value is None:
+        return False
+    return value
 
 
 def save_config(
     config: AppConfig,
     config_path: Path | str = DEFAULT_CONFIG_PATH,
 ) -> None:
+    """Write every setting that differs from its default, or that the file already
+    sets, into the file. Comments, key order and unknown keys are kept; settings
+    left unset are removed, MCP servers missing from `config` too."""
     path = Path(config_path)
-    lines = [
-        f"interface = {json.dumps(config.interface, ensure_ascii=False)}",
-        f"provider = {json.dumps(config.provider, ensure_ascii=False)}",
-        f"model = {json.dumps(config.model, ensure_ascii=False)}",
-        f"base_url = {json.dumps(config.base_url, ensure_ascii=False)}",
-    ]
-    if config.api_key:
-        lines.append(f"api_key = {json.dumps(config.api_key, ensure_ascii=False)}")
+    tree = read_document(path).unwrap()
+    defaults = flatten(AppConfig().model_dump(exclude={"mcp"}))
+    current = flatten(config.model_dump(exclude={"mcp"}))
+    in_file = flatten(tree)
 
-    if config.tools != ToolsConfig():
-        # json.dumps(False) is "false", which loads back as None.
-        fs_allowed_root = config.tools.fs_allowed_root or False
-        lines.extend(
-            [
-                "",
-                "[tools]",
-                "fs_allowed_root = " + json.dumps(fs_allowed_root, ensure_ascii=False),
-                f"web_search = {json.dumps(config.tools.web_search)}",
-                f"sandbox = {json.dumps(config.tools.sandbox)}",
-            ]
-        )
+    values: dict[str, Any] = {}
+    removed: list[str] = []
+    for key, value in current.items():
+        stored = to_file_value(key, value)
+        if stored is None:
+            removed.append(key)
+        elif value != defaults.get(key) or key in in_file:
+            values[key] = stored
 
-    if config.rag != RagConfig():
-        rag = config.rag
-        lines.extend(["", "[rag]", f"enabled = {json.dumps(rag.enabled)}"])
-        if rag.dir is not None:
-            lines.append(f"dir = {json.dumps(rag.dir, ensure_ascii=False)}")
-        lines.extend(
-            [
-                f"model = {json.dumps(rag.model, ensure_ascii=False)}",
-                f"db = {json.dumps(rag.db, ensure_ascii=False)}",
-                f"top_k = {rag.top_k}",
-                f"chunk_size = {rag.chunk_size}",
-                f"chunk_overlap = {rag.chunk_overlap}",
-            ]
-        )
+    servers = config.mcp.model_dump()["servers"]
+    known = tree.get("mcp", {}).get("servers", {})
+    for name, server in servers.items():
+        if known.get(name) != server:
+            values[f"mcp.servers.{name}"] = server
+    removed.extend(f"mcp.servers.{name}" for name in known if name not in servers)
 
-    if config.budget != BudgetConfig():
-        lines.extend(
-            [
-                "",
-                "[budget]",
-                f"max_tokens = {config.budget.max_tokens}",
-                f"threshold = {config.budget.threshold}",
-                f"keep_recent_turns = {config.budget.keep_recent_turns}",
-            ]
-        )
-
-    if config.guardrails != GuardrailsConfig():
-        lines.extend(
-            [
-                "",
-                "[guardrails]",
-                f"enabled = {json.dumps(config.guardrails.enabled)}",
-                f"injection = {json.dumps(config.guardrails.injection)}",
-                f"pii = {json.dumps(config.guardrails.pii)}",
-            ]
-        )
-
-    if config.eval != EvalConfig():
-        lines.extend(
-            [
-                "",
-                "[eval]",
-                f"log_replies = {json.dumps(config.eval.log_replies)}",
-                "replies_path = "
-                + json.dumps(config.eval.replies_path, ensure_ascii=False),
-                f"log_prompts = {json.dumps(config.eval.log_prompts)}",
-                "prompts_path = "
-                + json.dumps(config.eval.prompts_path, ensure_ascii=False),
-            ]
-        )
-
-    if config.memory != MemoryConfig():
-        lines.extend(
-            [
-                "",
-                "[memory]",
-                f"enabled = {json.dumps(config.memory.enabled)}",
-                f"auto_inject = {json.dumps(config.memory.auto_inject)}",
-            ]
-        )
-
-    if config.reasoning != ReasoningConfig():
-        lines.extend(
-            [
-                "",
-                "[reasoning]",
-                f"enabled = {json.dumps(config.reasoning.enabled)}",
-                f"show_thoughts = {json.dumps(config.reasoning.show_thoughts)}",
-                f"max_steps = {config.reasoning.max_steps}",
-            ]
-        )
-        if config.reasoning.think is not None:
-            lines.append(f"think = {json.dumps(config.reasoning.think)}")
-
-    if config.persona != PersonaConfig():
-        persona = config.persona
-        lines.extend(
-            [
-                "",
-                "[persona]",
-                f"enabled = {json.dumps(persona.enabled)}",
-                f"name = {json.dumps(persona.name, ensure_ascii=False)}",
-            ]
-        )
-        for key in ("instruction", "file"):
-            if (value := getattr(persona, key)) is not None:
-                lines.append(f"{key} = {json.dumps(value, ensure_ascii=False)}")
-
-    if options := config.options.to_payload():
-        lines.extend(["", "[options]"])
-        lines.extend(f"{key} = {json.dumps(value)}" for key, value in options.items())
-
-    # save_config rewrites the whole file, so every section must be written back or
-    # a runtime /model would silently delete the user's MCP servers.
-    for name, server in config.mcp.servers.items():
-        lines.extend(
-            [
-                "",
-                f"[mcp.servers.{name}]",
-                f"command = {json.dumps(server.command, ensure_ascii=False)}",
-                f"args = {json.dumps(server.args, ensure_ascii=False)}",
-                f"timeout = {server.timeout}",
-            ]
-        )
-        if server.env:
-            lines.append(f"[mcp.servers.{name}.env]")
-            lines.extend(
-                f"{json.dumps(key, ensure_ascii=False)} = "
-                f"{json.dumps(value, ensure_ascii=False)}"
-                for key, value in server.env.items()
-            )
-
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    except OSError as exc:
-        raise ConfigError(f"Could not write config file {path}: {exc}") from exc
+    update_file(path, values, removed)

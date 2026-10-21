@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.14.1",
     "rich>=15.0.0",
     "textual>=8.2.8",
+    "tomlkit>=0.15.2",
     "uvicorn[standard]>=0.54.0",
 ]
 

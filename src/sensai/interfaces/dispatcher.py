@@ -12,6 +12,7 @@ from sensai.core.bootstrap import BootstrapError, build_session
 from sensai.core.config import DEFAULT_CONFIG_PATH, ConfigError
 from sensai.domain.errors import ProviderError
 from sensai.interfaces.cli.app import run_cli
+from sensai.interfaces.cli.config import add_config_parser, run_config_command
 from sensai.interfaces.tui.app import run_tui
 from sensai.interfaces.web.app import run_web
 
@@ -39,6 +40,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     chat.add_argument(
         "--session", default=None, help="Name of the session to resume or create"
     )
+    add_config_parser(subparsers, str(DEFAULT_CONFIG_PATH))
     return parser
 
 
@@ -46,6 +48,8 @@ async def dispatch(argv: list[str]) -> int:
     """Build one session, then run the selected interface."""
     console = Console()
     args = build_arg_parser().parse_args(argv)
+    if args.command == "config":
+        return run_config_command(args, console)
 
     try:
         context = await build_session(
