@@ -9,12 +9,25 @@ from rich.console import Console
 from rich.markup import escape
 
 from sensai.core.bootstrap import BootstrapError, build_session
+from sensai.core.commands import CommandContext
 from sensai.core.config import DEFAULT_CONFIG_PATH, ConfigError
 from sensai.domain.errors import ProviderError
 from sensai.interfaces.cli.app import run_cli
 from sensai.interfaces.cli.config import add_config_parser, run_config_command
-from sensai.interfaces.tui.app import run_tui
-from sensai.interfaces.web.app import run_web
+
+
+async def run_tui(context: CommandContext) -> None:
+    """Start the Textual interface; imported on use, so the CLI starts faster."""
+    from sensai.interfaces.tui.app import run_tui as start
+
+    await start(context)
+
+
+async def run_web(context: CommandContext) -> None:
+    """Start the web interface; imported on use, so the CLI starts faster."""
+    from sensai.interfaces.web.app import run_web as start
+
+    await start(context)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
