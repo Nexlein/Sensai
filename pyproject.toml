@@ -9,7 +9,7 @@ authors = [
     { name = "Aberkane Mathys (Vulcaaa)", email = "mathys.aberkane@epitech.eu" },
     { name = "Lambrez Alban (Saitamadupauvre)", email = "alban.lambrez@epitech.eu" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.162.0",
     "httpx>=0.28.1",

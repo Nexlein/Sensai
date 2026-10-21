@@ -2,9 +2,9 @@
 
 import datetime
 import re
+import tomllib
 
 import pytest
-import tomllib
 
 from sensai.core.config import AppConfig, ConfigError, load_config
 from sensai.core.config_file import flatten

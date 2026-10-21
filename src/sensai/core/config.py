@@ -6,10 +6,10 @@ A field marked `restart` only takes effect when Sensai starts again.
 """
 
 import re
+import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-import tomllib
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from sensai.core.budget import BudgetConfig

@@ -2,9 +2,9 @@
 
 import os
 import stat
+import tomllib
 
 import pytest
-import tomllib
 
 from sensai.core.config_file import (
     ConfigError,

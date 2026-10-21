@@ -8,12 +8,12 @@ objects other components hold (the provider's `ModelOptions`, the budget's
 """
 
 import json
+import tomllib
 import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin
 
-import tomllib
 from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
 
