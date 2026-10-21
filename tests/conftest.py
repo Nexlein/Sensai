@@ -6,6 +6,9 @@ the CLI does, through `build_session`. `say` sends one input through
 """
 
 import textwrap
+import time
+from collections import Counter, defaultdict
+from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import date
 from types import SimpleNamespace
@@ -190,3 +193,200 @@ def searxng(route_search):
 
     route_search(handler)
     return fake
+
+
+MARKS = {
+    "passed": ("✓", "PASS", {"green": True}),
+    "failed": ("✗", "FAIL", {"red": True, "bold": True}),
+    "error": ("✗", "ERROR", {"red": True, "bold": True}),
+    "skipped": ("–", "SKIP", {"yellow": True}),
+    "xfailed": ("~", "XFAIL", {"yellow": True}),
+    "xpassed": ("!", "XPASS", {"red": True}),
+}
+SLOW_SECONDS = 0.5
+
+
+@dataclass
+class Outcome:
+    nodeid: str
+    module: str
+    title: str
+    status: str
+    seconds: float
+    reason: str = ""
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    group = parser.getgroup("sensai")
+    group.addoption(
+        "--classic", action="store_true", help="Plain pytest output, no titles"
+    )
+    group.addoption(
+        "--test-report",
+        default=None,
+        metavar="PATH",
+        help="Also write every test title and result as Markdown to PATH",
+    )
+
+
+def _first_line(doc: str | None) -> str:
+    if not doc or not doc.strip():
+        return ""
+    return doc.strip().splitlines()[0].strip().rstrip(".")
+
+
+def _humanize(name: str) -> str:
+    words = name.removeprefix("test_").replace("_", " ").strip()
+    return words[:1].upper() + words[1:]
+
+
+def test_title(item: pytest.Item) -> str:
+    function = getattr(item, "function", None)
+    name = getattr(item, "originalname", None) or item.name.split("[")[0]
+    title = _first_line(getattr(function, "__doc__", None)) or _humanize(name)
+    parent = getattr(item, "cls", None)
+    if parent is not None:
+        title = f"{_humanize(parent.__name__.removeprefix('Test'))} › {title}"
+    callspec = getattr(item, "callspec", None)
+    if callspec is not None:
+        title += f" [{callspec.id}]"
+    return title
+
+
+def module_title(item: pytest.Item) -> str:
+    path = Path(item.nodeid.split("::")[0])
+    doc = _first_line(getattr(getattr(item, "module", None), "__doc__", None))
+    location = "/".join(path.with_suffix("").parts[1:]).replace("test_", "")
+    return f"{location} — {doc}" if doc else location
+
+
+def _status(report: pytest.TestReport) -> str | None:
+    if hasattr(report, "wasxfail"):
+        return "xfailed" if report.skipped else "xpassed"
+    if report.when == "call":
+        return report.outcome
+    if report.failed:
+        return "error"
+    if report.skipped and report.when == "setup":
+        return "skipped"
+    return None
+
+
+def _reason(report: pytest.TestReport) -> str:
+    if report.skipped and isinstance(report.longrepr, tuple):
+        return str(report.longrepr[2]).removeprefix("Skipped: ")
+    if report.failed:
+        crash = getattr(report.longrepr, "reprcrash", None)
+        return crash.message.splitlines()[0] if crash is not None else ""
+    return ""
+
+
+class SpecReporter:
+    """Prints one line per test instead of pytest's dots."""
+
+    def __init__(self, config: pytest.Config) -> None:
+        self.config = config
+        self.terminal = config.pluginmanager.getplugin("terminalreporter")
+        self.titles: dict[str, tuple[str, str]] = {}
+        self.outcomes: list[Outcome] = []
+        self.current_module: str | None = None
+        self.started = time.perf_counter()
+
+    def pytest_collection_modifyitems(self, items: list[pytest.Item]) -> None:
+        self.titles = {
+            item.nodeid: (module_title(item), test_title(item)) for item in items
+        }
+
+    @pytest.hookimpl(tryfirst=True)
+    def pytest_report_teststatus(self, report: pytest.TestReport):
+        status = _status(report)
+        if status is None:
+            return ("", "", "")
+        word = {"xfailed": "XFAIL", "xpassed": "XPASS"}.get(status, status.upper())
+        return (status, "", word)
+
+    def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
+        status = _status(report)
+        if status is None:
+            return
+        module, title = self.titles.get(report.nodeid, (report.fspath, report.nodeid))
+        outcome = Outcome(
+            report.nodeid, module, title, status, report.duration, _reason(report)
+        )
+        self.outcomes.append(outcome)
+        tw = self.terminal
+        if module != self.current_module:
+            self.current_module = module
+            tw.ensure_newline()
+            tw.write_line("")
+            tw.write_line(module, bold=True)
+        symbol, _, markup = MARKS[status]
+        tw.write(f"  {symbol} ", **markup)
+        tw.write(title)
+        if outcome.seconds >= SLOW_SECONDS:
+            tw.write(f"  ({outcome.seconds:.2f} s)", yellow=True)
+        if outcome.reason:
+            tw.write(f"  — {outcome.reason}", **markup)
+        tw.write("\n")
+
+    def pytest_terminal_summary(self, terminalreporter) -> None:
+        if not self.outcomes:
+            return
+        areas: dict[str, Counter[str]] = defaultdict(Counter)
+        for outcome in self.outcomes:
+            parts = Path(outcome.nodeid.split("::")[0]).parts
+            area = parts[1] if len(parts) > 2 else "package"
+            areas[area][outcome.status] += 1
+        tw = terminalreporter
+        tw.write_sep("=", "results by area")
+        for area, counts in sorted(areas.items()):
+            failed = counts["failed"] + counts["error"]
+            line = (
+                f"  {area:<12} {counts['passed']:>4} passed"
+                f"  {failed:>3} failed  {counts['skipped']:>3} skipped"
+            )
+            tw.write_line(line, red=bool(failed), green=not failed)
+        path = self.config.getoption("--test-report")
+        if path:
+            write_markdown(
+                Path(path), self.outcomes, time.perf_counter() - self.started
+            )
+            tw.write_line(f"  report written to {path}")
+
+
+def write_markdown(path: Path, outcomes: list[Outcome], seconds: float) -> None:
+    """Every test with its title and result, one table per file."""
+    totals = Counter(outcome.status for outcome in outcomes)
+    lines = [
+        "# Test report",
+        "",
+        f"{len(outcomes)} tests in {seconds:.1f} s: "
+        + ", ".join(f"{count} {status}" for status, count in sorted(totals.items())),
+        "",
+    ]
+    by_module: dict[str, list[Outcome]] = defaultdict(list)
+    for outcome in outcomes:
+        by_module[outcome.module].append(outcome)
+    for module, members in by_module.items():
+        lines.extend(
+            [f"## {module}", "", "| Result | Test | Time |", "| --- | --- | --- |"]
+        )
+        for outcome in members:
+            symbol, word, _ = MARKS[outcome.status]
+            note = f" — {outcome.reason}" if outcome.reason else ""
+            title = (outcome.title + note).replace("|", "\\|")
+            lines.append(f"| {symbol} {word} | {title} | {outcome.seconds:.2f} s |")
+        lines.append("")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_configure(config: pytest.Config) -> None:
+    terminal = config.pluginmanager.getplugin("terminalreporter")
+    plain = config.getoption("--classic") or config.get_verbosity() != 0
+    if terminal is None or plain or hasattr(config, "workerinput"):
+        return
+    terminal.showfspath = False
+    terminal._show_progress_info = False
+    config.pluginmanager.register(SpecReporter(config), "sensai-spec-reporter")

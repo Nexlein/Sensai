@@ -1,3 +1,5 @@
+"""RAG chunker."""
+
 import os
 import tempfile
 

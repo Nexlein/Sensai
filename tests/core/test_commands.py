@@ -1,3 +1,5 @@
+"""Slash commands: /config, /model, /effort, /persona, /memory, /ps, /prompt."""
+
 import re
 from collections.abc import AsyncIterator
 

@@ -1,3 +1,5 @@
+"""Chat engine with the token budget."""
+
 from collections.abc import AsyncGenerator
 from typing import Any
 

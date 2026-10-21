@@ -1,3 +1,5 @@
+"""RAG vector store (SQLite, cosine)."""
+
 import os
 
 from sensai.domain.models import Chunk, generate_uuid

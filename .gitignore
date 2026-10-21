@@ -47,3 +47,6 @@ sensai.toml
 
 # Hypothesis example database
 .hypothesis/
+
+# Generated test and benchmark reports
+reports/

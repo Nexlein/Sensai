@@ -1,3 +1,5 @@
+"""MCP client and tools (T1)."""
+
 import sys
 from pathlib import Path
 

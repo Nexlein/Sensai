@@ -1,4 +1,4 @@
-.PHONY: all setup test test-verbose coverage test-live lint typecheck format run
+.PHONY: all setup test test-verbose test-report test-classic coverage test-live lint typecheck format run
 
 # Same version as the VSCodium/VS Code basedpyright extension; settings in pyproject.toml.
 BASEDPYRIGHT = basedpyright@1.40.2
@@ -21,11 +21,17 @@ setup:
 test:
 	uv run pytest
 
+test-report:
+	uv run pytest --test-report reports/tests.md
+
+test-classic:
+	uv run pytest --classic
+
 test-verbose:
 	uv run pytest -v -rs
 
 coverage:
-	uv run pytest --cov=sensai --cov-report=term-missing --cov-report=html
+	uv run pytest --classic --cov=sensai --cov-report=term-missing --cov-report=html
 
 test-live:
 	uv run pytest -m live -v -rA

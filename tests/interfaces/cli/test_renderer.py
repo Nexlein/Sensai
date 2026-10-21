@@ -1,3 +1,5 @@
+"""CLI renderer: streamed replies, notices, confirmations."""
+
 import asyncio
 from collections.abc import AsyncIterator
 

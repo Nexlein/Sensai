@@ -1,3 +1,5 @@
+"""Token and throughput lines."""
+
 from sensai.domain.events import BudgetEvent, UsageEvent
 from sensai.interfaces.usage import format_metrics, format_usage
 

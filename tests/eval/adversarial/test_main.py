@@ -1,3 +1,5 @@
+"""Adversarial suite command line."""
+
 from sensai.eval.adversarial.__main__ import main
 
 

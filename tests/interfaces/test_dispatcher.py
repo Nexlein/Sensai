@@ -1,3 +1,5 @@
+"""Entry point: argument parsing and interface choice."""
+
 from types import SimpleNamespace
 
 import pytest

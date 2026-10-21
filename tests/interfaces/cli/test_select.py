@@ -1,3 +1,5 @@
+"""CLI picker."""
+
 import pytest
 from prompt_toolkit.application import create_app_session
 from prompt_toolkit.input import create_pipe_input

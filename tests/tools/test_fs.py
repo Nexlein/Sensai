@@ -1,3 +1,5 @@
+"""File tools confined to the allowed root (T4)."""
+
 import os
 from pathlib import Path
 

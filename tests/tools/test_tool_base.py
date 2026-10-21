@@ -1,3 +1,5 @@
+"""Tool base classes and path boundary."""
+
 from pathlib import Path
 from typing import Any
 

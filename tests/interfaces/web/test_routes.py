@@ -1,3 +1,5 @@
+"""Web socket protocol."""
+
 import asyncio
 
 import pytest

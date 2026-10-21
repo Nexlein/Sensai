@@ -1,3 +1,5 @@
+"""LLM summarizer used to condense old turns."""
+
 from collections.abc import AsyncGenerator
 from typing import Any
 

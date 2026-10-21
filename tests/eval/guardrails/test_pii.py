@@ -1,3 +1,5 @@
+"""Personal data detection and masking."""
+
 import time
 from itertools import pairwise
 

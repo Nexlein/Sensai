@@ -1,3 +1,5 @@
+"""Context budget (M2): when and how old turns are summarized."""
+
 import httpx
 
 from sensai.core.budget import BudgetConfig

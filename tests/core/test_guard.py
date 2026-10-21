@@ -1,3 +1,5 @@
+"""Guardrail events and their reasons."""
+
 from sensai.core.guard import guardrail_event, reason
 from sensai.domain.models import GuardrailFinding
 

@@ -1,3 +1,5 @@
+"""Live token count while a reply streams."""
+
 from sensai.core.budget.tracker import UsageTracker
 
 

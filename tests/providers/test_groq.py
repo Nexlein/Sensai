@@ -1,3 +1,5 @@
+"""Groq provider (opt-in)."""
+
 import json
 
 import httpx

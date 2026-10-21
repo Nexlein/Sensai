@@ -1,3 +1,5 @@
+"""Config schema: precedence, validation and saving."""
+
 import pytest
 
 from sensai.core.config import (

@@ -1,3 +1,5 @@
+"""Mock providers."""
+
 from sensai.domain.events import Event, TextChunkEvent, ThoughtEvent, ToolCallEvent
 from sensai.domain.models import Message
 from sensai.providers.mock import MockLLMProvider, MockToolCallingLLMProvider

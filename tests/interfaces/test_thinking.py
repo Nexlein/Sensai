@@ -1,3 +1,5 @@
+""" "thinking… N s" indicator."""
+
 import asyncio
 from collections.abc import AsyncIterator
 

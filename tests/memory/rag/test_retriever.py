@@ -1,3 +1,5 @@
+"""RAG retriever: indexing and retrieval."""
+
 import os
 
 import pytest

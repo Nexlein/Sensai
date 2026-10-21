@@ -1,3 +1,5 @@
+"""Adversarial corpus (EV4) against the guardrails."""
+
 import pytest
 
 from sensai.eval.adversarial import CASES, CATEGORIES

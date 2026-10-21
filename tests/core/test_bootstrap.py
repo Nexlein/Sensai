@@ -1,3 +1,5 @@
+"""Session wiring: config, provider, tools, RAG, MCP, persona."""
+
 import json
 import sys
 from pathlib import Path

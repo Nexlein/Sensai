@@ -1,3 +1,5 @@
+"""CLI app: REPL, Ctrl+C, errors."""
+
 import asyncio
 import os
 import signal

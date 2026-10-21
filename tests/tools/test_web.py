@@ -1,3 +1,5 @@
+"""Web search tool (T3)."""
+
 import httpx
 import pytest
 

@@ -1,3 +1,5 @@
+"""Prompt-injection heuristics."""
+
 import pytest
 
 from sensai.eval.guardrails import find_injection

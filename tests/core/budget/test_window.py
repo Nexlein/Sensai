@@ -1,3 +1,5 @@
+"""History window: turns kept together with their tool results."""
+
 from sensai.core.budget.window import group_turns, split_window
 from sensai.domain.models import Message, ToolCall
 

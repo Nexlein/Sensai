@@ -1,3 +1,5 @@
+"""One model call streamed through output filters."""
+
 import pytest
 
 from sensai.core.streaming import RoundStreamer
