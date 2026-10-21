@@ -104,43 +104,45 @@ class SQLiteVectorStore:
     def search(self, query_embedding: list[float], top_k: int = 5) -> list[ScoredChunk]:
         """Return the top K chunks for a compatible query embedding.
 
-        Vectors are read as packed doubles and scored with a C dot product; only
-        the K best rows become `ScoredChunk` objects.
+        Only the vectors are read to score every chunk (packed doubles, C dot
+        product); text and metadata are then fetched for the K best alone.
         """
         query = _validate_embedding(query_embedding)
         if top_k <= 0:
             raise ValueError("top_k must be positive")
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT id, doc_id, text, metadata, embedding FROM chunks"
-            ).fetchall()
-
         query_norm = math.sqrt(_dot(query, query))
-        scored = []
-        for row in rows:
-            if not row[4]:
-                continue
-            vector = _decode(row[4])
-            if len(vector) != len(query):
-                raise ValueError("Embedding dimensions do not match")
-            norm = math.sqrt(_dot(vector, vector))
-            score = (
-                _dot(query, vector) / (query_norm * norm)
-                if query_norm and norm
-                else 0.0
-            )
-            scored.append((score, row, vector))
-
+        with self._connect() as conn:
+            scored = []
+            for rowid, raw in conn.execute("SELECT rowid, embedding FROM chunks"):
+                if not raw:
+                    continue
+                vector = _decode(raw)
+                if len(vector) != len(query):
+                    raise ValueError("Embedding dimensions do not match")
+                norm = math.sqrt(_dot(vector, vector))
+                score = (
+                    _dot(query, vector) / (query_norm * norm)
+                    if query_norm and norm
+                    else 0.0
+                )
+                scored.append((score, rowid, vector))
+            best = heapq.nlargest(top_k, scored, key=operator.itemgetter(0))
+            rows = {
+                row[0]: row[1:]
+                for row in conn.execute(
+                    "SELECT rowid, id, doc_id, text, metadata FROM chunks WHERE rowid IN "
+                    f"({','.join('?' * len(best))})",
+                    [rowid for _, rowid, _ in best],
+                )
+            }
         return [
             ScoredChunk(
-                id=cid,
-                doc_id=doc_id,
-                text=text,
-                metadata=json.loads(meta_str) if meta_str else {},
+                id=rows[rowid][0],
+                doc_id=rows[rowid][1],
+                text=rows[rowid][2],
+                metadata=json.loads(rows[rowid][3]) if rows[rowid][3] else {},
                 embedding=list(vector),
                 score=score,
             )
-            for score, (cid, doc_id, text, meta_str, _), vector in heapq.nlargest(
-                top_k, scored, key=operator.itemgetter(0)
-            )
+            for score, rowid, vector in best
         ]
