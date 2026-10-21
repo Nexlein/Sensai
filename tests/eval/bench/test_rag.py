@@ -4,6 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from sensai.core.engine import ChatEngine
+from sensai.domain.errors import ProviderError
+from sensai.domain.models import Conversation
 from sensai.eval.bench import rag
 from sensai.eval.bench.rag import (
     Condition,
@@ -108,3 +111,37 @@ async def test_conditions_differ_only_by_retrieval_and_persona(monkeypatch, tmp_
     assert with_rag.accuracy == 0.5 + 0.5 * (with_rag.refused_right == 1)
     assert with_rag.median_prompt_tokens == 120
     assert len(retriever.queries) == 2
+
+
+class FlakyProvider(ScriptedProvider):
+    def __init__(self, failures: int) -> None:
+        super().__init__()
+        self.failures = failures
+
+    async def chat_stream(self, messages, tools=None, think=None):
+        if self.failures:
+            self.failures -= 1
+            raise ProviderError("provider request failed")
+        async for event in super().chat_stream(messages, tools, think):
+            yield event
+
+
+def _engine(provider):
+    return ChatEngine(provider, Conversation(), think=False)
+
+
+async def test_a_dropped_call_is_retried_once(monkeypatch):
+    monkeypatch.setattr(rag, "RETRY_WAIT", 0)
+    provider = FlakyProvider(failures=1)
+
+    answer, usage = await rag._answer(_engine(provider), "Code du portail ?")
+
+    assert answer == "Je ne trouve pas cette information."
+    assert usage.prompt_tokens == 120
+
+
+async def test_a_second_failure_stops_the_suite(monkeypatch):
+    monkeypatch.setattr(rag, "RETRY_WAIT", 0)
+
+    with pytest.raises(ProviderError):
+        await rag._answer(_engine(FlakyProvider(failures=2)), "Code du portail ?")

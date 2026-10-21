@@ -6,6 +6,7 @@ right answer is to say the documents do not tell. Every condition runs the real
 pipeline (`ChatEngine`, guardrails, persona, retriever), not raw Ollama calls.
 """
 
+import asyncio
 import json
 import time
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from sensai.core.budget import BudgetConfig, ContextBudget
 from sensai.core.components import build_guardrail, load_persona
 from sensai.core.config import GuardrailsConfig, PersonaConfig
 from sensai.core.engine import ChatEngine
+from sensai.domain.errors import ProviderError
 from sensai.domain.events import TextChunkEvent, UsageEvent
 from sensai.domain.models import Conversation, ModelOptions
 from sensai.eval.bench.models import normalize
@@ -123,6 +125,32 @@ class ConditionResult:
         return self.correct / total if total else 0.0
 
 
+RETRY_WAIT = 15.0
+
+
+async def _answer(engine: ChatEngine, text: str) -> tuple[str, UsageEvent | None]:
+    """One question through the engine, retried once if Ollama drops the call.
+
+    A long run can see Ollama restart (out of memory, for instance); waiting for
+    it to come back costs one question's time instead of the whole suite.
+    """
+    for attempt in range(2):
+        chunks, usage = [], None
+        try:
+            async for event in engine.send(text):
+                if isinstance(event, TextChunkEvent):
+                    chunks.append(event.content)
+                elif isinstance(event, UsageEvent):
+                    usage = event
+        except ProviderError:
+            if attempt:
+                raise
+            await asyncio.sleep(RETRY_WAIT)
+            continue
+        return "".join(chunks), usage
+    raise AssertionError("unreachable")
+
+
 def _median(values: list[float]) -> float:
     ordered = sorted(values)
     return ordered[len(ordered) // 2] if ordered else 0.0
@@ -158,14 +186,8 @@ async def run_condition(
             think=False,
             persona=persona,
         )
-        chunks, usage = [], None
         start = time.perf_counter()
-        async for event in engine.send(question.question):
-            if isinstance(event, TextChunkEvent):
-                chunks.append(event.content)
-            elif isinstance(event, UsageEvent):
-                usage = event
-        answer = "".join(chunks)
+        answer, usage = await _answer(engine, question.question)
         rows.append(
             {
                 "id": question.id,
