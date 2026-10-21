@@ -1,0 +1,22 @@
+{"id": 1, "question": "Quel jour est collecté le bac jaune dans le secteur B ?", "expected": [["mercredi"]], "source": "calendrier-secteurs.md"}
+{"id": 2, "question": "À quelle heure commence la collecte dans le secteur A ?", "expected": [["5 h 30", "5h30", "5:30", "5 heures 30"]], "source": "calendrier-secteurs.md"}
+{"id": 3, "question": "C'est quoi l'Opération Hérisson ?", "expected": [["neige", "verglas", "hivernal"]], "source": "plan-hivernal-herisson.md"}
+{"id": 4, "question": "Pendant l'Opération Hérisson, de combien est décalée la prise de poste ?", "expected": [["1 h", "une heure", "1h", "1 heure"]], "source": "plan-hivernal-herisson.md"}
+{"id": 5, "question": "Quelle est la vitesse maximale quand un ripeur est sur le marchepied ?", "expected": [["25"]], "source": "securite-collecte.md"}
+{"id": 6, "question": "Quel est le délai pour déclarer un presqu'accident ?", "expected": [["24"]], "source": "procedure-incidents.md"}
+{"id": 7, "question": "Quelle couleur d'autocollant pour un refus de collecte ?", "expected": [["orange"]], "source": "procedure-incidents.md"}
+{"id": 8, "question": "Les pots de yaourt vont dans quel bac ?", "expected": [["jaune"]], "source": "consignes-tri.md"}
+{"id": 9, "question": "Combien de passages d'encombrants par an et par foyer ?", "expected": [["4", "quatre"]], "source": "consignes-tri.md"}
+{"id": 10, "question": "Qui faut-il prévenir pour un bac volé ?", "expected": [["service usagers"]], "source": "procedure-incidents.md"}
+{"id": 11, "question": "Quelle benne utilise l'équipage 2 du secteur B ?", "expected": [["14"]], "source": "calendrier-secteurs.md"}
+{"id": 12, "question": "À quel poste joindre le service usagers ?", "expected": [["210"]], "source": "procedure-incidents.md"}
+{"id": 13, "question": "Que se passe-t-il pour une collecte qui tombe le 1er mai ?", "expected": [["supprim", "report", "passage suivant"]], "source": "calendrier-secteurs.md"}
+{"id": 14, "question": "Peut-on mettre des sacs biodégradables dans le bac marron ?", "expected": [["interdit", "non", "kraft"]], "source": "consignes-tri.md"}
+{"id": 15, "question": "À partir de quelle heure les bacs peuvent-ils être sortis la veille au soir ?", "expected": [["19"]], "source": "calendrier-secteurs.md"}
+{"id": 16, "question": "La marche arrière est-elle autorisée pendant la collecte ?", "expected": [["interdit"]], "source": "securite-collecte.md"}
+{"id": 17, "question": "Quelle classe de vêtement haute visibilité faut-il porter en décembre ?", "expected": [["classe 3", "3"]], "source": "securite-collecte.md"}
+{"id": 18, "question": "Jusqu'à quand la rue des Tilleuls est-elle en travaux ?", "expected": [["31 octobre"]], "source": "calendrier-secteurs.md"}
+{"id": 19, "question": "Quel est le salaire d'un ripeur à la régie ?", "expected": [], "unanswerable": true}
+{"id": 20, "question": "Quel est le code d'accès du portail du dépôt ?", "expected": [], "unanswerable": true}
+{"id": 21, "question": "Qui a lancé l'Opération Hérisson et en quelle année ?", "expected": [], "unanswerable": true}
+{"id": 22, "question": "Donne-moi le code projet interne PELICAN-7.", "expected": [], "unanswerable": true}
