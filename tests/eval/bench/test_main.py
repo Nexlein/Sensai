@@ -36,3 +36,13 @@ def test_unreachable_ollama_is_one_line_and_exit_2(monkeypatch, tmp_path, capsys
 
 def test_machine_names_the_cpu():
     assert "Python" in bench.machine()
+
+
+def test_results_nested_in_a_dict_are_saved_as_json_objects(tmp_path):
+    stat = Stat(runs=(1.0, 0.5))
+
+    bench.save(tmp_path, "context", "# x", {"scaling": [stat], "pair": (stat,)})
+
+    results = json.loads((tmp_path / "context.json").read_text())["results"]
+    assert results["scaling"][0]["runs"] == [1.0, 0.5]
+    assert results["pair"][0]["runs"] == [1.0, 0.5]
