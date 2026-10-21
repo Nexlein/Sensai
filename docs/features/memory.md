@@ -10,7 +10,7 @@ Ticket #40 and `SUBJECT.md` encourage choosing fewer, well-integrated features w
 
 ### No Overlap with Existing Tools
 
-Sensai already provides the `write_file` tool ([tools/fs.py](file:///home/nexlein/Epitech/Tek3/Sensai/src/sensai/tools/fs.py)) equipped with diff previews and human-in-the-loop confirmation. M4 (editing living document sections) partially overlaps with filesystem editing. In contrast, Sensai previously lacked any mechanism for remembering facts, conventions, and user preferences across distinct sessions. M3 provides an entirely unserved capability.
+Sensai already provides the `write_file` tool ([tools/fs.py](../../src/sensai/tools/fs.py)) equipped with diff previews and human-in-the-loop confirmation. M4 (editing living document sections) partially overlaps with filesystem editing. In contrast, Sensai previously lacked any mechanism for remembering facts, conventions, and user preferences across distinct sessions. M3 provides an entirely unserved capability.
 
 ### Completing the Memory Architecture Trilogy
 
@@ -36,7 +36,7 @@ For live demonstrations and evaluation:
 
 ### Database Schema (`sensai.db`)
 
-Stored in SQLite via idempotent migrations in [sensai/memory/db.py](file:///home/nexlein/Epitech/Tek3/Sensai/src/sensai/memory/db.py):
+Stored in SQLite via idempotent migrations in [sensai/memory/db.py](../../src/sensai/memory/db.py):
 
 ```sql
 CREATE TABLE IF NOT EXISTS entities (
@@ -67,10 +67,10 @@ Key guarantees:
 
 ### Domain Models & Protocol Seam
 
-- **Models** ([domain/models.py](file:///home/nexlein/Epitech/Tek3/Sensai/src/sensai/domain/models.py)): `Entity` and `Fact` Pydantic models.
-- **Protocol** ([domain/protocols.py](file:///home/nexlein/Epitech/Tek3/Sensai/src/sensai/domain/protocols.py)): `StructuredMemory` protocol decouples the engine and tools from the SQLite implementation.
+- **Models** ([domain/models.py](../../src/sensai/domain/models.py)): `Entity` and `Fact` Pydantic models.
+- **Protocol** ([domain/protocols.py](../../src/sensai/domain/protocols.py)): `StructuredMemory` protocol decouples the engine and tools from the SQLite implementation.
 
-### Agent Tools ([tools/memory.py](file:///home/nexlein/Epitech/Tek3/Sensai/src/sensai/tools/memory.py))
+### Agent Tools ([tools/memory.py](../../src/sensai/tools/memory.py))
 
 1. `remember_fact`: Autonomous tool (`requires_confirmation = False`) storing or updating entity facts.
 2. `recall_memory`: Autonomous tool searching facts across entity names, keys, and values.

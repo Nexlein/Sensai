@@ -553,3 +553,78 @@ Acceptance criteria:
 
 - With `[eval] log_prompts = true`, each prompt-log line holds the real counts, the rates and `estimate_error`.
 - The estimate keeps driving the budget, so behaviour does not change with a provider that sends no counters.
+
+## Feature: Settings Saved as They Change
+
+As a user, I want a setting I change during a chat to still be there next time, so that I do not have to remember to save or retype it.
+
+Acceptance criteria:
+
+- With `autosave = true` (the default), `/config set`, `/config reset`, `/model`, `/provider`, `/effort` and `/persona on|off` write the changed key to `sensai.toml` at once, and the reply says `saved to sensai.toml`.
+- Comments, key order and keys Sensai does not know are kept in the file; values given by CLI flags are not written unless changed.
+- A value that is invalid, or that the running session cannot use, is refused with one line and changes neither the session nor the file; a change that would make the file fail to load at the next start is not written.
+
+As a user who experiments, I want to try settings without touching my file, so that a test run does not overwrite my real configuration.
+
+Acceptance criteria:
+
+- `/config set autosave false` keeps later changes in the session only; `/config` lists them as `unsaved`.
+- `/config save` writes everything; `/config reset <key>` returns a setting to its default and removes it from the file.
+
+## Feature: Self-Describing Settings
+
+As a new user, I want to discover every setting from inside the tool, so that I can configure Sensai without reading the source code.
+
+Acceptance criteria:
+
+- `/config keys [prefix]` and `sensai config keys` list each setting with its type, default, whether it needs a restart, and what it does.
+- `/config` shows every value grouped by section, tagged `default`, `file`, `flag` or `session`.
+- `sensai config init` writes a `sensai.toml` listing every setting, commented out at its default.
+
+As a developer scripting a setup, I want to edit the config from the shell, so that I can prepare a demo machine without opening an editor.
+
+Acceptance criteria:
+
+- `sensai config get|set|reset <key>` read and write one key with the same validation as in a session.
+- An invalid key or value prints one line and exits with status 1.
+
+## Feature: Readable Test Results
+
+As a developer or a reviewer, I want to see what each test checks and whether it passed, so that the test run documents the behaviour instead of printing dots.
+
+Acceptance criteria:
+
+- `make test` prints every test under its file, with a title taken from its docstring or name, and ✓, ✗ or – with the reason for a skip or a failure.
+- A summary gives passed, failed and skipped counts per area (`core`, `eval`, `tools`…).
+- `make test-report` writes the same list as Markdown in `reports/tests.md`.
+
+As a developer, I want the usual pytest output when I need it, so that tools and habits relying on it keep working.
+
+Acceptance criteria:
+
+- `-v`, `-q` or `--classic` give the standard pytest output.
+- Failure tracebacks and the short summary are unchanged.
+
+## Feature: Benchmarks
+
+As a team member preparing the defense, I want to measure which models fit our machines, so that our model choice rests on numbers.
+
+Acceptance criteria:
+
+- `python -m sensai.eval.bench speed` reports, per installed model, load time, prefill and decode speed, time to first token, memory and CPU/GPU placement.
+- `python -m sensai.eval.bench tools` scores each model on the same tool-choice cases, counting tools called for plain questions, missed tools and wrong tools.
+- Results are printed and saved as Markdown and JSON under `reports/bench/`.
+
+As a team member, I want to prove that RAG and the persona improve answers, so that the A/B claim in the keynote is backed by a replayable script.
+
+Acceptance criteria:
+
+- `python -m sensai.eval.bench rag` runs the same questions without RAG, with RAG and a generic prompt, and with RAG and the persona, through Sensai's own engine.
+- It reports accuracy, correct refusals on unanswerable questions, source citations, latency and prompt size per condition.
+
+As a developer, I want to know which parts of Sensai cost time, so that optimization targets what is actually slow.
+
+Acceptance criteria:
+
+- `python -m sensai.eval.bench perf` times start-up, guardrails, a full turn with a mock model, prompt building, sessions, memory, RAG search and config handling, without any model.
+- `python -m sensai.eval.bench context` shows how window size changes speed, memory and recall, and that a prompt over Ollama's default window is cut.

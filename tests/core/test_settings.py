@@ -188,3 +188,15 @@ def test_uncommenting_the_template_gives_the_defaults():
             lines.append(line)
 
     assert AppConfig(**tomllib.loads("\n".join(lines))) == AppConfig()
+
+
+def test_every_setting_is_documented_in_the_configuration_reference():
+    from pathlib import Path
+
+    reference = (
+        Path(__file__).resolve().parents[2] / "docs" / "configuration.md"
+    ).read_text()
+
+    documented = set(re.findall(r"^\| `([\w.]+)` +\|", reference, re.MULTILINE))
+
+    assert set(SETTINGS) - documented == set()

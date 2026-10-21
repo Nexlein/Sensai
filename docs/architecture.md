@@ -1,95 +1,81 @@
-# Technical Architecture Document — SENSAI
+# Architecture
 
-## 1. Project Overview
+Sensai is a local assistant written in plain Python on top of the Ollama HTTP API: no LLM
+framework, a custom tool-calling loop, a custom RAG pipeline and custom guardrails.
 
-- **Business scenario (keynote)**: to be defined by the team.
-- **Objective**: build a modular, framework-free AI assistant that talks directly to Ollama's native HTTP API.
+## Layers
 
-## 2. Design Principles
-
-- **Clean architecture & decoupling**: strict separation between domain (Pydantic models + Protocols), infrastructure (httpx/Ollama, SQLite), core logic (engine) and interfaces (CLI/TUI/Web). Dependencies only point downward.
-- **Stream-first & event-driven**: real-time token streaming through typed events (`TextChunkEvent`, `ToolCallEvent`, `GuardrailEvent`).
-- **Protocol seam**: `core/engine.py` depends on `domain/protocols.py` (`LLMProvider`, `ToolRegistry`, `Guardrail`, ...), never on concrete classes. Implementations are injected in `core/bootstrap.py`, shared by every interface.
-- **No LLM frameworks**: custom tool-calling loop, custom RAG pipeline, custom guardrails. No LangChain, LlamaIndex or Haystack.
-
-## 3. Layers
+Dependencies only point down.
 
 ```text
-interfaces/  cli (rich), tui (textual), web (stub)   + dispatcher, shared notices
-core/        engine, bootstrap, commands, config, prompt, budget (stub)
-providers/ tools/ memory/ eval/                      pluggable implementations
-domain/      models, events, protocols, errors
+interfaces/   cli (rich), tui (textual), web (FastAPI + websocket), shared wording
+core/         engine, streaming, tool runner, prompt, budget, config, settings, commands, bootstrap
+providers/    Ollama (chat + embeddings), Groq (opt-in), mock
+tools/        files, web search, Python sandbox, MCP client, memory tools
+memory/       sessions, structured memory, RAG (chunker, vector store, retriever)
+eval/         guardrails, adversarial corpus, LLM judge, loggers, benchmarks
+domain/       pydantic models, events, protocols, errors — no dependency on anything above
 ```
 
-## 4. Execution Pipeline (implemented)
+`domain/protocols.py` is the seam: `core/engine.py` types against `LLMProvider`,
+`ToolRegistry`, `Guardrail`, `ContextRetriever`… never against a concrete class. Concrete
+classes are chosen in one place, `core/bootstrap.py` (`build_session`), shared by the three
+interfaces. Tests inject fakes at the same seam.
+
+## One turn
 
 ```text
-[User input]
-      │
-      ▼
-[REPL / TUI] ── starts with "/" ──► [commands.py] (/help /clear /new /exit /config ...)
-      │
-      ▼
-[ChatEngine.send]
-      │
-      ▼
-[1. Input guardrail]   filter_input: injection ──► block | flag;  PII ──► redact | block
-      │                 (only the filtered text goes further, and into the history)
-      ▼
-[2. Retrieval (RAG)]   embed the filtered query, add matching chunks to the prompt
-      │
-      ▼
-[3. build_prompt]      conversation (+ optional persona, + retrieved context)
-      │
-      ▼
-[4. LLMProvider]       stream from Ollama /api/chat
-      │
-      ▼
-[5. Output guardrail]  PiiOutputStream: mask PII in the stream, even across chunk boundaries
-      │
-      ▼
-tool calls? ── yes ──► [ToolRegistry.get(name).execute()] ──► [6. Tool-result guardrail]
-      │                                                              │
-      no                          "tool" message ─► back to step 3 ◄─┘  (max 5 iterations)
-      ▼
-[assistant message stored] ──► [renderer] ──► [SqliteMemoryStore.save]
+user text ──► "/..." ? ──► core/commands.py (/config, /model, /memory, /prompt, /ps …)
+   │
+   ▼
+ChatEngine.send
+   1. input guardrail      injection → block | flag, personal data → mask | block
+   2. retrieval (RAG)      embed the filtered question, add the closest chunks
+   3. prompt               persona · tool guidance · privacy note · memory · RAG · summary · history
+   4. budget               summarize old turns past 80 % of budget.max_tokens
+   5. model call           Ollama /api/chat, streamed (NDJSON) as typed events
+   6. output guardrail     mask personal data in the stream, even split across chunks
+   7. tool calls?          confirm if sensitive → run → filter the result → back to 3
+                           (at most reasoning.max_steps rounds, then a tool-free answer)
+   ▼
+answer stored, session saved (SQLite), usage line shown
 ```
 
-Guardrails are on by default and can be disabled with `[guardrails] enabled = false`. With none injected, the engine behaves exactly as without them. Whenever a guardrail acts, the engine yields a `GuardrailEvent` (stage, action, rule names, never the matched value) and the renderers display a one-line notice.
+Everything flows as typed events (`TextChunkEvent`, `ToolCallEvent`, `ThoughtEvent`,
+`GuardrailEvent`, `UsageEvent`, `BudgetEvent`…), which each interface renders its own way.
+A cancelled or failed turn removes the unanswered user message, so history stays consistent.
 
-## 5. Guardrails (EV2) in detail
+## Where things live
 
-| Piece                           | Role                                                                                                                              |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `domain`: `GuardrailVerdict`    | Result of a check: `allow`, `redact`, `block` or `flag`, the text to use, and the findings (rule + category).                     |
-| `eval/guardrails/` detectors    | Regex + checksum validators (Luhn, IBAN mod-97, NIR key) for PII; heuristic rules for prompt injection.                           |
-| `RegexGuardrail`                | Implements the `Guardrail` protocol: `filter_input`, `filter_output` (also used for tool results), `new_output_stream`.           |
-| `PiiOutputStream`               | Incremental filter. Holds back a short tail (at least 48 characters, plus the trailing word up to 320) so a value is never split. |
-| `core/config.py` `[guardrails]` | `enabled` (default on), `injection = block \| flag`, `pii = redact \| block`.                                                     |
+| Concern                      | Code                                                                              | Doc                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Turn loop, steps, step limit | `core/engine.py`, `core/streaming.py`, `core/tool_runner.py`, `core/turn.py`      | —                                                                    |
+| Prompt and its sources       | `core/prompt.py` (`/prompt`, `[eval] log_prompts`)                                | —                                                                    |
+| Token budget (M2)            | `core/budget/`                                                                    | —                                                                    |
+| Settings                     | `core/config.py`, `core/config_file.py`, `core/settings.py`, `core/components.py` | [configuration.md](configuration.md)                                 |
+| Guardrails (EV2)             | `eval/guardrails/`                                                                | [features/guardrails-reference.md](features/guardrails-reference.md) |
+| Adversarial suite, judge     | `eval/adversarial/`, `eval/judge/`, `eval/evaluator.py`                           | [features/evaluation.md](features/evaluation.md)                     |
+| Benchmarks                   | `eval/bench/`                                                                     | [benchmarks.md](benchmarks.md)                                       |
+| RAG (R1)                     | `memory/rag/`                                                                     | —                                                                    |
+| Sessions, structured memory  | `memory/session.py`, `memory/manager.py`, `tools/memory.py`                       | [features/memory.md](features/memory.md)                             |
+| Files (T4)                   | `tools/fs.py` (confined to `tools.fs_allowed_root`)                               | —                                                                    |
+| Web search (T3)              | `tools/web.py` (local SearXNG)                                                    | —                                                                    |
+| Python sandbox (T2)          | `tools/sandbox.py` (throwaway Docker container)                                   | [features/sandbox.md](features/sandbox.md)                           |
+| MCP (T1)                     | `tools/mcp.py` (stdio JSON-RPC client)                                            | [features/mcp.md](features/mcp.md)                                   |
+| Interfaces                   | `interfaces/cli/`, `interfaces/tui/`, `interfaces/web/`                           | —                                                                    |
 
-Design choices and the reference design they were compared against are in [elevenlabs-guardrails.md](elevenlabs-guardrails.md).
+## Design choices in one line each
 
-## 6. Module Status
+- **Streaming first**: replies are rendered token by token; the output filter only holds back
+  the last 48 characters (an IBAN fits) so a value is never shown half-masked.
+- **Deterministic guardrails** (regex + checksums) instead of a classifier model: microseconds
+  per message (see [benchmarks](benchmarks.md#sensais-own-code)), testable, no extra model call.
+- **SQLite everywhere** (sessions, facts, vectors): one file, no service to run.
+- **Human in the loop**: every tool that writes, runs code, searches the web or calls MCP asks
+  first, with a full diff or the full code.
+- **Settings are self-describing**: every key has a type, a default and a description in the
+  schema; `/config`, `sensai config`, the template and the reference doc all come from it.
 
-| Area                                   | Status                           |
-| -------------------------------------- | -------------------------------- |
-| Domain models / events / protocols     | Done                             |
-| Providers (Ollama, embeddings, mock)   | Done                             |
-| Chat engine + tool-calling loop        | Done                             |
-| Slash commands, TOML config            | Done                             |
-| Session persistence, SQLite (M1)       | Done (no user profile yet)       |
-| FS tools with sandbox root (T4)        | Done                             |
-| RAG chunker / vector store / retriever | Done, enabled with `--rag-dir`   |
-| CLI and TUI, shared bootstrap          | Done, `--ui cli\|tui`            |
-| Content & privacy guardrails (EV2)     | Done, on by default              |
-| Turn logger (EV3)                      | Built, not wired into the engine |
-| Token budget (M2)                      | Done                             |
-| Structured memory (M3)                 | Done, SQLite facts & entities    |
-| MCP tools (T1), stdio client           | Done, `[mcp.servers.*]` config   |
-| Sandbox exec (T2), web search (T3)     | Stubs                            |
-| Evaluator (EV1)                        | Stub                             |
-| Web interface (FastAPI SSE)            | Stub                             |
-
-## 7. Target Pipeline (planned additions)
-
-Persona (A5) and user profile (M1) in the context builder, token budgeting (M2), MCP / sandbox / web-search tools (T1-T3), automated evaluation (EV1), logging and metrics (EV3), artifact updates (M4) and a web interface (X1) are planned on top of the pipeline above.
+The reasoning behind the bigger choices, with alternatives, is in
+[soutenance/decisions.md](soutenance/decisions.md) (French). Known weaknesses are in the
+[code review](code-review.md).

@@ -8,7 +8,7 @@ Sensai — local AI assistant CLI built on Ollama. Constraints and scope: [docs/
 
 Hard constraints (do not violate):
 
-- Python >= 3.10 as declared in `pyproject.toml` (note: the code already uses `datetime.UTC`, which needs 3.11+).
+- Python >= 3.11 as declared in `pyproject.toml` (`tomllib`, `datetime.UTC`).
 - No LLM frameworks (LangChain, LlamaIndex, Haystack, equivalent). Direct Ollama HTTP API only.
 - Standard lib + utility packages (httpx, pydantic, sqlite3, fastapi, etc.) fine for non-LLM concerns.
 
@@ -18,7 +18,7 @@ Layered, one-way dependency:
 
 ```
 interfaces/  (cli, tui, web)   -> talks to core, nothing talks to interfaces
-core/        (engine, streaming, tool_runner, turn, guard, bootstrap, commands, config, prompt, budget) -> orchestrates via domain protocols
+core/        (engine, streaming, tool_runner, turn, guard, bootstrap, commands, config, config_file, settings, components, prompt, budget) -> orchestrates via domain protocols
 providers/ , tools/ , memory/ , eval/  -> pluggable impls of domain/protocols.py
 domain/      (models, events, protocols) -> pure data + interfaces, no deps upward
 ```
@@ -29,13 +29,15 @@ domain/      (models, events, protocols) -> pure data + interfaces, no deps upwa
 
 ```bash
 make setup   # uv sync + pre-commit install
-make test    # uv run pytest
+make test    # uv run pytest, one line per test title with its result
+make test-report  # also writes reports/tests.md
 make lint    # uv run ruff check src/
 make typecheck  # basedpyright on src/ and tests/ (standard mode, [tool.basedpyright] in pyproject.toml)
 make format  # uv run ruff format src/ + prettier on yml/md
 ```
 
-Run a single test: `uv run pytest tests/path/to/test_file.py::test_name`
+Run a single test: `uv run pytest tests/path/to/test_file.py::test_name` (`--classic` for plain pytest output)
+Benchmarks: `uv run python -m sensai.eval.bench perf|speed|tools|effort|context|rag` (results in `reports/bench/`, summary in [docs/benchmarks.md](docs/benchmarks.md)).
 
 ## Working conventions
 
@@ -49,7 +51,7 @@ Run a single test: `uv run pytest tests/path/to/test_file.py::test_name`
 - Domain models (`domain/models.py`, `domain/events.py`) are pydantic `BaseModel`. Extend via new fields/subclasses, don't bypass validation.
 - Provider/tool implementations must satisfy the relevant `domain/protocols.py` Protocol — check the protocol signature before adding a new provider or tool.
 
-## Current state (2026-09-29)
+## Current state (2026-10-21)
 
 Implemented:
 
@@ -57,14 +59,14 @@ Implemented:
 - `providers/`: `OllamaLLMProvider`, `OllamaEmbeddingProvider`, `MockLLMProvider`, `ScriptedLLMProvider` (replays scripted rounds, records each call; for tests), name-based registry (`get_provider`). `GroqLLMProvider` (`providers/groq.py`) is an opt-in extra over Groq's OpenAI-compatible SSE API; it deviates from the Ollama-only rule above, so Ollama must stay the default. It takes `api_key` (config `api_key` or `GROQ_API_KEY`), ignores `base_url`, and `/config` masks the key.
 - `core/`: `ChatEngine` (streaming, tool-calling loop capped at 5 iterations, optional RAG retriever and guardrail), `bootstrap.py` (`build_session`), `commands.py` (slash commands), `config.py` (CLI > `sensai.toml` > defaults, `[tools]` and `[guardrails]` sections), `prompt.py`, `input.py`.
 - `tools/`: `ToolRegistry`, `ReadFileTool`, `ListDirTool` (confined to `fs_allowed_root`).
-- `tools/mcp.py` (T1): hand-written MCP client over stdio (`McpClient`: initialize, `tools/list`, `tools/call`) and `McpTool` (a `SensitiveTool`, named `<server>__<tool>`). Servers come from `[mcp.servers.<name>]` in `sensai.toml`; `build_session` starts them in parallel, skips a failing one with a warning in `CommandContext.startup_warnings`, and `CommandContext.aclose()` stops them. `save_config` rewrites the whole file, so new config sections must be written back there too. Live test against the GitHub server: `SENSAI_LIVE_MCP=1` (needs Docker and `GITHUB_PERSONAL_ACCESS_TOKEN`).
+- Settings: `core/config.py` (pydantic schema, every field has a `description`, `json_schema_extra={"restart": True}` marks start-up-only keys), `core/config_file.py` (tomlkit edits that keep comments, atomic write), `core/settings.py` (dotted keys `SETTINGS`, `validated`, `assign` in place, `save_setting`, sources, `template`), `core/components.py` (`apply_setting` pushes a change into the running session; `load_persona`, `build_guardrail`). `/config set|reset|keys|show|save` and `/model`, `/provider`, `/effort`, `/persona` all go through `commands.change_setting`, which autosaves the one key when `autosave = true` (default). `CommandContext.config_path=None` means never write (tests). `sensai config ...` is the shell version (`interfaces/cli/config.py`). New settings need a description and must appear in the key table of `docs/configuration.md` (a test checks it). `options.num_ctx` defaults to 8192 so Ollama's own 4096 window never cuts the prompt.
+- `tools/mcp.py` (T1): hand-written MCP client over stdio (`McpClient`: initialize, `tools/list`, `tools/call`) and `McpTool` (a `SensitiveTool`, named `<server>__<tool>`). Servers come from `[mcp.servers.<name>]` in `sensai.toml`; `build_session` starts them in parallel, skips a failing one with a warning in `CommandContext.startup_warnings`, and `CommandContext.aclose()` stops them. `save_config` is generic (no per-section code) and keeps the file's comments. Live test against the GitHub server: `SENSAI_LIVE_MCP=1` (needs Docker and `GITHUB_PERSONAL_ACCESS_TOKEN`).
 - `memory/`: SQLite session persistence (`--session`), RAG (`TextChunker`, `SQLiteVectorStore`, `RAGRetriever`, enabled with `[rag] enabled` + `dir` or `--rag-dir`; `--rag-*` flags override `[rag]` in `build_session`, `top_k`/`chunk_size`/`chunk_overlap` come from `[rag]`), structured memory `manager.py` (M3: SQLite CRUD over entities and facts, auto-injected into prompt and managed via `/memory`).
 - `tools/sandbox.py` (T2): `RunCodeTool` (`run_python`, a `SensitiveTool`) pipes the code to `python -I -` in a throwaway `docker run` (no network, read-only, all caps dropped, non-root, 256m/1 cpu/64 pids, timeout 10s default and 60s max, container killed on timeout). Output is `exit code / stdout / stderr`, each clipped at 4000 chars; Docker failures come back as `Error: sandbox unavailable…`. Registered by `build_default_registry` unless `[tools] sandbox = false` (same for `web_search`). `preview` renders the code as an all-added diff so the confirmation prompt shows it in full (`tool_confirmation` hides the `code` argument then). Needs Docker and `python:3.15-alpine`. Live test: `SENSAI_LIVE_SANDBOX=1`.
 - Slow or failing model server: `OllamaLLMProvider` has no read timeout (`wait_forever`; connect and write stay bounded), so a slow CPU model is never cut off. `ChatEngine` turns any `httpx.HTTPError` or `RuntimeError` from the provider into `ProviderError` (with the cause chained), and `interfaces/notices.error_text` words it in one line for both UIs, never a traceback. `interfaces/thinking.py` (`Thinking.watch`) shows "thinking… N s" after a 1 s grace while the next event is awaited and pauses during confirmations (`hold`). Ctrl+C in the CLI (`_stoppable` in `cli/app.py`) and Esc in the TUI cancel only the current turn; `ChatEngine.send` then drops the unanswered user message.
-- `memory/`: SQLite session persistence (`--session`), RAG (`TextChunker`, `SQLiteVectorStore`, `RAGRetriever`, enabled with `--rag-dir`).
 - `eval/guardrails/` (EV2): regex + checksum PII detectors, heuristic injection rules, `RegexGuardrail`, `PiiOutputStream`. On by default; disable with `[guardrails] enabled = false`.
 - `eval/evaluator.py` + `eval/adversarial/` (EV4): attack corpus (`corpus.py`, `known_gap` marks what the heuristics miss) replayed at guardrail and engine level, with a report. Run with `python -m sensai.eval.adversarial`.
-- `eval/judge/` (EV1): `LLMJudge` grades a reply for relevance and coherence (1-5) and checks its claims against the RAG context, through an injected `LLMProvider`. Failures come back as a verdict with `error`, never an exception. Run with `python -m sensai.eval.judge replies.jsonl`. Not wired into the chat loop. Its input comes from `ReplyLogger` (`eval/logger.py`, a `ReplyRecorder`): with `[eval] log_replies = true`, `ChatEngine` appends each final, non-refused reply to `logs/replies.jsonl`. Live test: `SENSAI_LIVE_JUDGE=1` (needs Ollama). Usage and test guide for EV1/EV4: [docs/evaluation.md](docs/evaluation.md).
+- `eval/judge/` (EV1): `LLMJudge` grades a reply for relevance and coherence (1-5) and checks its claims against the RAG context, through an injected `LLMProvider`. Failures come back as a verdict with `error`, never an exception. Run with `python -m sensai.eval.judge replies.jsonl`. Not wired into the chat loop. Its input comes from `ReplyLogger` (`eval/logger.py`, a `ReplyRecorder`): with `[eval] log_replies = true`, `ChatEngine` appends each final, non-refused reply to `logs/replies.jsonl`. Live test: `SENSAI_LIVE_JUDGE=1` (needs Ollama). Usage and test guide for EV1/EV4: [docs/features/evaluation.md](docs/features/evaluation.md).
 - Reasoning loop: with `[reasoning] enabled` (default) `ChatEngine` emits `StepEvent`, `ThoughtEvent` (`source` native or text) and `MaxStepsEvent`, stores the thought on `Message.thought`, and at `max_steps` makes one last tool-free call. `split_thoughts` (set from `show_thoughts`) is what holds text back during a round that may call tools; off by default so answers stream. `think` is the effort passed to `chat_stream(think=...)`; the default is `DEFAULT_EFFORT = "low"` and `/effort` changes it live through `CommandContext.choose`, a picker each UI provides. `save_config` writes the `[reasoning]` section back.
 - `/ps`: `OllamaLLMProvider.loaded_models()` reads `GET /api/ps` into `LoadedModel`s; the command checks the provider against the `ModelInspector` protocol (`domain/protocols.py`, runtime-checkable) and formats sizes and CPU/GPU split like `ollama ps`. Providers without it (Groq, mock) get "not available".
 - Model options: `[options]` (`ModelOptions` in `domain/models.py`: `temperature`, `num_ctx`, `top_p`, `seed`, `num_predict`) is sent as `options` to `/api/chat` (Groq maps all but `num_ctx`); unset keys are not sent. Providers hold the same `ModelOptions` object as `AppConfig`, so `/config set options.<key>` mutates it in place and applies next turn. `AppConfig` rejects `budget.max_tokens > num_ctx - num_predict` (`check_context_fits`). Named `[options]` because top-level `model` is already a key.
@@ -80,9 +82,8 @@ Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`).
 
 Persona: `[persona]` (`enabled`, `name`, `instruction` or `file`, not both) is loaded by `bootstrap.load_persona` into `ChatEngine.persona`, even when disabled, so `/persona on|off` can flip `engine.persona_enabled` (and `config.persona.enabled`) live. `PromptComposer.compose_parts` inserts it last at index 0 (source `persona`), so it leads every system message; off gives exactly the persona-less prompt. Shipped prompt: `personas/collecte.md`.
 
-Empty stubs, not yet built: `tools/sandbox.py`.
-Empty stubs, not yet built: `core/budget.py`, `memory/manager.py`, `memory/artifact.py`.
+Empty stub, not yet built: `memory/artifact.py`.
 
-Guardrail scope and known limits: input, model output and tool results are filtered. Not covered: PII inside tool-call arguments written by the model, the RAG context injected into the prompt, names and postal addresses. Reference design: [docs/elevenlabs-guardrails.md](docs/elevenlabs-guardrails.md).
+Guardrail scope and known limits: input, model output and tool results are filtered. Not covered: PII inside tool-call arguments written by the model, the RAG context injected into the prompt, names and postal addresses. Reference design: [docs/features/guardrails-reference.md](docs/features/guardrails-reference.md).
 
 Sprint plan tracked as GitHub issues (milestones "Sprint 1 - Base Loop MVP", "Sprint 2 - Session, Tools, Logging", "Sprint 3 - Tools, Permissions, Eval").

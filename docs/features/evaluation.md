@@ -60,7 +60,7 @@ A JSONL file, one reply per line. `context` is the RAG text the assistant had; l
 {"question": "What is the capital of France?", "answer": "Paris. It has 40 million inhabitants.", "context": "Paris is the capital of France. The city has about 2.1 million inhabitants."}
 ```
 
-A sample with a good answer, an invented fact, a contradiction, an off-topic answer and an answer that tries to steer its own score: [examples/judge-replies.jsonl](examples/judge-replies.jsonl).
+A sample with a good answer, an invented fact, a contradiction, an off-topic answer and an answer that tries to steer its own score: [examples/judge-replies.jsonl](../examples/judge-replies.jsonl).
 
 ### Running
 
