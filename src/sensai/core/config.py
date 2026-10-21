@@ -22,6 +22,7 @@ __all__ = [
     "DEFAULT_EFFORT",
     "DEFAULT_INTERFACE",
     "DEFAULT_MODEL",
+    "DEFAULT_NUM_CTX",
     "DEFAULT_PROVIDER",
     "AppConfig",
     "ConfigError",
@@ -36,6 +37,7 @@ DEFAULT_MODEL = "qwen3.5:4b"
 DEFAULT_BASE_URL = "http://localhost:11434"
 DEFAULT_CONFIG_PATH = Path("sensai.toml")
 DEFAULT_EFFORT = "low"
+DEFAULT_NUM_CTX = 8192
 RESTART = {"restart": True}
 _SERVER_NAME = re.compile(r"[A-Za-z0-9_-]+")
 
@@ -278,7 +280,19 @@ class AppConfig(BaseModel):
     reasoning: ReasoningConfig = ReasoningConfig()
     persona: PersonaConfig = PersonaConfig()
     rag: RagConfig = RagConfig()
-    options: ModelOptions = ModelOptions()
+    options: ModelOptions = Field(
+        default_factory=lambda: ModelOptions(num_ctx=DEFAULT_NUM_CTX),
+        description="Model options; num_ctx matches budget.max_tokens so Ollama "
+        "never cuts the prompt silently",
+    )
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _default_window(cls, value: Any) -> Any:
+        """An `[options]` table without num_ctx still gets the default window."""
+        if isinstance(value, dict) and "num_ctx" not in value:
+            return {**value, "num_ctx": DEFAULT_NUM_CTX}
+        return value
 
     @model_validator(mode="after")
     def _budget_fits_context(self) -> "AppConfig":

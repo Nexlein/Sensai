@@ -249,7 +249,8 @@ def test_title(item: pytest.Item) -> str:
         title = f"{_humanize(parent.__name__.removeprefix('Test'))} › {title}"
     callspec = getattr(item, "callspec", None)
     if callspec is not None:
-        title += f" [{callspec.id}]"
+        label = callspec.id if len(callspec.id) <= 40 else callspec.id[:39] + "…"
+        title += f" [{label}]"
     return title
 
 

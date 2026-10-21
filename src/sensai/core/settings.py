@@ -69,27 +69,31 @@ def _restart(info: FieldInfo) -> bool:
     return isinstance(extra, dict) and bool(extra.get("restart"))
 
 
-def _catalog(model: type[BaseModel], prefix: str = "") -> dict[str, Setting]:
+def _catalog(
+    model: type[BaseModel], defaults: BaseModel, prefix: str = ""
+) -> dict[str, Setting]:
+    """Settings of `model`; defaults are read from `defaults`, an instance, since a
+    section's default can differ from its class defaults (`options.num_ctx`)."""
     settings: dict[str, Setting] = {}
     for name, info in model.model_fields.items():
         key = f"{prefix}{name}"
         annotation = info.annotation
         if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-            settings.update(_catalog(annotation, f"{key}."))
+            settings.update(_catalog(annotation, getattr(defaults, name), f"{key}."))
             continue
         if key == "mcp.servers":
             continue
         settings[key] = Setting(
             key=key,
             kind=_kind(annotation) + _bounds(info),
-            default=info.get_default(call_default_factory=True),
+            default=getattr(defaults, name),
             description=info.description or "",
             restart=_restart(info),
         )
     return settings
 
 
-SETTINGS: dict[str, Setting] = _catalog(AppConfig)
+SETTINGS: dict[str, Setting] = _catalog(AppConfig, AppConfig())
 
 
 def parse_value(raw: str) -> Any:

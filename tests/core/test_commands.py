@@ -181,7 +181,7 @@ async def test_dispatch_model_switches_provider_and_preserves_conversation():
                 "model": "llama3.2:latest",
                 "base_url": "http://localhost:11434",
                 "api_key": None,
-                "options": ModelOptions(),
+                "options": ModelOptions(num_ctx=8192),
             },
         )
     ]
@@ -234,7 +234,7 @@ async def test_dispatch_provider_switches_provider_and_preserves_conversation():
                 "model": DEFAULT_MODEL,
                 "base_url": "http://localhost:11434",
                 "api_key": None,
-                "options": ModelOptions(),
+                "options": ModelOptions(num_ctx=8192),
             },
         )
     ]
@@ -355,7 +355,7 @@ async def test_dispatch_config_set_model_rebuilds_provider():
                 "model": "mistral",
                 "base_url": "http://localhost:11434",
                 "api_key": None,
-                "options": ModelOptions(),
+                "options": ModelOptions(num_ctx=8192),
             },
         )
     ]
@@ -392,7 +392,7 @@ async def test_dispatch_config_set_base_url_rebuilds_provider():
                 "model": DEFAULT_MODEL,
                 "base_url": "http://ollama.example:11434",
                 "api_key": None,
-                "options": ModelOptions(),
+                "options": ModelOptions(num_ctx=8192),
             },
         )
     ]
@@ -963,7 +963,7 @@ async def test_config_set_option_rejects_invalid_values(key, value):
     )
 
     assert (result.message or "").startswith(f"Invalid {key}:")
-    assert context.config.options.to_payload() == {}
+    assert context.config.options.to_payload() == {"num_ctx": 8192}
 
 
 async def test_prompt_before_any_turn_says_nothing_was_sent():
@@ -1120,7 +1120,7 @@ async def test_failed_provider_switch_keeps_the_previous_model(tmp_path):
 
 
 async def test_config_reset_restores_the_default_and_drops_the_key(tmp_path):
-    context = _saved_context(tmp_path, "[options]\nseed = 7\n# note\nnum_predict = 9\n")
+    context = _saved_context(tmp_path, "[options]\nseed = 7\n# note\ntop_p = 0.9\n")
     context.config.options.seed = 7
 
     message = await _config(context, "reset", "options.seed")
@@ -1128,7 +1128,7 @@ async def test_config_reset_restores_the_default_and_drops_the_key(tmp_path):
     assert message == f"options.seed = (unset) (saved to {context.config_path})"
     assert context.config.options.seed is None
     assert "seed" not in context.config_path.read_text()
-    assert "num_predict = 9" in context.config_path.read_text()
+    assert "top_p = 0.9" in context.config_path.read_text()
 
 
 async def test_autosave_off_keeps_changes_in_the_session(tmp_path):
@@ -1170,7 +1170,7 @@ async def test_config_get_of_a_section_shows_only_that_section():
 async def test_config_keys_describes_settings():
     message = await _config(_context(), "keys", "options.num_ctx")
 
-    assert message.startswith("options.num_ctx: int | none > 0 = (unset)")
+    assert message.startswith("options.num_ctx: int | none > 0 = 8192")
     assert "Context window" in message
     assert (await _config(_context(), "keys", "nope")) == "Unknown config key: nope"
 

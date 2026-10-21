@@ -420,7 +420,7 @@ def test_save_config_round_trips_reasoning(tmp_path):
 
 
 def test_options_are_unset_by_default():
-    assert AppConfig().options.to_payload() == {}
+    assert AppConfig().options.to_payload() == {"num_ctx": 8192}
 
 
 def test_options_from_file(tmp_path):
