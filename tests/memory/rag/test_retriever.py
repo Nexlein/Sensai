@@ -116,7 +116,7 @@ async def test_indexed_document_reaches_chat_prompt(tmp_path):
     _ = [event async for event in engine.send("apple question")]
 
     assert provider.prompt is not None
-    assert "apple facts" in provider.prompt[0].content
+    assert "apple facts" in provider.prompt[1].content  # after the date
     assert provider.prompt[-1].content == "apple question"
 
 
@@ -150,3 +150,45 @@ async def test_retrieve_context_rejects_a_missing_query_vector(tmp_path):
 
     with pytest.raises(ValueError, match="wrong number of vectors"):
         await retriever.retrieve_context("query")
+
+
+@pytest.mark.parametrize(
+    ("metadata", "label"),
+    [
+        (
+            {
+                "filename": "calendrier.md",
+                "path": "/home/alban/Sensai/data/collecte/calendrier.md",
+                "source": "collecte/calendrier.md",
+            },
+            "collecte/calendrier.md",
+        ),
+        # Indexed before `source` existed: the filename, still not the full path.
+        (
+            {"filename": "calendrier.md", "path": "/home/alban/data/calendrier.md"},
+            "calendrier.md",
+        ),
+        ({}, "unknown"),
+    ],
+)
+async def test_source_label_never_shows_the_absolute_path(tmp_path, metadata, label):
+    # An absolute path sent the model to read_file outside its root instead of
+    # answering from the excerpt.
+    store = SQLiteVectorStore(db_path=str(tmp_path / "rag.db"))
+    store.save_chunks(
+        [
+            Chunk(
+                id=generate_uuid(),
+                doc_id="d1",
+                text="Secteur B : mercredi.",
+                embedding=[1.0, 0.0],
+                metadata=metadata,
+            )
+        ]
+    )
+    retriever = RAGRetriever(provider=MockProvider(), store=store)  # type: ignore
+
+    context = await retriever.retrieve_context("bac jaune")
+
+    assert context.startswith(f"--- Source: {label} ---\n")
+    assert "/home/" not in context

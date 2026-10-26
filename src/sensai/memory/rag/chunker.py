@@ -40,7 +40,11 @@ class TextChunker:
                         id=str(uuid5(NAMESPACE_URL, str(resolved_path))),
                         path=str(resolved_path),
                         content=content,
-                        metadata={"filename": filename, "path": str(resolved_path)},
+                        metadata={
+                            "filename": filename,
+                            "path": str(resolved_path),
+                            "source": resolved_path.relative_to(directory).as_posix(),
+                        },
                     )
                 )
         return docs

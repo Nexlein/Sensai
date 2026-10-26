@@ -115,3 +115,12 @@ def test_chunks_rebuild_the_text_and_respect_the_size(text, size, overlap):
         rebuilt += chunk.text[overlap:]
     assert rebuilt == text
     assert len({c.id for c in chunks}) == len(chunks)
+
+
+def test_ingest_records_each_file_relative_to_the_indexed_directory(tmp_path):
+    (tmp_path / "collecte").mkdir()
+    (tmp_path / "collecte" / "calendrier.md").write_text("x", encoding="utf-8")
+
+    [doc] = TextChunker().ingest_directory(str(tmp_path))
+
+    assert doc.metadata["source"] == "collecte/calendrier.md"

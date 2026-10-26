@@ -98,7 +98,7 @@ async def test_history_compressed_before_the_model_call():
 
     assert summarizer.calls == 1
     sent = provider.prompts[0]
-    assert sent[0].content == SUMMARY_PREFIX + "gist"
+    assert sent[1].content == SUMMARY_PREFIX + "gist"  # after the date
     assert sent[-1].content == "latest question"
     assert conversation.messages[-1].role == "assistant"
     assert len(sent) < 13
@@ -113,5 +113,5 @@ async def test_summarizer_failure_does_not_break_the_chat():
 
     _ = [event async for event in engine.send("latest question")]
 
-    assert len(provider.prompts[0]) == 13
+    assert len(provider.prompts[0]) == 14  # the date and 13 messages
     assert conversation.messages[-1].content == "ok"

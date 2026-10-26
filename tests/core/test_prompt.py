@@ -10,6 +10,7 @@ from sensai.core.prompt import (
     PromptComposer,
     PromptPart,
     build_prompt,
+    date_note,
     format_prompt,
     prompt_entry,
 )
@@ -143,6 +144,20 @@ async def test_composer_adds_tool_guidance_and_step_limit_in_order():
 
 
 @pytest.mark.asyncio
+async def test_composer_gives_today_s_date_even_without_tools(today):
+    conversation = Conversation()
+    conversation.add_message("user", "Qui a reçu le Nobel de physique 2026 ?")
+
+    prompt = await PromptComposer(conversation).compose(
+        Turn("Qui a reçu le Nobel de physique 2026 ?"), with_tools=False
+    )
+
+    assert prompt[0].role == "system"
+    assert prompt[0].content == date_note(today)
+    assert prompt[0].content.startswith("Today is Monday 2026-10-26.")
+
+
+@pytest.mark.asyncio
 async def test_composer_adds_privacy_note_and_rag_from_the_turn():
     conversation = Conversation()
     conversation.add_message("user", "hello")
@@ -231,6 +246,7 @@ async def test_compose_parts_tags_every_message_with_its_source():
     assert [part.source for part in parts] == [
         "step_limit",
         "tools",
+        "date",
         "privacy",
         "memory",
         "rag",

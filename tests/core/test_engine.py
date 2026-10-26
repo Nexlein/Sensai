@@ -1,13 +1,14 @@
 import asyncio
 import json
 from collections.abc import AsyncGenerator
+from datetime import date
 from typing import Any
 
 import httpx
 import pytest
 
 from sensai.core.engine import ChatEngine
-from sensai.core.prompt import PRIVACY_NOTE, TOOL_USE_GUIDANCE
+from sensai.core.prompt import PRIVACY_NOTE, TOOL_USE_GUIDANCE, date_note
 from sensai.core.tool_runner import TOOL_RESULT_WITHHELD
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import AssistantStartEvent, Event, GuardrailEvent
@@ -262,7 +263,7 @@ async def test_send_leads_with_the_persona_only_while_enabled():
     _ = [event async for event in engine.send("second")]
 
     assert provider.prompts[0][0].content == "Tu es Collecte."
-    assert "verified fact" in provider.prompts[0][1].content
+    assert "verified fact" in provider.prompts[0][2].content  # after the date
     assert all(m.content != "Tu es Collecte." for m in provider.prompts[1])
 
 
@@ -279,8 +280,8 @@ async def test_send_injects_retrieved_context_without_persisting_it():
 
     _ = [event async for event in engine.send("question")]
 
-    assert provider.prompts[0][0].role == "system"
-    assert "verified fact" in provider.prompts[0][0].content
+    assert provider.prompts[0][1].role == "system"
+    assert "verified fact" in provider.prompts[0][1].content  # after the date
     assert [message.role for message in conversation.messages] == ["user", "assistant"]
     assert all(
         "verified fact" not in message.content for message in conversation.messages
@@ -576,7 +577,9 @@ async def test_engine_without_guardrail_never_emits_guardrail_events():
 
 
 def _system_notes(prompt) -> list[str]:
-    return [m.content for m in prompt if m.role == "system"]
+    """System messages other than the date, which every prompt carries."""
+    today = date_note(date.today())
+    return [m.content for m in prompt if m.role == "system" and m.content != today]
 
 
 @pytest.mark.asyncio
@@ -1066,7 +1069,12 @@ async def test_every_model_round_is_logged_with_its_full_prompt():
     assert len(recorder.entries) == 2
     first, second = recorder.entries
     assert first["tools"] == ["dummy"]
-    assert [m["source"] for m in first["messages"]] == ["tools", "rag", "history"]
+    assert [m["source"] for m in first["messages"]] == [
+        "tools",
+        "date",
+        "rag",
+        "history",
+    ]
     assert [m["content"] for m in first["messages"]] == [
         m.content for m in provider.prompts[0]
     ]
