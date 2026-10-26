@@ -1,16 +1,14 @@
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, computed_field
 
 from sensai.domain.models import GuardrailAction
 
-Now = Annotated[datetime, Field(default_factory=datetime.now)]
-
 
 class Event(BaseModel):
     type: str
-    timestamp: Now
+    timestamp: datetime = Field(default_factory=datetime.now)
 
 
 class AssistantStartEvent(Event):
