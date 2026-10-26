@@ -40,7 +40,8 @@ Run a single test: `uv run pytest tests/path/to/test_file.py::test_name`
 
 - Package manager is `uv`. Never call `pip` directly.
 - Every new file under `src/sensai/` needs a matching test file under `tests/` in the same change — not a follow-up. See open issues for the current sprint plan.
-- `tests/` mirrors `src/sensai/` layout 1:1.
+- `tests/` mirrors `src/sensai/` layout 1:1. Exceptions, since they cross layers: `tests/functional/` (a real `build_session` session driven through `process_input`, model replaced by `ScriptedLLMProvider`; golden files of the system prompt and tool definitions in `tests/functional/golden/`, refreshed with `SENSAI_UPDATE_GOLDEN=1`) and `tests/live/` (real Ollama model, marked `live`, skipped without `SENSAI_OLLAMA_TEST_MODEL`). Shared harness in `tests/conftest.py`. Tests that need a model server or Docker carry the `live` marker (`make test-live`).
+- `make coverage` measures branch coverage; CI fails under `fail_under` in `pyproject.toml`.
 - Every feature PR adds at least two user stories (role/action/outcome plus acceptance criteria) to `docs/USER_STORIES.md`, as SUBJECT.md requires.
 - Ruff handles both lint and format; run `make format` before committing.
 - Pre-commit hooks are installed by `make setup` — don't bypass with `--no-verify` unless explicitly told to.
@@ -52,7 +53,7 @@ Run a single test: `uv run pytest tests/path/to/test_file.py::test_name`
 Implemented:
 
 - `domain/`: models (`Message`, `Conversation`, `ToolCall`, `Persona`, `Document`, `Chunk`, `ScoredChunk`, `GuardrailVerdict`, `GuardrailFinding`), events (`TextChunkEvent`, `ToolCallEvent`, `GuardrailEvent`), protocols (`LLMProvider`, `BaseTool`, `MemoryStore`, `Guardrail`, `OutputStream`, `ToolRegistry`, `EmbeddingProvider`, `VectorStore`, `ContextRetriever`, `ReplyRecorder`), errors.
-- `providers/`: `OllamaLLMProvider`, `OllamaEmbeddingProvider`, `MockLLMProvider`, name-based registry (`get_provider`). `GroqLLMProvider` (`providers/groq.py`) is an opt-in extra over Groq's OpenAI-compatible SSE API; it deviates from the Ollama-only rule above, so Ollama must stay the default. It takes `api_key` (config `api_key` or `GROQ_API_KEY`), ignores `base_url`, and `/config` masks the key.
+- `providers/`: `OllamaLLMProvider`, `OllamaEmbeddingProvider`, `MockLLMProvider`, `ScriptedLLMProvider` (replays scripted rounds, records each call; for tests), name-based registry (`get_provider`). `GroqLLMProvider` (`providers/groq.py`) is an opt-in extra over Groq's OpenAI-compatible SSE API; it deviates from the Ollama-only rule above, so Ollama must stay the default. It takes `api_key` (config `api_key` or `GROQ_API_KEY`), ignores `base_url`, and `/config` masks the key.
 - `core/`: `ChatEngine` (streaming, tool-calling loop capped at 5 iterations, optional RAG retriever and guardrail), `bootstrap.py` (`build_session`), `commands.py` (slash commands), `config.py` (CLI > `sensai.toml` > defaults, `[tools]` and `[guardrails]` sections), `prompt.py`, `input.py`.
 - `tools/`: `ToolRegistry`, `ReadFileTool`, `ListDirTool` (confined to `fs_allowed_root`).
 - `tools/mcp.py` (T1): hand-written MCP client over stdio (`McpClient`: initialize, `tools/list`, `tools/call`) and `McpTool` (a `SensitiveTool`, named `<server>__<tool>`). Servers come from `[mcp.servers.<name>]` in `sensai.toml`; `build_session` starts them in parallel, skips a failing one with a warning in `CommandContext.startup_warnings`, and `CommandContext.aclose()` stops them. `save_config` rewrites the whole file, so new config sections must be written back there too. Live test against the GitHub server: `SENSAI_LIVE_MCP=1` (needs Docker and `GITHUB_PERSONAL_ACCESS_TOKEN`).
