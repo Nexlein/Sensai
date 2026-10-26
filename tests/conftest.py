@@ -7,6 +7,7 @@ the CLI does, through `build_session`. `say` sends one input through
 
 import textwrap
 from dataclasses import dataclass, field
+from datetime import date
 from types import SimpleNamespace
 
 import httpx
@@ -44,6 +45,19 @@ class Exchange:
         lines += [f"  tool {c.tool_name}({c.arguments})" for c in self.tool_calls]
         lines.append(f"sensai: {self.text or self.result.message}")
         return "\n".join(lines)
+
+
+@pytest.fixture
+def today(monkeypatch):
+    """Freeze the date the prompt gives the model: Monday 2026-10-26."""
+
+    class FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 10, 26)
+
+    monkeypatch.setattr("sensai.core.prompt.date", FrozenDate)
+    return FrozenDate.today()
 
 
 @pytest.fixture

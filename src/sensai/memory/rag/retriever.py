@@ -1,3 +1,4 @@
+from sensai.domain.models import Chunk
 from sensai.domain.protocols import EmbeddingProvider, VectorStore
 from sensai.memory.rag.chunker import TextChunker
 
@@ -46,6 +47,14 @@ class RAGRetriever:
             raise ValueError("Embedding provider returned the wrong number of vectors")
         scored_chunks = self.store.search(embeddings[0], top_k=top_k or self.top_k)
         return "\n\n".join(
-            f"--- Source: {chunk.metadata.get('path', chunk.metadata.get('filename', 'unknown'))} ---\n{chunk.text}"
+            f"--- Source: {_source_label(chunk)} ---\n{chunk.text}"
             for chunk in scored_chunks
         )
+
+
+def _source_label(chunk: Chunk) -> str:
+    """Where a chunk comes from, relative to the indexed directory.
+
+    Never the absolute path: the model took it for a file to open with read_file."""
+    metadata = chunk.metadata
+    return metadata.get("source") or metadata.get("filename") or "unknown"

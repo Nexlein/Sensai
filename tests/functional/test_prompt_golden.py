@@ -14,6 +14,8 @@ import pytest
 
 GOLDEN = Path(__file__).with_name("golden")
 PERSONA = Path(__file__).resolve().parents[2] / "personas" / "collecte.md"
+# The prompt carries today's date: freeze it so the files stay stable.
+pytestmark = pytest.mark.usefixtures("today")
 
 
 def _system_prompt(context) -> str:

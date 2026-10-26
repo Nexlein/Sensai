@@ -10,6 +10,7 @@ class ReadFileTool(PermissionBoundary, Tool):
     name = "read_file"
     description = (
         "Read the text contents of an existing local file inside the allowed root. "
+        "Local files only: never pass a URL. "
         "The path is a file, not a directory. A unique case-insensitive filename match is accepted. "
         "Use list_dir on its parent directory first if the exact filename is unknown."
     )
@@ -21,7 +22,7 @@ class ReadFileTool(PermissionBoundary, Tool):
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "File path relative to the allowed root, for example AGENTS.md or docs/guide.md. Exact spelling is preferred.",
+                    "description": "File path relative to the allowed root, for example AGENTS.md or docs/guide.md. Keep the user's spelling: never translate or rename it.",
                 }
             },
             "required": ["path"],
@@ -99,7 +100,7 @@ class WriteFileTool(PermissionBoundary, SensitiveTool):
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "File path relative to the allowed root, for example notes/todo.md. Do not pass a directory.",
+                    "description": "File path relative to the allowed root, for example notes/todo.md. Keep the user's spelling: never translate or rename it. Do not pass a directory.",
                 },
                 "content": {
                     "type": "string",
