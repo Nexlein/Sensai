@@ -357,7 +357,7 @@ async def test_run_repl_reports_empty_input_and_continues():
 
 async def test_run_repl_reports_provider_error_and_continues():
     class FailingProvider:
-        async def chat_stream(self, messages, tools=None):
+        async def chat_stream(self, messages, tools=None, think=None):
             raise RuntimeError("boom")
             yield  # pragma: no cover
 
@@ -463,7 +463,7 @@ async def test_cli_confirmation_then_followup_keeps_chat_working(monkeypatch):
             return "Result"
 
     class Provider:
-        async def chat_stream(self, messages, tools=None):
+        async def chat_stream(self, messages, tools=None, think=None):
             if messages[-1].role == "user" and messages[-1].content == "cherche":
                 yield TextChunkEvent(content="Je vais chercher.")
                 yield ToolCallEvent(

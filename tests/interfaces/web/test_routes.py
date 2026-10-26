@@ -29,10 +29,10 @@ class FakeMemoryStore:
 class SensitiveTool:
     name = "danger"
     description = "does something risky"
-    parameters_schema = {"type": "object", "properties": {}}
     requires_confirmation = True
 
     def __init__(self):
+        self.parameters_schema = {"type": "object", "properties": {}}
         self.runs = 0
 
     async def execute(self, **kwargs):
@@ -41,7 +41,7 @@ class SensitiveTool:
 
 
 class ToolThenTextProvider:
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         if messages[-1].role == "tool":
             yield TextChunkEvent(content="finished")
         else:
@@ -49,14 +49,14 @@ class ToolThenTextProvider:
 
 
 class SlowProvider:
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         yield TextChunkEvent(content="start")
         await asyncio.sleep(30)
         yield TextChunkEvent(content="never")
 
 
 class FailingProvider:
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         raise RuntimeError("boom")
         yield
 

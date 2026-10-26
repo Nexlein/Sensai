@@ -21,7 +21,10 @@ class FailingLLMProvider:
         self.exc = exc
 
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         raise self.exc
         yield  # pragma: no cover
@@ -105,7 +108,10 @@ async def test_send_wraps_any_http_failure_and_leaves_conversation_unchanged(exc
 
 class StallingLLMProvider:
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         await asyncio.sleep(60)
         yield  # pragma: no cover
@@ -168,7 +174,7 @@ class MockRoundTripProvider:
     def __init__(self):
         self.calls = 0
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.calls += 1
         if self.calls == 1:
             yield ToolCallEvent(tool_name="dummy", arguments={"foo": "bar"})
@@ -235,7 +241,7 @@ class RecordingLLMProvider:
     def __init__(self):
         self.prompts = []
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.prompts.append(messages)
         yield TextChunkEvent(content="answer")
 
@@ -307,7 +313,7 @@ class ScriptedProvider:
         self.scripts = scripts
         self.prompts = []
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.prompts.append(list(messages))
         for event in self.scripts[len(self.prompts) - 1]:
             yield event
@@ -978,7 +984,7 @@ class FailsAfterToolProvider:
         self.calls = 0
         self.exc = exc
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.calls += 1
         if self.calls == 1:
             yield ToolCallEvent(tool_name="dummy", arguments={})
