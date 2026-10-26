@@ -30,6 +30,7 @@ Raccourcis du `Makefile` :
 make test-verbose   # uv run pytest -v -rs : chaque test, et la raison des tests sautés
 make coverage       # couverture de branches, lignes manquantes, rapport HTML dans htmlcov/
 make test-live      # uniquement les tests marqués `live` (vrai modèle, Docker), transcripts inclus
+make typecheck     # basedpyright sur src/ et tests/, mêmes règles que l'éditeur
 ```
 
 La couverture est mesurée par branche (`[tool.coverage]` dans `pyproject.toml`) et la CI échoue
@@ -43,18 +44,18 @@ Mesurée le 2026-10-26 (`make coverage`, couverture de branches).
 | ----------------------- | ------------------------- | -------- | ---------- |
 | Moteur, boucle d'outils | `tests/core/`             | 315      | 98 %       |
 | Budget (M2)             | `tests/core/budget/`      | 46       | 100 %      |
-| Guardrails (EV2)        | `tests/eval/guardrails/`  | 276      | 99 %       |
+| Guardrails (EV2)        | `tests/eval/guardrails/`  | 276      | 98 %       |
 | Adversarial (EV4)       | `tests/eval/adversarial/` | 18       | 95 %       |
 | Juge (EV1)              | `tests/eval/judge/`       | 33       | 98 %       |
-| RAG (R1)                | `tests/memory/rag/`       | 20       | 99 %       |
-| Mémoire, sessions       | `tests/memory/`           | 18       | 99 %       |
+| RAG (R1)                | `tests/memory/rag/`       | 21       | 99 %       |
+| Mémoire, sessions       | `tests/memory/`           | 23       | 99 %       |
 | Outils (T1-T4)          | `tests/tools/`            | 155      | 98 %       |
 | Providers               | `tests/providers/`        | 88       | 98 %       |
 | Interfaces              | `tests/interfaces/`       | 184      | 98 %       |
 | Parcours complets       | `tests/functional/`       | 33       | (tout)     |
 | Comportement du modèle  | `tests/live/`             | 46       | (sautés)   |
 
-Total : 1225 tests passent, 61 sont sautés sans modèle ni Docker, 98 % de couverture.
+Total : 1231 tests passent, 61 sont sautés sans modèle ni Docker, 98 % de couverture.
 
 ## Les familles de tests
 
@@ -87,6 +88,10 @@ des centaines d'entrées générées. Luhn, IBAN et NIR détectent toute faute d
 le masquage des PII en streaming donne le même résultat quelle que soit la découpe du flux ; le
 découpage RAG reconstitue le texte sans perte ; un chemin validé ne sort jamais de la racine
 autorisée, quels que soient les `..`, liens symboliques et `/` combinés.
+
+**Typage** : `make typecheck` lance basedpyright (la version de l'extension VSCodium) en mode
+`standard` sur `src/` et `tests/`, avec la configuration `[tool.basedpyright]` de `pyproject.toml`.
+La CI (job Lint) échoue à la première erreur de type, et l'éditeur affiche les mêmes erreurs.
 
 **Sécurité** : corpus de chemins hostiles pour les outils fichiers (traversée, chemin absolu, lien
 symbolique sortant, octet nul, nom de 5000 caractères), en plus de l'évaluation adversariale (EV4).
