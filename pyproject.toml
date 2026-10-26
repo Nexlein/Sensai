@@ -11,10 +11,10 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.143.1",
+    "fastapi>=0.162.0",
     "httpx>=0.28.1",
     "prompt-toolkit>=3.0.53",
-    "pydantic>=2.11.4",
+    "pydantic>=2.14.1",
     "rich>=15.0.0",
     "textual>=8.2.8",
     "uvicorn[standard]>=0.54.0",
@@ -24,18 +24,23 @@ dependencies = [
 sensai = "sensai:main"
 
 [build-system]
-requires = ["uv_build>=0.12.17,<0.13.0"]
+requires = ["uv_build>=0.13.5,<0.14.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.14.0",
     "hypothesis>=6.168.5",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
-    "pytest-asyncio>=1.0.0",
-    "pytest-cov>=6.0.0",
-    "ruff>=0.16.8",
+    "pytest-asyncio>=1.4.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.2",
 ]
+
+[tool.uv]
+# uv.lock uses the 0.13 format; older uv versions fail on it.
+required-version = ">=0.13.5"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
