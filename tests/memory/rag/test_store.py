@@ -69,3 +69,12 @@ def test_store_closes_every_connection_it_opens(tmp_path, opened_connections):
     for conn in opened_connections:
         with pytest.raises(sqlite3.ProgrammingError, match="closed"):
             conn.execute("SELECT 1")
+
+
+def test_search_rejects_non_positive_top_k(tmp_path):
+    import pytest
+
+    store = SQLiteVectorStore(str(tmp_path / "rag.db"))
+
+    with pytest.raises(ValueError, match="top_k must be positive"):
+        store.search([1.0, 0.0], top_k=0)

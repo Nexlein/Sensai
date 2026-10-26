@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -13,12 +13,8 @@ def now_utc() -> datetime:
     return datetime.now(UTC)
 
 
-ID = Annotated[str, Field(default_factory=generate_uuid)]
-Now = Annotated[datetime, Field(default_factory=now_utc)]
-
-
 class ToolCall(BaseModel):
-    id: ID
+    id: str = Field(default_factory=generate_uuid)
     name: str
     arguments: dict[str, Any]
     # Unified diff shown before confirmation; display-only, never persisted.
@@ -26,19 +22,19 @@ class ToolCall(BaseModel):
 
 
 class Message(BaseModel):
-    id: ID
+    id: str = Field(default_factory=generate_uuid)
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     tool_calls: list[ToolCall] | None = None
     thought: str | None = None
-    timestamp: Now
+    timestamp: datetime = Field(default_factory=now_utc)
 
 
 class Conversation(BaseModel):
-    id: ID
+    id: str = Field(default_factory=generate_uuid)
     messages: list[Message] = Field(default_factory=list)
-    created_at: Now
-    updated_at: Now
+    created_at: datetime = Field(default_factory=now_utc)
+    updated_at: datetime = Field(default_factory=now_utc)
 
     def add_message(
         self,
@@ -110,7 +106,7 @@ class GuardrailVerdict(BaseModel):
 class Document(BaseModel):
     """A raw document ingested from the filesystem."""
 
-    id: ID
+    id: str = Field(default_factory=generate_uuid)
     path: str
     content: str
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -119,7 +115,7 @@ class Document(BaseModel):
 class Chunk(BaseModel):
     """A segment of text split from a Document."""
 
-    id: ID
+    id: str = Field(default_factory=generate_uuid)
     doc_id: str
     text: str
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -135,21 +131,21 @@ class ScoredChunk(Chunk):
 class Entity(BaseModel):
     """An entity stored in long-term memory (e.g. 'user', 'project')."""
 
-    id: ID
+    id: str = Field(default_factory=generate_uuid)
     name: str
     entity_type: str = "generic"
-    created_at: Now
-    updated_at: Now
+    created_at: datetime = Field(default_factory=now_utc)
+    updated_at: datetime = Field(default_factory=now_utc)
 
 
 class Fact(BaseModel):
     """A structured fact about an entity stored across sessions."""
 
-    id: ID
+    id: str = Field(default_factory=generate_uuid)
     entity_name: str
     key: str
     value: str
     confidence: float = 1.0
     tags: list[str] = Field(default_factory=list)
-    created_at: Now
-    updated_at: Now
+    created_at: datetime = Field(default_factory=now_utc)
+    updated_at: datetime = Field(default_factory=now_utc)

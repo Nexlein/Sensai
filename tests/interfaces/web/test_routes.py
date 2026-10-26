@@ -29,10 +29,10 @@ class FakeMemoryStore:
 class SensitiveTool:
     name = "danger"
     description = "does something risky"
-    parameters_schema = {"type": "object", "properties": {}}
     requires_confirmation = True
 
     def __init__(self):
+        self.parameters_schema = {"type": "object", "properties": {}}
         self.runs = 0
 
     async def execute(self, **kwargs):
@@ -267,3 +267,33 @@ def test_unknown_or_malformed_payloads_are_ignored():
         ws.send_json(["not", "a", "dict"])
         ws.send_json({"type": "message", "text": "hi"})
         assert any(m["type"] == "text_chunk" for m in _until(ws, "done"))
+
+
+def test_guardrail_masking_reaches_the_page_as_a_notice():
+    from sensai.eval.guardrails import RegexGuardrail
+
+    context = _context(MockLLMProvider(default_response="noted", simulated_delay=0))
+    context.engine.guardrail = RegexGuardrail()
+    client = TestClient(build_app(context))
+
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "message", "text": "Rappelle le 06 12 34 56 78"})
+        seen = _until(ws, "done")
+
+    notices = [m["message"] for m in seen if m["type"] == "notice"]
+    assert notices and "phone" in notices[0]
+    stored = context.engine.conversation.messages[0].content
+    assert "06 12 34 56 78" not in stored
+
+
+def test_disconnecting_mid_turn_cancels_it_and_drops_the_unanswered_message():
+    context = _context(SlowProvider())
+    client = TestClient(build_app(context))
+
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "message", "text": "slow"})
+        _until(ws, "text_chunk")
+
+    assert context.engine.conversation.messages == []
