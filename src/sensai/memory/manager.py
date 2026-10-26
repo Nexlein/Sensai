@@ -1,4 +1,6 @@
 import json
+import re
+import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -6,6 +8,14 @@ from uuid import uuid4
 from sensai.domain.models import Fact
 from sensai.domain.protocols import StructuredMemory
 from sensai.memory.db import DEFAULT_DB_PATH, connect, transaction
+
+_WORD = re.compile(r"[^\W_]+")
+
+
+def _words(text: str) -> list[str]:
+    """Casefolded words of `text` without accents; `_` splits words too."""
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    return _WORD.findall("".join(c for c in decomposed if not unicodedata.combining(c)))
 
 
 class SqliteMemoryManager(StructuredMemory):
@@ -112,21 +122,24 @@ class SqliteMemoryManager(StructuredMemory):
         return facts
 
     def search_facts(self, query: str) -> list[Fact]:
-        clean_query = query.strip()
-        if not clean_query:
+        """Facts whose entity, key or value has a word starting with a query word.
+
+        Accents, case and `_` do not matter: "éditeur préféré" finds the key
+        "editeur_prefere". Facts matching more words come first."""
+        words = _words(query)
+        # "de", "la", "my" would match half the facts; keep them only if alone.
+        words = [w for w in words if len(w) > 2] or words
+        if not words:
             return []
-        like_pattern = f"%{clean_query}%"
-        with transaction(self.db_path) as conn:
-            rows = conn.execute(
-                """
-                SELECT id, entity_name, key, value, confidence, tags, created_at, updated_at
-                FROM facts
-                WHERE entity_name LIKE ? OR key LIKE ? OR value LIKE ?
-                ORDER BY entity_name ASC, key ASC
-                """,
-                (like_pattern, like_pattern, like_pattern),
-            ).fetchall()
-        return [self._row_to_fact(r) for r in rows]
+        ranked: list[tuple[int, Fact]] = []
+        for fact in self.list_facts():
+            fact_words = _words(f"{fact.entity_name} {fact.key} {fact.value}")
+            hits = sum(any(fw.startswith(w) for fw in fact_words) for w in words)
+            if hits:
+                ranked.append((hits, fact))
+        # Stable sort: equal ranks keep list_facts' entity, key order.
+        ranked.sort(key=lambda item: -item[0])
+        return [fact for _, fact in ranked]
 
     def delete_fact(self, entity: str, key: str) -> bool:
         with transaction(self.db_path) as conn:
