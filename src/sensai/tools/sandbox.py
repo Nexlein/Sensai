@@ -5,7 +5,7 @@ from typing import Any
 
 from .base import SensitiveTool
 
-DEFAULT_IMAGE = "python:3.12-alpine"
+DEFAULT_IMAGE = "python:3.15-alpine"
 DEFAULT_TIMEOUT = 10.0
 MAX_TIMEOUT = 60.0
 MAX_OUTPUT_CHARS = 4000

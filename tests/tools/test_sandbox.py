@@ -162,7 +162,7 @@ async def test_docker_failure_is_not_mistaken_for_a_script_error(tmp_path):
 @pytest.mark.live
 @pytest.mark.skipif(
     not os.environ.get("SENSAI_LIVE_SANDBOX"),
-    reason="set SENSAI_LIVE_SANDBOX=1 (needs Docker and the python:3.12-alpine image)",
+    reason="set SENSAI_LIVE_SANDBOX=1 (needs Docker and the python:3.15-alpine image)",
 )
 class TestLive:
     async def test_runs_code_in_a_container(self):

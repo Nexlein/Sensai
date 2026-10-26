@@ -165,7 +165,7 @@ The last row is told apart by Docker's own exit codes (125 to 127) with an empty
 You need Docker running and the image available locally:
 
 ```bash
-docker pull python:3.12-alpine
+docker pull python:3.15-alpine
 ```
 
 If the image is missing, `docker run` tries to download it, and that download counts against the 10-second timeout. Pull it once beforehand.
@@ -192,7 +192,7 @@ uv run python -m pytest
 Run the live tests:
 
 ```bash
-docker pull python:3.12-alpine
+docker pull python:3.15-alpine
 SENSAI_LIVE_SANDBOX=1 uv run python -m pytest tests/tools/test_sandbox.py
 ```
 
