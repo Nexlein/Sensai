@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -144,3 +145,20 @@ def test_format_context(memory_manager: SqliteMemoryManager) -> None:
     # Limit max facts
     capped = memory_manager.format_context(max_facts=2)
     assert len(capped.splitlines()) == 2
+
+
+def test_manager_closes_every_connection_it_opens(
+    tmp_path: Path, opened_connections: list[sqlite3.Connection]
+) -> None:
+    manager = SqliteMemoryManager(tmp_path / "test_memory.db")
+    manager.store_fact(entity="user", key="editor", value="vim")
+    manager.list_facts()
+    manager.search_facts("vim")
+    manager.delete_fact("user", "editor")
+    manager.delete_entity("user")
+    manager.clear()
+
+    assert opened_connections
+    for conn in opened_connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            conn.execute("SELECT 1")

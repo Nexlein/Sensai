@@ -1,5 +1,6 @@
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from sensai.domain.events import Event, TextChunkEvent, ThoughtEvent, ToolCallEvent
@@ -57,3 +58,44 @@ class MockToolCallingLLMProvider:
             tool_name=self.tool_name,
             arguments=self.tool_args,
         )
+
+
+@dataclass
+class ScriptedCall:
+    """What one model call received."""
+
+    messages: list[Message]
+    tools: list[dict[str, Any]] | None
+
+
+ScriptedRound = str | Event | Sequence[Event]
+
+
+class ScriptedLLMProvider:
+    """Plays back one scripted round per call, so a whole turn can be replayed.
+
+    A round is reply text, one event, or a list of events. Every call is kept in
+    `calls`, so a test can check the prompt and tools the model was given. Running
+    out of rounds raises, which the engine reports as a provider failure.
+    """
+
+    def __init__(self, *rounds: ScriptedRound) -> None:
+        self.rounds = list(rounds)
+        self.calls: list[ScriptedCall] = []
+
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
+    ) -> AsyncGenerator[Event]:
+        self.calls.append(ScriptedCall([m.model_copy() for m in messages], tools))
+        if not self.rounds:
+            raise RuntimeError("ScriptedLLMProvider has no scripted round left")
+        current = self.rounds.pop(0)
+        if isinstance(current, str):
+            current = [TextChunkEvent(content=current)]
+        elif isinstance(current, Event):
+            current = [current]
+        for event in current:
+            yield event

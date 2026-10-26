@@ -1,12 +1,11 @@
 import json
-import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from sensai.domain.models import Fact
 from sensai.domain.protocols import StructuredMemory
-from sensai.memory.db import DEFAULT_DB_PATH, connect
+from sensai.memory.db import DEFAULT_DB_PATH, connect, transaction
 
 
 class SqliteMemoryManager(StructuredMemory):
@@ -14,7 +13,7 @@ class SqliteMemoryManager(StructuredMemory):
 
     def __init__(self, db_path: Path | str = DEFAULT_DB_PATH) -> None:
         self.db_path = Path(db_path) if isinstance(db_path, str) else db_path
-        self._conn: sqlite3.Connection = connect(db_path)
+        connect(db_path).close()
 
     def store_fact(
         self,
@@ -40,8 +39,8 @@ class SqliteMemoryManager(StructuredMemory):
         now_str = datetime.now(UTC).isoformat()
         fact_id = str(uuid4())
 
-        with self._conn:
-            self._conn.execute(
+        with transaction(self.db_path) as conn:
+            conn.execute(
                 """
                 INSERT INTO entities (id, name, entity_type, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?)
@@ -49,7 +48,7 @@ class SqliteMemoryManager(StructuredMemory):
                 """,
                 (str(uuid4()), entity, entity_type, now_str, now_str),
             )
-            self._conn.execute(
+            conn.execute(
                 """
                 INSERT INTO facts (id, entity_name, key, value, confidence, tags, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -77,14 +76,15 @@ class SqliteMemoryManager(StructuredMemory):
         return fact
 
     def get_fact(self, entity: str, key: str) -> Fact | None:
-        row = self._conn.execute(
-            """
-            SELECT id, entity_name, key, value, confidence, tags, created_at, updated_at
-            FROM facts
-            WHERE entity_name = ? AND key = ?
-            """,
-            (entity.strip(), key.strip()),
-        ).fetchone()
+        with transaction(self.db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT id, entity_name, key, value, confidence, tags, created_at, updated_at
+                FROM facts
+                WHERE entity_name = ? AND key = ?
+                """,
+                (entity.strip(), key.strip()),
+            ).fetchone()
         if row is None:
             return None
         return self._row_to_fact(row)
@@ -102,7 +102,8 @@ class SqliteMemoryManager(StructuredMemory):
             params.append(entity.strip())
 
         query += " ORDER BY entity_name ASC, key ASC"
-        rows = self._conn.execute(query, params).fetchall()
+        with transaction(self.db_path) as conn:
+            rows = conn.execute(query, params).fetchall()
         facts = [self._row_to_fact(r) for r in rows]
 
         if tag is not None and tag.strip():
@@ -115,36 +116,37 @@ class SqliteMemoryManager(StructuredMemory):
         if not clean_query:
             return []
         like_pattern = f"%{clean_query}%"
-        rows = self._conn.execute(
-            """
-            SELECT id, entity_name, key, value, confidence, tags, created_at, updated_at
-            FROM facts
-            WHERE entity_name LIKE ? OR key LIKE ? OR value LIKE ?
-            ORDER BY entity_name ASC, key ASC
-            """,
-            (like_pattern, like_pattern, like_pattern),
-        ).fetchall()
+        with transaction(self.db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT id, entity_name, key, value, confidence, tags, created_at, updated_at
+                FROM facts
+                WHERE entity_name LIKE ? OR key LIKE ? OR value LIKE ?
+                ORDER BY entity_name ASC, key ASC
+                """,
+                (like_pattern, like_pattern, like_pattern),
+            ).fetchall()
         return [self._row_to_fact(r) for r in rows]
 
     def delete_fact(self, entity: str, key: str) -> bool:
-        with self._conn:
-            cursor = self._conn.execute(
+        with transaction(self.db_path) as conn:
+            cursor = conn.execute(
                 "DELETE FROM facts WHERE entity_name = ? AND key = ?",
                 (entity.strip(), key.strip()),
             )
             return cursor.rowcount > 0
 
     def delete_entity(self, entity: str) -> bool:
-        with self._conn:
-            cursor = self._conn.execute(
+        with transaction(self.db_path) as conn:
+            cursor = conn.execute(
                 "DELETE FROM entities WHERE name = ?", (entity.strip(),)
             )
             return cursor.rowcount > 0
 
     def clear(self) -> None:
-        with self._conn:
-            self._conn.execute("DELETE FROM facts")
-            self._conn.execute("DELETE FROM entities")
+        with transaction(self.db_path) as conn:
+            conn.execute("DELETE FROM facts")
+            conn.execute("DELETE FROM entities")
 
     def format_context(self, entity: str | None = None, max_facts: int = 20) -> str:
         facts = self.list_facts(entity=entity)[:max_facts]

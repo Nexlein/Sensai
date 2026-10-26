@@ -127,3 +127,37 @@ async def test_mcp_tool_turns_client_errors_into_strings():
         assert await tool.execute(a=1, b=1) == "Error: MCP server exited unexpectedly"
     finally:
         await mcp.close()
+
+
+async def test_list_tools_without_a_tools_list_raises(client, monkeypatch):
+    async def fake_request(method, params):
+        return {"tools": "none"}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    with pytest.raises(McpError, match="no tools list"):
+        await client.list_tools()
+
+
+async def test_stray_non_json_output_is_skipped():
+    mcp = _client("--noisy-call")
+    await mcp.start()
+    try:
+        assert await mcp.call_tool("add", {"a": 2, "b": 3}) == "5"
+    finally:
+        await mcp.close()
+
+
+@pytest.mark.parametrize(
+    "content, expected",
+    [
+        (None, ""),
+        ("plain string", ""),
+        (["junk", {"type": "text", "text": "kept"}], "kept"),
+        ([{"text": "no type"}], "[unknown content omitted]"),
+    ],
+)
+def test_content_to_text_ignores_malformed_blocks(content, expected):
+    from sensai.tools.mcp import _content_to_text
+
+    assert _content_to_text(content) == expected

@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -89,3 +90,46 @@ def test_forget_fact_tool(memory_manager: SqliteMemoryManager) -> None:
     # Execute deletion on already deleted
     res_again = asyncio.run(tool.execute(entity="user", key="token"))
     assert "No memory found for user.token" in res_again
+
+
+@pytest.fixture
+def broken_memory(
+    memory_manager: SqliteMemoryManager, monkeypatch: pytest.MonkeyPatch
+) -> SqliteMemoryManager:
+    """A store whose database is unusable, as when the file is locked."""
+
+    def fail(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    for method in ("search_facts", "list_facts", "delete_fact", "get_fact"):
+        monkeypatch.setattr(memory_manager, method, fail)
+    return memory_manager
+
+
+def test_recall_memory_combines_query_and_entity_filter(
+    memory_manager: SqliteMemoryManager,
+) -> None:
+    memory_manager.store_fact("user", "lang", "Rust")
+    memory_manager.store_fact("project", "lang", "Python")
+
+    res = asyncio.run(
+        RecallMemoryTool(memory_manager).execute(query="lang", entity="USER")
+    )
+
+    assert res == "- user.lang: Rust"
+
+
+def test_recall_memory_reports_database_error(
+    broken_memory: SqliteMemoryManager,
+) -> None:
+    res = asyncio.run(RecallMemoryTool(broken_memory).execute(query="x"))
+
+    assert res == "Error recalling memory: database is locked"
+
+
+def test_forget_fact_reports_database_error(
+    broken_memory: SqliteMemoryManager,
+) -> None:
+    res = asyncio.run(ForgetFactTool(broken_memory).execute(entity="user", key="k"))
+
+    assert res == "Error forgetting memory: database is locked"

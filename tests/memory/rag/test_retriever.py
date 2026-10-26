@@ -118,3 +118,35 @@ async def test_indexed_document_reaches_chat_prompt(tmp_path):
     assert provider.prompt is not None
     assert "apple facts" in provider.prompt[0].content
     assert provider.prompt[-1].content == "apple question"
+
+
+class MixedDimensionProvider:
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0] * (i + 1) for i in range(len(texts))]
+
+
+class NoVectorProvider:
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        return []
+
+
+async def test_index_directory_rejects_vectors_of_different_sizes(tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "a.md").write_text("first", encoding="utf-8")
+    (docs / "b.md").write_text("second", encoding="utf-8")
+    retriever = RAGRetriever(
+        MixedDimensionProvider(), SQLiteVectorStore(str(tmp_path / "rag.db"))
+    )
+
+    with pytest.raises(ValueError, match="incompatible vectors"):
+        await retriever.index_directory(str(docs))
+
+
+async def test_retrieve_context_rejects_a_missing_query_vector(tmp_path):
+    retriever = RAGRetriever(
+        NoVectorProvider(), SQLiteVectorStore(str(tmp_path / "rag.db"))
+    )
+
+    with pytest.raises(ValueError, match="wrong number of vectors"):
+        await retriever.retrieve_context("query")

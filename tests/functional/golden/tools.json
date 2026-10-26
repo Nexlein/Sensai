@@ -1,0 +1,184 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "read_file",
+      "description": "Read the text contents of an existing local file inside the allowed root. The path is a file, not a directory. A unique case-insensitive filename match is accepted. Use list_dir on its parent directory first if the exact filename is unknown.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path relative to the allowed root, for example AGENTS.md or docs/guide.md. Exact spelling is preferred."
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_dir",
+      "description": "List actual file and directory names inside a local directory. Use this to see what exists or find the exact spelling of a filename. Use path '.' for the allowed project root. The path must be a directory, not a file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Directory path relative to the allowed root. Use '.' for the project root, not '/'. Do not pass a filename."
+          }
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "write_file",
+      "description": "Write text content to a local file inside the allowed root, creating it or replacing its contents. Missing parent directories are created. The user must confirm every write before it happens.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path relative to the allowed root, for example notes/todo.md. Do not pass a directory."
+          },
+          "content": {
+            "type": "string",
+            "description": "Full text content to write. Existing content is replaced."
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "web_search",
+      "description": "Search the web for information or pages requested by the user, especially when a current fact or source URL is needed. Start with concise, neutral keywords; narrow the search only when the user provides a constraint or the results justify one. Returns page titles, URLs, and excerpts. Use the results as evidence and include relevant source links in the answer.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Concise search keywords, without unverified assumptions"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "remember_fact",
+      "description": "Store or update a structured fact about an entity in long-term memory across sessions. Use this to remember user preferences, project conventions, tech stack, or environment facts.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string",
+            "description": "Entity name, for example 'user', 'project', or 'environment'."
+          },
+          "key": {
+            "type": "string",
+            "description": "The specific attribute or fact key, e.g. 'preferred_language', 'linter'."
+          },
+          "value": {
+            "type": "string",
+            "description": "The value or details to remember."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional category tags, e.g. ['preference', 'tooling']."
+          }
+        },
+        "required": [
+          "entity",
+          "key",
+          "value"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "recall_memory",
+      "description": "Search or retrieve stored facts from long-term memory about the user, project, or other entities.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search keyword matching entity name, key, or value."
+          },
+          "entity": {
+            "type": "string",
+            "description": "Optional entity name filter, e.g. 'user' or 'project'."
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "forget_fact",
+      "description": "Delete a stored fact about an entity from long-term memory across sessions. The user must confirm this deletion.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string",
+            "description": "Name of the entity, e.g. 'user' or 'project'."
+          },
+          "key": {
+            "type": "string",
+            "description": "The fact key to delete, e.g. 'preferred_language'."
+          }
+        },
+        "required": [
+          "entity",
+          "key"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_python",
+      "description": "Run a Python 3 script in an isolated sandbox (no network, no access to the user's files, read-only filesystem, limited memory and time) and return its exit code, stdout and stderr. Use it to compute, test or check code. If the script fails, read the traceback, fix the code and run it again. The user must confirm every run.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Complete Python 3 source to run. Print results to stdout."
+          },
+          "timeout": {
+            "type": "number",
+            "description": "Seconds before the run is killed (default 10, max 60)."
+          }
+        },
+        "required": [
+          "code"
+        ]
+      }
+    }
+  }
+]

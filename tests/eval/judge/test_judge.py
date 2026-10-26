@@ -214,6 +214,7 @@ async def test_judge_all_keeps_order_and_isolates_failures():
     assert report.errors == 1
 
 
+@pytest.mark.live
 @pytest.mark.skipif(
     not os.environ.get("SENSAI_LIVE_JUDGE"),
     reason="needs a running Ollama; set SENSAI_LIVE_JUDGE=1",
