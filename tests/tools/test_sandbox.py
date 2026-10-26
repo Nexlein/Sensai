@@ -159,6 +159,34 @@ async def test_docker_failure_is_not_mistaken_for_a_script_error(tmp_path):
     assert result == "Error: sandbox unavailable: Cannot connect to the Docker daemon"
 
 
+async def test_refused_container_start_is_not_mistaken_for_a_script_error(tmp_path):
+    # Snap Docker refuses exec under no-new-privileges: the runtime exits 255
+    # before Python starts, so nothing the model wrote has run.
+    body = RUN_SCRIPT + (
+        "sys.stderr.write('exec /usr/local/bin/python: operation not permitted\\n')\n"
+        "sys.exit(255)"
+    )
+
+    result = await RunCodeTool(docker_bin=fake_docker(tmp_path, body)).execute(
+        code="print(1)"
+    )
+
+    assert result == (
+        "Error: sandbox unavailable: exec /usr/local/bin/python: operation not permitted"
+    )
+
+
+async def test_script_exiting_255_is_still_a_script_result(tmp_path):
+    body = RUN_SCRIPT + "sys.stderr.write('custom failure\\n')\nsys.exit(255)"
+
+    result = await RunCodeTool(docker_bin=fake_docker(tmp_path, body)).execute(
+        code="raise SystemExit(255)"
+    )
+
+    assert result.startswith("exit code: 255\nstdout:\n(empty)\nstderr:\n")
+    assert "custom failure" in result
+
+
 @pytest.mark.live
 @pytest.mark.skipif(
     not os.environ.get("SENSAI_LIVE_SANDBOX"),

@@ -157,8 +157,9 @@ If you stop the turn yourself (Ctrl+C in the CLI, Esc in the TUI), the same clea
 | `timeout` is not a number, or is zero or negative                            | `Error: timeout must be a number` / `must be positive`    |
 | The `docker` binary does not exist                                           | `Error: sandbox unavailable, could not start Docker: ...` |
 | Docker is installed but failed (daemon down, image missing and not pullable) | `Error: sandbox unavailable: <docker's message>`          |
+| The runtime refused to start Python (`exec ...: operation not permitted`)    | `Error: sandbox unavailable: <runtime's message>`         |
 
-The last row is told apart by Docker's own exit codes (125 to 127) with an empty stdout. Without that, "the daemon is not running" would look like a script bug and the model would waste turns trying to fix perfectly good code.
+The last two rows are told apart by Docker's own exit codes with an empty stdout: 125 to 127, or 255 when the runtime's message starts with `exec ` (Python never started). Without that, "the daemon is not running" would look like a script bug and the model would waste turns trying to fix perfectly good code.
 
 ## 9. Setup
 
@@ -169,6 +170,12 @@ docker pull python:3.15-alpine
 ```
 
 If the image is missing, `docker run` tries to download it, and that download counts against the 10-second timeout. Pull it once beforehand.
+
+**Snap Docker does not work.** Ubuntu's snap package (`snap install docker`) refuses to start a program under `--security-opt no-new-privileges`, one of the sandbox's protections, so every run ends with `Error: sandbox unavailable: exec /usr/local/bin/python: operation not permitted`. Install Docker from Docker's own apt repository instead ([docs.docker.com/engine/install/ubuntu](https://docs.docker.com/engine/install/ubuntu/)). Check with:
+
+```bash
+echo 'print(1)' | docker run --rm -i --security-opt no-new-privileges python:3.15-alpine python -I -
+```
 
 There is nothing to configure: the tool is registered by `build_default_registry` next to the other built-in tools. The image name and Docker binary are constructor arguments of `RunCodeTool`, not settings in `sensai.toml` yet.
 

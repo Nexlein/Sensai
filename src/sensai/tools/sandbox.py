@@ -145,8 +145,12 @@ class RunCodeTool(SensitiveTool):
 
         out = stdout.decode(errors="replace")
         err = stderr.decode(errors="replace")
-        if process.returncode in (125, 126, 127) and not out:
-            # Docker itself failed (daemon down, image missing), not the script.
+        if not out and (
+            process.returncode in (125, 126, 127)
+            or (process.returncode == 255 and err.startswith("exec "))
+        ):
+            # Docker itself failed (daemon down, image missing, or the runtime
+            # refused to start Python, as snap Docker does), not the script.
             return f"Error: sandbox unavailable: {_clip(err.strip())}"
         return (
             f"exit code: {process.returncode}\n"
