@@ -1,6 +1,10 @@
 import os
 import tempfile
 
+from hypothesis import assume, given
+from hypothesis import strategies as st
+
+from sensai.domain.models import Document
 from sensai.memory.rag.chunker import TextChunker
 
 
@@ -88,3 +92,26 @@ def test_ingest_skips_files_that_are_not_utf8(tmp_path):
     docs = TextChunker().ingest_directory(str(tmp_path))
 
     assert [doc.content for doc in docs] == ["ok"]
+
+
+# Property: chunking loses nothing, for any text and any valid size/overlap.
+
+
+@given(
+    text=st.text(max_size=400),
+    size=st.integers(1, 60),
+    overlap=st.integers(0, 59),
+)
+def test_chunks_rebuild_the_text_and_respect_the_size(text, size, overlap):
+    assume(overlap < size)
+    doc = Document(id="d", path="d.md", content=text)
+
+    chunks = TextChunker(size, overlap).chunk_documents([doc])
+
+    assert all(0 < len(c.text) <= size for c in chunks)
+    rebuilt = chunks[0].text if chunks else ""
+    for chunk in chunks[1:]:
+        assert len(chunk.text) > overlap  # never an overlap-only tail
+        rebuilt += chunk.text[overlap:]
+    assert rebuilt == text
+    assert len({c.id for c in chunks}) == len(chunks)

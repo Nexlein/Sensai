@@ -268,3 +268,46 @@ async def test_write_file_under_a_file_reports_error_and_keeps_the_file(fs_sandb
 
     assert result.startswith("Error writing file:")
     assert (fs_sandbox / "test.txt").read_text() == "hello world"
+
+
+# Paths a model (or an injected document) might try: all must be refused.
+HOSTILE_PATHS = [
+    "../outside/secret.txt",
+    "subdir/../../outside/secret.txt",
+    "/etc/passwd",
+    "link/secret.txt",
+    "nul\x00byte.txt",
+    "a" * 5000,
+]
+
+
+@pytest.mark.parametrize("path", HOSTILE_PATHS)
+@pytest.mark.parametrize("tool_class", [ReadFileTool, ListDirTool])
+@pytest.mark.asyncio
+async def test_hostile_read_paths_return_an_error_never_raise(
+    fs_sandbox, tool_class, path
+):
+    result = await tool_class(fs_sandbox).execute(path)
+
+    assert result.startswith("Error")
+
+
+@pytest.mark.parametrize("path", HOSTILE_PATHS)
+@pytest.mark.asyncio
+async def test_hostile_write_paths_never_write_outside_the_root(fs_sandbox, path):
+    outside = fs_sandbox.parent / "outside"
+    before = sorted(p.name for p in outside.iterdir())
+
+    result = await WriteFileTool(fs_sandbox).execute(path, "pwned")
+
+    assert result.startswith("Error")
+    assert sorted(p.name for p in outside.iterdir()) == before
+    assert (outside / "secret.txt").read_text() == "secret"
+
+
+@pytest.mark.asyncio
+async def test_tilde_is_a_plain_folder_name_not_the_home_directory(fs_sandbox):
+    result = await WriteFileTool(fs_sandbox).execute("~/.ssh/id_rsa", "x")
+
+    assert result == "Wrote 1 characters to ~/.ssh/id_rsa"
+    assert (fs_sandbox / "~" / ".ssh" / "id_rsa").read_text() == "x"
