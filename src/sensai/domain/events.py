@@ -9,21 +9,22 @@ Now = Annotated[datetime, Field(default_factory=datetime.now)]
 
 
 class Event(BaseModel):
+    # Subclasses narrow `type` to a Literal; pyright flags narrowing a mutable field.
     type: str
     timestamp: Now
 
 
 class AssistantStartEvent(Event):
-    type: Literal["assistant_start"] = "assistant_start"
+    type: Literal["assistant_start"] = "assistant_start"  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
 class TextChunkEvent(Event):
-    type: Literal["text_chunk"] = "text_chunk"
+    type: Literal["text_chunk"] = "text_chunk"  # pyright: ignore[reportIncompatibleVariableOverride]
     content: str
 
 
 class BudgetEvent(Event):
-    type: Literal["budget"] = "budget"
+    type: Literal["budget"] = "budget"  # pyright: ignore[reportIncompatibleVariableOverride]
     used: int
     max_tokens: int
 
@@ -34,7 +35,7 @@ class UsageEvent(Event):
     Each field is None when the provider does not report it.
     """
 
-    type: Literal["usage"] = "usage"
+    type: Literal["usage"] = "usage"  # pyright: ignore[reportIncompatibleVariableOverride]
     prompt_tokens: int | None = None
     reply_tokens: int | None = None
     prompt_seconds: float | None = None
@@ -70,7 +71,7 @@ def _rate(tokens: int | None, seconds: float | None) -> float | None:
 
 
 class ToolCallEvent(Event):
-    type: Literal["tool_call"] = "tool_call"
+    type: Literal["tool_call"] = "tool_call"  # pyright: ignore[reportIncompatibleVariableOverride]
     tool_name: str
     arguments: dict[str, Any]
 
@@ -78,7 +79,7 @@ class ToolCallEvent(Event):
 class ThoughtEvent(Event):
     """A reasoning step shown between tool calls, never part of the final answer."""
 
-    type: Literal["thought"] = "thought"
+    type: Literal["thought"] = "thought"  # pyright: ignore[reportIncompatibleVariableOverride]
     content: str
     source: Literal["native", "text"] = "text"
 
@@ -86,7 +87,7 @@ class ThoughtEvent(Event):
 class StepEvent(Event):
     """A tool round is about to start: step `index` of at most `max_steps`."""
 
-    type: Literal["step"] = "step"
+    type: Literal["step"] = "step"  # pyright: ignore[reportIncompatibleVariableOverride]
     index: int
     max_steps: int
 
@@ -94,12 +95,12 @@ class StepEvent(Event):
 class MaxStepsEvent(Event):
     """The step cap was reached; the answer that follows is forced."""
 
-    type: Literal["max_steps"] = "max_steps"
+    type: Literal["max_steps"] = "max_steps"  # pyright: ignore[reportIncompatibleVariableOverride]
     max_steps: int
 
 
 class GuardrailEvent(Event):
-    type: Literal["guardrail"] = "guardrail"
+    type: Literal["guardrail"] = "guardrail"  # pyright: ignore[reportIncompatibleVariableOverride]
     stage: Literal["input", "output", "tool"]
     action: GuardrailAction
     reason: str
