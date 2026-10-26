@@ -27,3 +27,6 @@ jobs:
 
       - name: Lint Python (Ruff)
         run: uv run ruff check src/
+
+      - name: Type check (basedpyright)
+        run: make typecheck

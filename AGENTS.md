@@ -31,6 +31,7 @@ domain/      (models, events, protocols) -> pure data + interfaces, no deps upwa
 make setup   # uv sync + pre-commit install
 make test    # uv run pytest
 make lint    # uv run ruff check src/
+make typecheck  # basedpyright on src/ and tests/ (standard mode, [tool.basedpyright] in pyproject.toml)
 make format  # uv run ruff format src/ + prettier on yml/md
 ```
 

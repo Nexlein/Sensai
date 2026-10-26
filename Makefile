@@ -1,6 +1,9 @@
-.PHONY: all setup test test-verbose coverage test-live lint format run
+.PHONY: all setup test test-verbose coverage test-live lint typecheck format run
 
-all: format lint test
+# Same version as the VSCodium/VS Code basedpyright extension; settings in pyproject.toml.
+BASEDPYRIGHT = basedpyright@1.40.2
+
+all: format lint typecheck test
 
 run:
 	uv run sensai $(filter-out $@,$(MAKECMDGOALS))
@@ -29,6 +32,9 @@ test-live:
 
 lint:
 	uv run ruff check src/
+
+typecheck:
+	uvx $(BASEDPYRIGHT)
 
 format:
 	uv run ruff format src/
