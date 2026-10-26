@@ -107,7 +107,7 @@ réponse), visible même quand il passe.
 | Comportement du modèle      | `SENSAI_OLLAMA_TEST_MODEL=qwen3.5:4b make test-live`                                          | Ollama + modèle (+ `nomic-embed-text`)  |
 | Choix d'outils (historique) | `SENSAI_OLLAMA_TEST_MODEL=qwen3.5:4b uv run pytest tests/providers/test_ollama.py -k live -v` | Ollama + modèle                         |
 | Juge LLM                    | `SENSAI_LIVE_JUDGE=1 uv run pytest tests/eval/judge/test_judge.py -v`                         | Ollama                                  |
-| Sandbox Docker              | `SENSAI_LIVE_SANDBOX=1 uv run pytest tests/tools/test_sandbox.py -v`                          | Docker + `python:3.12-alpine`           |
+| Sandbox Docker              | `SENSAI_LIVE_SANDBOX=1 uv run pytest tests/tools/test_sandbox.py -v`                          | Docker + `python:3.15-alpine`           |
 | Serveur MCP GitHub          | `SENSAI_LIVE_MCP=1 uv run pytest tests/tools/test_mcp_live.py -v`                             | Docker + `GITHUB_PERSONAL_ACCESS_TOKEN` |
 
 `tests/live/` vérifie, pour chaque outil, le choix du modèle **et** sa réponse finale :

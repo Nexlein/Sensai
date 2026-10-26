@@ -144,8 +144,8 @@ request.
 The `run_python` tool lets the model run Python and read the output or traceback. The
 code runs in a throwaway Docker container (no network, read-only filesystem, no host
 files, 256 MB, 10 s by default) and every run asks for your confirmation, with the full
-code shown first. It needs Docker and the `python:3.12-alpine` image
-(`docker pull python:3.12-alpine`); without Docker the tool reports it is unavailable.
+code shown first. It needs Docker and the `python:3.15-alpine` image
+(`docker pull python:3.15-alpine`); without Docker the tool reports it is unavailable.
 
 ### MCP servers
 
