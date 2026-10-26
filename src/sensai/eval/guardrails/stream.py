@@ -1,5 +1,6 @@
 """Streaming PII redaction that never splits a match across chunks."""
 
+import re
 from typing import Literal
 
 from sensai.domain.models import GuardrailFinding
@@ -14,6 +15,12 @@ REFUSAL_TEXT = "[response withheld: it contained personal data]"
 MAX_SPACED_PII = 48
 MAX_EMAIL = 320
 _WHITESPACE = " \t\r\n"
+# A number written in groups ("18 446 744 073 709 551 616") is released whole:
+# its tail alone can pass for a card. Longer runs than this are cut anyway, so a
+# hostile stream of digits cannot make the buffer grow without bound.
+MAX_NUMBER_RUN = 2 * MAX_SPACED_PII
+_NUMBER_TAIL = re.compile(r"\d[\d \t-]*\Z")
+_NUMBER_HEAD = re.compile(r"[\d \t-]*\d")
 _EMAIL_CHARS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._%+-@"
 )
@@ -32,6 +39,18 @@ def _trailing_email_run(text: str) -> int:
             break
         length += 1
     return length
+
+
+def _before_number(buffer: str, cut: int) -> int:
+    """Move `cut` back before a number it would split, to that number's word start."""
+    if cut <= 0 or not _NUMBER_HEAD.match(buffer, cut):
+        return cut  # nothing numeric continues after the cut
+    floor = max(0, cut - MAX_NUMBER_RUN)
+    run = _NUMBER_TAIL.search(buffer, floor, cut)
+    if run is None or (run.start() == floor and floor > 0):
+        return cut  # no number before the cut, or one too long to hold back
+    # Back to a word start too, so `\b` sees the same context as in the full text.
+    return _last_whitespace(buffer, run.start()) + 1
 
 
 class PiiOutputStream:
@@ -94,6 +113,7 @@ class PiiOutputStream:
         boundary = _last_whitespace(buffer, cut)
         if boundary >= 0:
             cut = boundary + 1
+        cut = _before_number(buffer, cut)
         # Never release half of a match.
         for match in matches:
             if match.start < cut < match.end:
