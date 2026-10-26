@@ -1,246 +1,169 @@
 # Sensai
 
-< WATASHI WA NIHONGO O SUKOSHI SHIKA HANASEMASEN />
+A local AI assistant that runs on your own machine through [Ollama](https://ollama.com/):
+streaming chat, tools (files, web search, Python sandbox, MCP), document retrieval (RAG),
+long-term memory and privacy guardrails, in a terminal, a TUI or a browser. Plain Python, no
+LLM framework.
 
-## 📚 Documentation
+Demo scenario: _Sensai Collecte_, the assistant of a (fictional) waste-collection authority,
+answering team leaders from their own rule books without sending data anywhere
+([docs/soutenance/scenario.md](docs/soutenance/scenario.md)).
 
-- [Project Subject & Constraints](docs/SUBJECT.md)
-- [Features Catalog](docs/CATALOGUE.md)
-- [Evaluation (adversarial suite, LLM-as-judge)](docs/evaluation.md)
-- [Préparation soutenance (scénario, démo, benchmarks, RGPD, décisions)](docs/soutenance/README.md)
-- [Jeu de données du scénario (Régie de collecte, fictif)](data/collecte/)
+## Features
 
-## 🚀 Getting Started for Developers
+| Feature                | What it does                                                                                                | Turn it off / on          |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Streaming chat (B1)    | Replies appear token by token; history kept in the session; one-line errors                                 | —                         |
+| Sessions (M1)          | `--session name` resumes a saved conversation (SQLite)                                                      | —                         |
+| Token budget (M2)      | Old turns are summarized before the prompt outgrows the window                                              | `[budget]`                |
+| Structured memory (M3) | Remembers facts (`user.secteur = B`) across sessions; `/memory` to view or edit                             | `[memory] enabled`        |
+| RAG (R1)               | Answers from your Markdown/text files, with sources                                                         | `[rag]` or `--rag-dir`    |
+| File tools (T4)        | Read, list and write files inside one folder; every write shows a diff and asks                             | `[tools] fs_allowed_root` |
+| Web search (T3)        | Through a local SearXNG; asks before searching                                                              | `[tools] web_search`      |
+| Python sandbox (T2)    | Runs code in a locked-down Docker container; shows the code and asks                                        | `[tools] sandbox`         |
+| MCP tools (T1)         | Uses tools of any MCP server (stdio); asks before each call                                                 | `[mcp.servers.*]`         |
+| Reasoning (A1)         | Tool rounds with optional visible thoughts; thinking effort with `/effort`                                  | `[reasoning]`             |
+| Human in the loop (A3) | Every sensitive tool waits for your yes                                                                     | —                         |
+| Persona (A5)           | A domain system prompt, switchable live with `/persona on\|off`                                             | `[persona]`               |
+| Guardrails (EV2)       | Blocks prompt injection; masks emails, phones, IBANs, cards, French SSNs in input, replies and tool results | `[guardrails]`            |
+| Evaluation (EV1, EV4)  | LLM judge for replies; adversarial attack suite                                                             | `python -m sensai.eval.*` |
+| Observability          | `/prompt` shows the exact prompt; real token counts and tok/s after each reply; `/ps` shows RAM/VRAM        | `[eval] log_prompts`      |
+| Web and TUI (X1)       | `--ui web` (localhost) or `--ui tui`                                                                        | `interface`               |
 
-To start working on this project, clone the repository and run the setup command. This will automatically download all dependencies and install the Git hooks required to format your code!
+## Quick start
 
-```bash
-git clone git@github.com:Nexlein/Sensai.git
-cd Sensai
-
-# Install everything automatically
-make setup
-```
-
-## 🛠️ Useful Commands
-
-- `make test` - Run the test suite
-- `make lint` - Check for logical errors
-- `make format` - Force format all files manually
-
-## ✨ Features (WIP)
-
-- Interactive CLI chat REPL streaming responses from an LLM provider
-- Pluggable provider registry (currently: [Ollama](https://ollama.com/), opt-in [Groq](https://groq.com/), and a `mock` provider for testing/demos)
-- Config resolved from CLI args > `sensai.toml` > built-in defaults, no source changes needed to switch model/provider
-- Secure filesystem tools (read/list) strictly bounded to an allowed root directory (T4 feature)
-- Tool-calling engine that seamlessly orchestrates tool dispatch, handles recursion limits, and gracefully recovers from unexpected errors
-- Privacy and content guardrails (EV2), on by default: prompt-injection blocking on input, PII masking or refusal on input, streamed output and tool results
-
-## 💡 Usage Examples
-
-Start a chat session against a local [Ollama](https://ollama.com/) instance:
+Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), [Ollama](https://ollama.com/).
+Docker is optional (sandbox, SearXNG).
 
 ```bash
-ollama pull qwen3.5:4b
+git clone git@github.com:Nexlein/Sensai.git && cd Sensai
+make setup                       # dependencies + git hooks
+ollama pull qwen3.5:4b           # default chat model
+ollama pull nomic-embed-text     # only for RAG
 uv run sensai chat
 ```
 
-Qwen3.5 4B is the default because it can answer ordinary messages directly and
-use tools for file and web requests. Sensai asks for confirmation before running
-tools that require it. The optional `ollama/Modelfile` supports Llama 3.2, but
-the smaller Llama model may invent content after reading a tool result.
-
-To verify a model's tool selection against a running local Ollama server:
-
-```bash
-SENSAI_OLLAMA_TEST_MODEL=qwen3.5:4b uv run pytest tests/providers/test_ollama.py -k live
+```text
+you: Bonjour, tu sers à quoi ?
+sensai: Je suis Sensai, un assistant local…
+2.1k / 8.2k tokens (25%)
+prompt 412 tok · reply 96 tok · 12.4 tok/s · first token 3.1 s · total 11.0 s
 ```
 
-These optional tests cover greetings, explanations, file reads, web requests,
-and approval or refusal followed by another message. Search results are
-simulated; the tests do not query the web. Without the environment variable,
-the normal test suite skips them. Other models remain selectable with `--model`.
+`Ctrl+C` stops the current reply; `/exit` or `Ctrl+D` leaves.
 
-Type a message and press enter; the reply streams in as `sensai: ...`. Type `/exit` or press `Ctrl+C` to leave.
+## Usage examples
 
-You can also use slash commands inside the interactive session:
+```bash
+uv run sensai chat --model llama3.2:3b             # another model for this run
+uv run sensai chat --ui web                        # http://127.0.0.1:8000
+uv run sensai chat --ui tui
+uv run sensai chat --session incident-1018         # resume or create a named session
+uv run sensai chat --rag-dir data/collecte         # answer from these documents
+uv run sensai chat --provider mock                 # offline demo, no model needed
+```
 
-- `/help` - Show available commands
-- `/clear` - Clear the current conversation history
-- `/new` - Start and persist a new conversation
-- `/config get [key]` - View runtime configuration
-- `/config set <key> <value>` - Update runtime configuration
-- `/config save` - Save configuration to file
+Inside a session:
 
-Options:
+| Command                                                                       | Effect                                                     |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `/help`                                                                       | All commands                                               |
+| `/model qwen3.5:9b`, `/provider ollama`                                       | Switch model or provider for the next turn                 |
+| `/effort [low\|medium\|high\|off]`                                            | Thinking effort (picker without argument)                  |
+| `/persona on\|off`                                                            | Switch the domain persona                                  |
+| `/config`, `/config set <key> <value>`, `/config reset <key>`, `/config keys` | Settings, see below                                        |
+| `/memory`, `/memory set user secteur B`, `/memory search B`                   | Long-term facts                                            |
+| `/prompt`                                                                     | The full prompt of the last model call, message by message |
+| `/ps`                                                                         | Models in memory, size, CPU/GPU split                      |
+| `/new`, `/clear`                                                              | New conversation / empty this one                          |
 
-- `--ui <cli|tui>` — interface to use (defaults to `cli`)
-- `--model <name>` — model to use
-- `--provider <name>` — provider to use (`ollama` by default, or `mock` for a offline demo)
-- `--base-url <url>` — base URL of the provider's API (defaults to `http://localhost:11434`)
-- `--config <path>` — path to a config file (defaults to `sensai.toml` in the working directory)
+Example with the scenario corpus and persona:
 
-Instead of CLI flags, you can set defaults in a `sensai.toml` file:
+```text
+you: Il a neigé cette nuit, qu'est-ce que je dois changer ?
+sensai: L'Opération Hérisson s'applique : prise de poste décalée d'une heure (secteurs B et C : 7 h 00),
+chaînes montées au dépôt, aucun agent sur le marchepied… [plan-hivernal-herisson.md]
+you: Écris le rapport d'incident dans rapports/2026-10-21-tilleuls.md
+Allow write_file?   (the full diff of the file is shown first)
+✓ allowed write_file
+```
+
+## Configuration
+
+One file, `sensai.toml`, in the launch directory. Precedence: CLI flag > file > default.
+
+```bash
+uv run sensai config init                          # documented file with every setting
+uv run sensai config set options.temperature 0.2
+uv run sensai config keys rag                      # what each RAG setting does
+```
+
+Inside a session, `/config set` applies a change to the next turn and **saves it at once**
+(`autosave = true`), keeping your comments in the file. Invalid values are refused with one
+line. Full reference, every key, live vs restart: [docs/configuration.md](docs/configuration.md).
 
 ```toml
-interface = "cli"
-provider = "ollama"
 model = "qwen3.5:4b"
-base_url = "http://localhost:11434"
 
-[tools]
-fs_allowed_root = "."
-```
+[options]
+temperature = 0.2
+num_ctx = 8192          # default; must hold budget.max_tokens
 
-`sensai.toml` is local configuration and is ignored by Git. With the configuration
-above, CLI and TUI both use Qwen3.5 and can read, list and write files under the
-directory Sensai is launched from. This is also the default without `[tools]`.
-Every write asks for your confirmation first. Set `fs_allowed_root = false` to
-turn the filesystem tools off.
-
-### Groq (optional)
-
-Ollama stays the default. To use [Groq](https://groq.com/) instead, which is a hosted
-service and not local, opt in explicitly. Groq needs an API key and a Groq model
-name; the Ollama `model` and `base_url` do not apply:
-
-```toml
-provider = "groq"
-model = "openai/gpt-oss-120b"
-# api_key = "gsk_..."   # or export GROQ_API_KEY
-```
-
-Prefer the `GROQ_API_KEY` environment variable: a key in `sensai.toml` is stored in
-clear text (the file is ignored by Git). `/config` hides the key. Switch at runtime
-with `/provider groq` then `/model <groq-model>`. RAG embeddings still use Ollama.
-
-### Reasoning and effort
-
-Between tool calls the model can show its reasoning and a `step N/M` line. They are
-hidden by default; the final answer streams as usual. Tune it in `sensai.toml`:
-
-```toml
-[reasoning]
-enabled = true         # false turns the reasoning loop off
-show_thoughts = false  # true shows thoughts and steps in the CLI and the TUI
-max_steps = 5          # tool rounds before the model must answer without tools
-think = "low"          # thinking effort: "low", "medium", "high", false, or true
-```
-
-With `show_thoughts = true`, text the model writes before a tool call is shown as a
-thought instead of part of the answer, so an answer only appears once its round has
-ended. At the step limit Sensai tells the model to answer with what it has and prints a
-notice.
-
-`/effort` changes the thinking effort for the running session. Without an argument it
-opens a picker (`Low`, `Medium`, `High`, `Off`), with the default marked and the current
-level preselected; `/effort high` or `/effort off` sets it directly. `/config save` keeps
-it in `sensai.toml`. A model that cannot think ignores the setting after one refused
-request.
-
-### Code execution
-
-The `run_python` tool lets the model run Python and read the output or traceback. The
-code runs in a throwaway Docker container (no network, read-only filesystem, no host
-files, 256 MB, 10 s by default) and every run asks for your confirmation, with the full
-code shown first. It needs Docker and the `python:3.15-alpine` image
-(`docker pull python:3.15-alpine`); without Docker the tool reports it is unavailable.
-
-### MCP servers
-
-Sensai can use tools from [MCP](https://modelcontextprotocol.io) servers that run
-as a local command (stdio transport; HTTP servers are not supported). Declare
-them in `sensai.toml`; the table name prefixes the tool names (`github__list_issues`):
-
-```toml
-[mcp.servers.github]
-command = "docker"
-args = ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
-        "ghcr.io/github/github-mcp-server", "stdio", "--read-only", "--toolsets", "issues"]
-
-[mcp.servers.github.env]
-GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_..."
-```
-
-Every MCP call asks for your confirmation first. A server that fails to start is
-skipped with a warning. `timeout` (seconds, default 30) bounds each request. Keep
-tokens out of Git: `sensai.toml` is ignored, but do not paste it elsewhere.
-How it works end to end: [docs/mcp.md](docs/mcp.md).
-
-Run `sensai chat --ui tui` to use the Textual interface. The flag takes precedence over `interface` in `sensai.toml`. The web interface is planned but not available yet.
-
-### Local web search service
-
-The web search tool uses a local [SearXNG](https://docs.searxng.org/) service.
-Docker Compose starts the same configuration for every developer, with JSON
-results enabled:
-
-```bash
-cp .env.example .env
-# Generate a secret, then replace SEARXNG_SECRET in .env with its output.
-openssl rand -hex 32
-docker compose up -d searxng
-curl 'http://127.0.0.1:8888/search?q=sensai&format=json'
-uv run sensai chat
-```
-
-SearXNG is available at `http://127.0.0.1:8888` and bound to localhost.
-Sensai registers `web_search` automatically and calls this local service when
-its model requests a web search. Start SearXNG before using web search; stop it
-with `docker compose down`. The local `.env` is ignored by Git; commit only
-`.env.example` as the setup template.
-
-### Ask questions about local documents (RAG)
-
-Start Ollama with an embedding model such as `nomic-embed-text`, then point Sensai
-at a directory of Markdown or text files:
-
-```bash
-ollama pull nomic-embed-text
-sensai chat --rag-dir ./docs --rag-model nomic-embed-text --rag-db rag.db
-```
-
-Sensai indexes the directory when chat starts, replacing stale chunks in the local
-SQLite index. Each question retrieves the closest chunks and includes them in
-the model prompt. The retrieved text is not saved in conversation history.
-`--rag-dir` is optional; omit it to chat without document retrieval.
-
-The same settings live in `sensai.toml`, with the CLI flags taking precedence:
-
-```toml
 [rag]
 enabled = true
-dir = "./docs"
-model = "nomic-embed-text"
-db = "rag.db"
-top_k = 5
-chunk_size = 500
-chunk_overlap = 50
+dir = "data/collecte"
+
+[persona]
+enabled = true
+name = "Sensai Collecte"
+file = "personas/collecte.md"
 ```
 
-`[tools] web_search = false` and `[tools] sandbox = false` remove the web search
-and `run_python` tools, so the model no longer sees them.
+### Optional services
 
-### Privacy and content guardrails
+- **Web search**: `cp .env.example .env`, set `SEARXNG_SECRET` (`openssl rand -hex 32`), then
+  `docker compose up -d searxng` (SearXNG on `127.0.0.1:8888`).
+- **Python sandbox**: `docker pull python:3.15-alpine`. Details: [docs/features/sandbox.md](docs/features/sandbox.md).
+- **MCP servers**: one `[mcp.servers.<name>]` table each. Details: [docs/features/mcp.md](docs/features/mcp.md).
+- **Groq** (hosted, opt-in, not local): `provider = "groq"`, a Groq model name and `GROQ_API_KEY`.
+  RAG embeddings stay on Ollama.
 
-Guardrails are on by default, with no configuration needed. Tune or disable them in `sensai.toml`:
+## Performance in short
 
-```toml
-[guardrails]
-enabled = true      # set to false to turn all guardrails off
-injection = "block" # or "flag": warn but send the message anyway
-pii = "redact"      # or "block": refuse instead of masking
+Measured on an i7-13650HX with 16 GB of RAM, Ollama on CPU (RAG A/B on the RTX 4060)
+([full results and method](docs/benchmarks.md)):
+
+| What                                                          | Measured                                                                |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Sensai's own work per turn (prompt, guardrails, session save) | under 5 ms                                                              |
+| Start-up                                                      | 216 ms                                                                  |
+| qwen3.5:4b (default): first token / writing speed             | ~7 s / 11 tokens/s                                                      |
+| Fastest model: granite3.1-moe                                 | 46 tokens/s, but never calls tools                                      |
+| Right tool chosen (10 cases)                                  | qwen3.5:4b and gemma4:e4b 10/10; granite, mistral, phi4-mini 4/10       |
+| Fact found in a long prompt                                   | yes up to 25 000 tokens, but 9 min to read on CPU; 8 192 window ≈ 100 s |
+| Thinking on vs off (same right answer)                        | 7 min vs 16 s                                                           |
+| RAG on the demo corpus (22 questions, GPU)                    | 23 % → 82 % right answers; 3 min for the whole A/B                      |
+
+The model is the only slow part. Running Ollama on the GPU (CUDA build) is the biggest win
+left; see the [code review](docs/code-review.md) for the rest.
+
+## Development
+
+```bash
+make test          # every test by title with ✓/✗, summary per area (about 25 s)
+make test-report   # same, plus reports/tests.md
+make coverage      # coverage per file
+make lint          # ruff
+make format        # ruff format + prettier
+uv run python -m sensai.eval.bench perf           # Sensai's own overhead, no model
+uv run python -m sensai.eval.bench speed          # every installed model
+uv run python -m sensai.eval.bench rag            # RAG / persona A/B on 22 questions
 ```
 
-When enabled, Sensai checks three places:
+Conventions for contributors and AI agents: [AGENTS.md](AGENTS.md). Architecture, code review
+and testing guide: [docs/](docs/README.md).
 
-- **Your message**: prompt-injection attempts ("ignore all previous instructions", "reveal your system prompt", jailbreak personas, in English and French) are blocked and never reach the model. Personal data is masked before the model, the document retriever and the session history see it.
-- **The model's reply**: personal data is masked while the reply streams, even if a value arrives split across chunks. With `pii = "block"` the reply is cut and replaced by a refusal notice.
-- **Tool results**: personal data returned by a tool such as `read_file` is masked before the model sees it.
+## Team
 
-Detected personal data: email addresses, phone numbers, IBANs, credit card numbers and French social security numbers. Card, IBAN and SSN candidates are checked against their checksum, so an ordinary long number is left alone. A notice such as `⚠ Personal data in your message was masked (pii: email).` tells you what happened, naming the rule and never the value. The model is also told, for that turn, that the placeholders were inserted on purpose, so it answers "that value was hidden" instead of sounding broken.
-
-Because the rules favour masking over leaking, an ordinary number can occasionally be masked (a 10-digit number starting with `0` looks like a French phone number). Set `enabled = false` if that gets in the way.
-
-Limits: names and postal addresses are not detected, the injection rules are heuristics that paraphrases can get past, and personal data inside tool-call arguments or retrieved documents is not filtered.
+Nielsen Combe-Bracciale (Nexlein), Teddy Bertrand, Mathys Aberkane (Vulcaaa), Alban Lambrez
+(Saitamadupauvre) — Epitech.
