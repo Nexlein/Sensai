@@ -1,6 +1,8 @@
 import json
 import math
 import sqlite3
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 
 from sensai.domain.models import Chunk, ScoredChunk
 
@@ -32,8 +34,14 @@ class SQLiteVectorStore:
         self.db_path = db_path
         self._init_db()
 
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """Yield a connection that commits on success, rolls back on error, then closes."""
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
+            yield conn
+
     def _init_db(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS chunks (
@@ -62,12 +70,12 @@ class SQLiteVectorStore:
 
     def save_chunks(self, chunks: list[Chunk]) -> None:
         """Add or update already embedded chunks."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             self._insert_chunks(conn, chunks)
 
     def replace_chunks(self, chunks: list[Chunk]) -> None:
         """Atomically replace an index, including stale or deleted documents."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("DELETE FROM chunks")
             self._insert_chunks(conn, chunks)
 
@@ -76,7 +84,7 @@ class SQLiteVectorStore:
         _validate_embedding(query_embedding)
         if top_k <= 0:
             raise ValueError("top_k must be positive")
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             rows = conn.execute(
                 "SELECT id, doc_id, text, metadata, embedding FROM chunks"
             ).fetchall()
