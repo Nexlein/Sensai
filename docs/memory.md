@@ -97,7 +97,7 @@ Users inspect and control long-term memory via the `/memory` command:
 - `/memory get <entity> <key>`: View a specific fact.
 - `/memory set <entity> <key> <value>`: Manually create or update a fact.
 - `/memory delete <entity> <key>`: Delete a fact.
-- `/memory search <query>`: Search memories by substring.
+- `/memory search <query>`: Search memories by word (accents, case and `_` ignored; best matches first).
 - `/memory clear`: Clear all memories.
 
 ---

@@ -104,6 +104,39 @@ def test_search_facts(memory_manager: SqliteMemoryManager) -> None:
     assert res_entity[0].entity_name == "infra"
 
 
+def test_search_matches_words_whatever_their_accents_and_case(
+    memory_manager: SqliteMemoryManager,
+) -> None:
+    # The model asked for "éditeur de texte préféré"; the key was "editeur_prefere".
+    memory_manager.store_fact("user", "editeur_prefere", "Helix")
+    memory_manager.store_fact("user", "langue", "Deutsch")
+
+    found = memory_manager.search_facts("Éditeur de texte PRÉFÉRÉ ?")
+
+    # "de" is too short to count next to longer words, or it would match "Deutsch".
+    assert [(f.key, f.value) for f in found] == [("editeur_prefere", "Helix")]
+
+
+def test_search_ranks_facts_by_how_many_words_they_match(
+    memory_manager: SqliteMemoryManager,
+) -> None:
+    memory_manager.store_fact("user", "editeur_secondaire", "nano")
+    memory_manager.store_fact("user", "editeur_prefere", "Helix")
+    memory_manager.store_fact("project", "name", "Sensai")
+
+    found = memory_manager.search_facts("éditeur préféré")
+
+    assert [f.key for f in found] == ["editeur_prefere", "editeur_secondaire"]
+
+
+def test_search_with_no_word_finds_nothing(
+    memory_manager: SqliteMemoryManager,
+) -> None:
+    memory_manager.store_fact("user", "fav_db", "PostgreSQL")
+
+    assert memory_manager.search_facts(" ?! ") == []
+
+
 def test_delete_fact(memory_manager: SqliteMemoryManager) -> None:
     memory_manager.store_fact("user", "theme", "dark")
     assert memory_manager.delete_fact("user", "theme") is True
