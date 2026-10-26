@@ -1,4 +1,4 @@
-.PHONY: all setup test lint format run
+.PHONY: all setup test test-verbose coverage test-live lint format run
 
 all: format lint test
 
@@ -17,6 +17,15 @@ setup:
 
 test:
 	uv run pytest
+
+test-verbose:
+	uv run pytest -v -rs
+
+coverage:
+	uv run pytest --cov=sensai --cov-report=term-missing --cov-report=html
+
+test-live:
+	uv run pytest -m live -v -rA
 
 lint:
 	uv run ruff check src/

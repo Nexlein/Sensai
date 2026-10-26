@@ -158,6 +158,7 @@ async def test_docker_failure_is_not_mistaken_for_a_script_error(tmp_path):
     assert result == "Error: sandbox unavailable: Cannot connect to the Docker daemon"
 
 
+@pytest.mark.live
 @pytest.mark.skipif(
     not os.environ.get("SENSAI_LIVE_SANDBOX"),
     reason="set SENSAI_LIVE_SANDBOX=1 (needs Docker and the python:3.12-alpine image)",

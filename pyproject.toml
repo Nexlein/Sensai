@@ -38,3 +38,15 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+    "live: needs a real model server or Docker; skipped unless its env var is set",
+]
+
+[tool.coverage.run]
+source = ["sensai"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 96

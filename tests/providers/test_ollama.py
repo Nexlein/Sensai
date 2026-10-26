@@ -493,6 +493,7 @@ def live_ollama_provider():
     return OllamaLLMProvider(model=model)
 
 
+@pytest.mark.live
 @pytest.mark.parametrize(
     "prompt, expects_tool",
     [
@@ -528,6 +529,7 @@ async def test_live_tool_selection(live_ollama_provider, prompt, expects_tool):
         assert '"name"' not in text  # No unparsed/invented function call.
 
 
+@pytest.mark.live
 @pytest.mark.parametrize("approved", [True, False])
 async def test_live_confirmation_round_trip(live_ollama_provider, approved):
     from sensai.core.engine import ChatEngine
@@ -575,6 +577,7 @@ async def test_live_confirmation_round_trip(live_ollama_provider, approved):
     assert any(isinstance(event, TextChunkEvent) for event in events)
 
 
+@pytest.mark.live
 async def test_live_file_read_uses_listing_then_exact_case(
     live_ollama_provider, tmp_path
 ):
