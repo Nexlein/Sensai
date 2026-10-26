@@ -65,14 +65,21 @@ Les drapeaux CLI restent prioritaires sur le fichier ; `--rag-dir` active le RAG
 uv run sensai chat --rag-dir data/collecte --rag-model nomic-embed-text --rag-db rag.db
 ```
 
-Modification en direct, sans redémarrer :
+Modification en direct, sans redémarrer, **enregistrée aussitôt** dans `sensai.toml`
+(`autosave = true` par défaut, commentaires du fichier conservés) :
 
 ```text
-/config get guardrails
-/config set model llama3.2
-/effort
-/config save
+/config                                  # tous les réglages, avec leur source (default, file, flag, session)
+/config keys options                     # type, défaut et rôle de chaque réglage
+/config set options.temperature 0.7      # options.temperature = 0.7 (saved to sensai.toml)
+/config set options.num_ctx 2048         # refusé en une ligne : budget.max_tokens ne tient plus
+/config reset options.temperature        # retour au défaut, clé retirée du fichier
+/model llama3.2:3b                       # même chemin : validé, appliqué, enregistré
 ```
+
+Depuis le terminal : `sensai config init` (fichier documenté avec tous les réglages),
+`sensai config set <clé> <valeur>`, `sensai config keys`. Référence complète :
+[../configuration.md](../configuration.md).
 
 ### Bascules de features
 
@@ -92,10 +99,11 @@ Modification en direct, sans redémarrer :
 ## Température et contexte
 
 Sans champ `options`, Ollama applique les valeurs du Modelfile du modèle, ou ses défauts. Or notre
-budget suppose 8192 tokens, alors que le `num_ctx` par défaut d'Ollama est plus petit selon la
-version (2048 ou 4096). Au-delà, **Ollama tronque silencieusement le début du prompt**,
+budget suppose 8192 tokens, alors que le `num_ctx` par défaut d'Ollama est de 4096 sur une
+machine sans GPU. Au-delà, **Ollama tronque silencieusement le début du prompt**,
 c'est-à-dire nos messages système (persona, RAG, privacy note). Le modèle « oublie » ses règles
-sans erreur.
+sans erreur. **Corrigé** : `options.num_ctx` vaut 8192 par défaut et est toujours envoyé
+(mesure dans [benchmarks.md](benchmarks.md)).
 
 Section `[options]` (le nom `[model]` est impossible : la clé `model = "..."` existe déjà au
 niveau racine du TOML). Chaque clé est facultative ; une clé absente n'est pas envoyée, et sans

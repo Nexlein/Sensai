@@ -20,65 +20,46 @@ uv run python -m sensai.eval.adversarial
 ## A/B 1 : RAG activé vs désactivé (mesure principale)
 
 **Hypothèse** : sur des questions dont la réponse n'existe que dans `data/collecte/`, le RAG fait
-passer l'exactitude de ~0 % (le modèle invente) à plus de 70 %, pour un surcoût de latence mesurable.
+passer l'exactitude de ~0 % (le modèle ne sait pas) à plus de 70 %, pour un surcoût de latence
+mesurable.
 
-**Protocole** :
+**Protocole** : qwen3.5:4b, `temperature = 0`, `seed = 42`, réflexion désactivée, 22 questions
+([`data/bench/rag-questions.jsonl`](../../data/bench/rag-questions.jsonl)), dont 4 sans réponse
+dans le corpus (le bon comportement est de le dire). Chaque question passe par le vrai moteur
+de Sensai (`ChatEngine`, guardrails, persona, retriever). Une réponse est juste si elle contient
+tous les mots-clés attendus (casse et accents ignorés).
 
-- Même modèle, `temperature = 0`, `seed = 42`, même machine, modèle préchauffé.
-- 20 questions avec réponse de référence (`docs/soutenance/bench-questions.jsonl`, à créer depuis le
-  tableau ci-dessous), dont 4 sans réponse dans le corpus (le bon comportement est de le dire).
-- Condition A : sans `--rag-dir`. Condition B : avec `--rag-dir data/collecte`.
+```bash
+uv run python -m sensai.eval.bench rag     # 3 min sur GPU, ~35 min sur CPU
+```
 
-**Métriques** :
+**Résultats** (26/10/2026, RTX 4060, index : 26 chunks en 0,8 s, une recherche 24 ms) :
 
-| Métrique             | Calcul                                                                                       |
-| -------------------- | -------------------------------------------------------------------------------------------- |
-| Exactitude factuelle | Part des réponses contenant tous les mots-clés attendus (insensible à la casse/accents)      |
-| Refus correct        | Part des questions hors corpus où le modèle dit ne pas savoir                                |
-| Fidélité (juge EV1)  | Part des affirmations `supported` par le contexte (condition B uniquement)                   |
-| Latence              | Temps total moyen et temps avant le premier token (`total_duration`, `prompt_eval_duration`) |
-| Tokens de prompt     | `prompt_eval_count` moyen : le coût du contexte ajouté                                       |
+| Condition                 | Exactitude | Faits justes | Refus justes | Source citée   | Temps médian | 1er token | Tokens prompt |
+| ------------------------- | ---------- | ------------ | ------------ | -------------- | ------------ | --------- | ------------- |
+| A : sans RAG, persona     | 23 %       | 1/18         | 4/4          | 5/18 (fausses) | 1,3 s        | 0,2 s     | 289           |
+| B : RAG, prompt générique | **82 %**   | 15/18        | 3/4          | 3/18           | 3,2 s        | 0,5 s     | 872           |
+| C : RAG + persona         | **82 %**   | 15/18        | 3/4          | **15/18**      | 1,9 s        | 0,6 s     | 1 135         |
 
-**Questions** (extrait, faits inventés présents seulement dans le corpus) :
+**À dire à l'oral** :
 
-| #   | Question                                                                 | Mots-clés attendus   | Source                    |
-| --- | ------------------------------------------------------------------------ | -------------------- | ------------------------- |
-| 1   | Quel jour est collecté le bac jaune dans le secteur B ?                  | `mercredi`           | calendrier-secteurs.md    |
-| 2   | À quelle heure commence la collecte dans le secteur A ?                  | `5 h 30`             | calendrier-secteurs.md    |
-| 3   | C'est quoi l'Opération Hérisson ?                                        | `neige`, `verglas`   | plan-hivernal-herisson.md |
-| 4   | Pendant l'Opération Hérisson, de combien est décalée la prise de poste ? | `1 h` ou `une heure` | plan-hivernal-herisson.md |
-| 5   | Vitesse max quand un ripeur est sur le marchepied ?                      | `25`                 | securite-collecte.md      |
-| 6   | Quel est le délai pour déclarer un presqu'accident ?                     | `24 h`               | procedure-incidents.md    |
-| 7   | Quelle couleur d'autocollant pour un refus de collecte ?                 | `orange`             | procedure-incidents.md    |
-| 8   | Les pots de yaourt vont dans quel bac ?                                  | `jaune`              | consignes-tri.md          |
-| 9   | Combien de passages d'encombrants par an par foyer ?                     | `4`                  | consignes-tri.md          |
-| 10  | Qui contacter pour un bac volé ?                                         | `service usagers`    | procedure-incidents.md    |
-| 17  | Quel est le salaire d'un ripeur à la régie ?                             | (refus attendu)      | hors corpus               |
-| 18  | Quel est le code d'accès du portail du dépôt ?                           | (refus attendu)      | hors corpus               |
-
-Compléter jusqu'à 20 en lisant le corpus.
-
-**Résultats** (à remplir, 3 passages, médiane) :
-
-| Condition    | Exactitude | Refus correct | Fidélité (juge) | Latence moy. | 1er token | Tokens prompt moy. |
-| ------------ | ---------- | ------------- | --------------- | ------------ | --------- | ------------------ |
-| A : sans RAG |            |               | n/a             |              |           |                    |
-| B : avec RAG |            |               |                 |              |           |                    |
-
-**Arbitrage à commenter** : le RAG ajoute ~5 chunks × 500 caractères ≈ 600 tokens par question →
-temps avant le premier token plus long, contexte consommé plus vite. C'est le compromis
-« précision vs latence » attendu au critère 16.
+- RAG : **+59 points** d'exactitude (1 → 15 faits justes sur 18) pour ~600 tokens de prompt et
+  0,3 s de plus avant le premier mot. C'est le compromis « précision vs latence » du critère 16.
+- Sans documents, le modèle **invente des sources** : 5 réponses citent un fichier, dont
+  `procedure-tri.md` qui n'existe pas, et un « poste 102 » inventé. Une citation ne prouve rien
+  si la source n'était pas dans le prompt (hallucination à montrer en démo).
+- Les 3 erreurs restantes viennent toutes d'un **tableau Markdown** (`calendrier-secteurs.md`) :
+  le modèle lit la mauvaise ligne (13 h 00 est l'horaire du secteur D, pas du A). Piste :
+  découper les documents par titres et garder l'en-tête des tableaux.
+- Une question piège (« qui a lancé l'Opération Hérisson et en quelle année ? ») reçoit une
+  réponse plausible au lieu d'un refus : le contexte proche pousse le modèle à combler les trous.
 
 ## A/B 2 : pré-prompt générique vs spécialisé
 
-Même jeu de questions, condition B (RAG activé), avec `TOOL_USE_GUIDANCE` seul vs la persona de
-[scenario.md](scenario.md#pré-prompt-proposé). Bascule en direct avec `/persona off` / `/persona on`,
-ou `[persona] enabled` dans le fichier.
-
-| Condition            | Exactitude | Source citée | Refus correct |
-| -------------------- | ---------- | ------------ | ------------- |
-| Pré-prompt générique |            |              |               |
-| Persona collecte     |            |              |               |
+Mesuré par le même script (conditions B et C ci-dessus) : **même exactitude (82 %)**, mais la
+persona fait citer la source **15 fois sur 18 au lieu de 3** et donne des réponses plus courtes
+(1,9 s contre 3,2 s). La persona change la forme et la traçabilité, pas ce que le modèle sait.
+Bascule en direct avec `/persona off` / `/persona on`.
 
 ## A/B 3 : compression du budget (M2)
 
@@ -91,41 +72,14 @@ donné au tour 2 (oui / non). Montre le compromis « coût de contexte vs perte 
 Questions 1 à 10, condition B, `temperature` 0.0 vs 0.7 vs 1.2, 5 passages chacune sans `seed`.
 Métriques : exactitude moyenne et variance entre passages.
 
-## Script à écrire
+## Autres mesures
 
-`python -m sensai.eval.bench` (dans `eval/bench/`, avec ses tests dans `tests/eval/bench/`) :
-
-```bash
-uv run python -m sensai.eval.bench \
-  --questions docs/soutenance/bench-questions.jsonl \
-  --rag-dir data/collecte --model qwen3.5:4b --runs 3
-```
-
-Format d'une ligne de questions :
-
-```json
-{"id": 1, "question": "Quel jour est collecté le bac jaune dans le secteur B ?", "expected": ["mercredi"], "source": "calendrier-secteurs.md"}
-{"id": 17, "question": "Quel est le salaire d'un ripeur à la régie ?", "expected": [], "unanswerable": true}
-```
-
-Sortie attendue :
-
-```text
-== RAG A/B · qwen3.5:4b · 20 questions × 3 runs ==
-condition   accuracy  refusal  latency   ttft    prompt_tok
-no-rag        5%       25%     8.2 s    0.9 s       210
-rag          80%       75%    11.6 s    2.8 s       830
-delta       +75 pts   +50 pts  +3.4 s   +1.9 s      +620
-```
-
-Contraintes : passe par `build_session` (même pipeline que la CLI), `temperature = 0` et `seed` fixés
-(dépend de `[options]`, voir [configuration.md](configuration.md)), écrit aussi les réponses au format
-du juge pour enchaîner `python -m sensai.eval.judge`. Code de sortie non nul si une condition échoue
-complètement (Ollama absent → message une ligne, pas de trace).
+Vitesse des 10 modèles, choix des outils, effort de réflexion, limites de la fenêtre de
+contexte : [../benchmarks.md](../benchmarks.md), résumé dans [modeles.md](modeles.md).
 
 ## Rejouer en direct
 
 1. Préchauffer le modèle (voir [demo-script.md](demo-script.md#préparation-avant-dentrer-en-salle)).
-2. Lancer avec `--runs 1` et 10 questions pour tenir en moins de 3 minutes.
+2. Lancer `uv run python -m sensai.eval.bench rag` (3 minutes sur GPU).
 3. Comparer aux résultats du tableau : les **ordres de grandeur** doivent tenir (écart d'exactitude
    de plusieurs dizaines de points), pas les valeurs exactes.

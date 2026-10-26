@@ -119,15 +119,24 @@ similarité, modèle 10× plus gros), ni l'embedding pour générer (pas de têt
 
 ## Tableau des modèles testés
 
-À remplir avec les mesures de [benchmarks.md](benchmarks.md) et [observabilite.md](observabilite.md).
-Même machine, même prompt, `temperature = 0`, `seed = 42`.
+Mesuré le 21/10/2026 sur le PC d'Alban (i7-13650HX, 16 Go, Ollama sur CPU), `temperature = 0`,
+`seed = 42`, réflexion désactivée. Commandes et détail : [../benchmarks.md](../benchmarks.md).
 
-| Modèle           | Taille | Quantif. | RAM (`ollama ps`) | Decode tok/s | 1er token | Tool calls OK (live tests) | Exactitude RAG (bench) | Français | Retenu |
-| ---------------- | ------ | -------- | ----------------- | ------------ | --------- | -------------------------- | ---------------------- | -------- | ------ |
-| qwen3.5:4b       | 4B     |          |                   |              |           |                            |                        |          | ✅     |
-| llama3.2 (3B)    | 3B     |          |                   |              |           |                            |                        |          |        |
-| sensai-llama3.2  | 3B     |          |                   |              |           |                            |                        |          |        |
-| mistral (7B)     | 7B     |          |                   |              |           |                            |                        |          |        |
-| gemma3:4b        | 4B     |          |                   |              |           |                            |                        |          |        |
-| phi4-mini        | 3,8B   |          |                   |              |           |                            |                        |          |        |
-| nomic-embed-text | 137M   |          |                   | n/a          | n/a       | n/a                        | (embedding)            | n/a      | ✅     |
+| Modèle           | Taille | Quantif. | RAM    | Écriture tok/s | 1er token | Bon outil (10 cas)     | Retenu |
+| ---------------- | ------ | -------- | ------ | -------------- | --------- | ---------------------- | ------ |
+| qwen3.5:4b       | 4,2B   | Q4_K_M   | 3,1 Go | 11,0           | 7,1 s     | **10/10**              | ✅     |
+| gemma4:e4b       | 7,5B   | Q4_K_M   | 1,8 Go | 16,2           | 8,6 s     | **10/10**              | plan B |
+| qwen3.5:2b       | 1,9B   | Q8_0     | 2,4 Go | 16,0           | 3,7 s     | 9/10                   |        |
+| ministral-3:3b   | 3,8B   | Q4_K_M   | 2,7 Go | 13,9           | 5,9 s     | 9/10                   |        |
+| qwen3.5:9b       | 9,0B   | Q4_K_M   | 6,2 Go | 6,4            | 12,8 s    | 9/10                   |        |
+| bonsai2 (1 bit)  | 8,2B   | Q1_0     | 1,9 Go | 16,7           | 27,2 s    | 9/10                   |        |
+| llama3.2:3b      | 3,2B   | Q4_K_M   | 2,6 Go | 15,7           | 5,7 s     | 6/10 (outils inutiles) |        |
+| granite3.1-moe   | 3,3B   | Q4_K_M   | 2,4 Go | **46,2**       | 3,0 s     | 4/10 (jamais d'outil)  |        |
+| phi4-mini        | 3,8B   | Q4_K_M   | 3,1 Go | 12,7           | 5,4 s     | 4/10 (jamais d'outil)  |        |
+| mistral:7b       | 7,2B   | Q4_K_M   | 5,0 Go | 7,6            | 14,8 s    | 4/10 (jamais d'outil)  |        |
+| nomic-embed-text | 137M   | F16      | 0,3 Go | n/a            | n/a       | n/a (embeddings)       | ✅     |
+
+À retenir pour l'oral : la vitesse d'écriture suit le nombre de paramètres **actifs** (granite
+est un mélange d'experts, ~0,8B actifs, d'où 46 tok/s) ; un modèle plus gros (qwen3.5:9b) ne
+choisit pas mieux ses outils et écrit deux fois moins vite ; trois modèles n'appellent jamais
+d'outil via l'API d'Ollama.
