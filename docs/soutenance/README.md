@@ -69,6 +69,6 @@ Dans l'ordre, ce qui bloque un prérequis éliminatoire :
 4. ~~Lire `prompt_eval_count`, `eval_count`, `eval_duration` du dernier message d'Ollama : vrai compteur de tokens et tokens/s affichés après chaque réponse.~~ Fait (#78).
 5. ~~Persona « collecte » branchée (`Persona` existe déjà dans `domain/models.py`).~~ Fait (#79).
 6. ~~Script A/B RAG (`python -m sensai.eval.bench`).~~ Fait, voir [benchmarks.md](benchmarks.md).
-7. Réflexion désactivée par défaut sur CPU : `/effort low` coûte ~7 min sur une addition avec qwen3.5:4b (voir [../code-review.md](../code-review.md)).
+7. Réflexion désactivée par défaut : `/effort low` coûte 50 s sur GPU et ~7 min sur CPU pour une addition avec qwen3.5:4b, contre 3 s / 16 s sans (voir [../code-review.md](../code-review.md)).
 
 Chaque feature ajoutée apporte ses deux user stories dans `docs/USER_STORIES.md`.

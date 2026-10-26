@@ -130,22 +130,21 @@ file = "personas/collecte.md"
 
 ## Performance in short
 
-Measured on an i7-13650HX with 16 GB of RAM, Ollama on CPU (RAG A/B on the RTX 4060)
-([full results and method](docs/benchmarks.md)):
+Measured on an i7-13650HX laptop with 16 GB of RAM and an RTX 4060 (8 GB), Ollama on the GPU
+and on CPU only ([full results and method](docs/benchmarks.md)):
 
-| What                                                          | Measured                                                                |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Sensai's own work per turn (prompt, guardrails, session save) | under 5 ms                                                              |
-| Start-up                                                      | 216 ms                                                                  |
-| qwen3.5:4b (default): first token / writing speed             | ~7 s / 11 tokens/s                                                      |
-| Fastest model: granite3.1-moe                                 | 46 tokens/s, but never calls tools                                      |
-| Right tool chosen (10 cases)                                  | qwen3.5:4b and gemma4:e4b 10/10; granite, mistral, phi4-mini 4/10       |
-| Fact found in a long prompt                                   | yes up to 25 000 tokens, but 9 min to read on CPU; 8 192 window ≈ 100 s |
-| Thinking on vs off (same right answer)                        | 7 min vs 16 s                                                           |
-| RAG on the demo corpus (22 questions, GPU)                    | 23 % → 82 % right answers; 3 min for the whole A/B                      |
+| What                                                  | GPU                       | CPU only       |
+| ----------------------------------------------------- | ------------------------- | -------------- |
+| Sensai's own work per turn (prompt, guardrails, save) | under 5 ms                | same           |
+| Start-up                                              | 216 ms                    | same           |
+| qwen3.5:4b (default): first token / writing speed     | 0.3 s / 37 tok/s          | 7 s / 11 tok/s |
+| Full 8 192-token window read before the first word    | 3.5 s                     | ~100 s         |
+| Thinking on vs off (same right answer)                | 50 s vs 3 s               | 7 min vs 16 s  |
+| RAG on the demo corpus (22 questions)                 | 23 % → 82 % right answers | same           |
 
-The model is the only slow part. Running Ollama on the GPU (CUDA build) is the biggest win
-left; see the [code review](docs/code-review.md) for the rest.
+Right tool chosen out of 10 cases: qwen3.5:4b and gemma4:e4b 10/10; granite, mistral and
+phi4-mini 4/10 (they never call tools). The model is the only slow part; on a machine without
+a GPU, prefer a small model and keep thinking off.
 
 ## Development
 

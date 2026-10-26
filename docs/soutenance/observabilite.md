@@ -138,13 +138,13 @@ Conséquences à dire au jury :
 Mesure : `uv run python -m sensai.eval.bench speed --models qwen3.5:4b` (même texte, 3 essais à
 chaud, médiane), ou `ollama run <modèle> --verbose`. Toutes les mesures : [../benchmarks.md](../benchmarks.md).
 
-| Machine    | CPU                     | RAM   | GPU / VRAM           | Modèle     | Prefill tok/s | Decode tok/s | 1er token   |
-| ---------- | ----------------------- | ----- | -------------------- | ---------- | ------------- | ------------ | ----------- |
-| PC Teddy   | i7-13650HX (20 threads) | 32 Go | _à relever_          | qwen3.5:4b |               |              |             |
-| PC Alban   | i7-13650HX (20 threads) | 16 Go | aucun (Ollama CPU)   | qwen3.5:4b | 74            | 11,0         | 7,1 s       |
-| PC Alban   | i7-13650HX (20 threads) | 16 Go | RTX 4060 8 Go (CUDA) | qwen3.5:4b | _à mesurer_   | _à mesurer_  | _à mesurer_ |
-| _membre 3_ |                         |       |                      |            |               |              |             |
-| _membre 4_ |                         |       |                      |            |               |              |             |
+| Machine    | CPU                     | RAM   | GPU / VRAM           | Modèle     | Prefill tok/s | Decode tok/s | 1er token |
+| ---------- | ----------------------- | ----- | -------------------- | ---------- | ------------- | ------------ | --------- |
+| PC Teddy   | i7-13650HX (20 threads) | 32 Go | _à relever_          | qwen3.5:4b |               |              |           |
+| PC Alban   | i7-13650HX (20 threads) | 16 Go | aucun (Ollama CPU)   | qwen3.5:4b | 74            | 11,0         | 7,1 s     |
+| PC Alban   | i7-13650HX (20 threads) | 16 Go | RTX 4060 8 Go (CUDA) | qwen3.5:4b | 1 700         | 37,1         | 0,3 s     |
+| _membre 3_ |                         |       |                      |            |               |              |           |
+| _membre 4_ |                         |       |                      |            |               |              |           |
 
 ## RAM et VRAM
 

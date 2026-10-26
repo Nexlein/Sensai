@@ -119,24 +119,27 @@ similarité, modèle 10× plus gros), ni l'embedding pour générer (pas de têt
 
 ## Tableau des modèles testés
 
-Mesuré le 21/10/2026 sur le PC d'Alban (i7-13650HX, 16 Go, Ollama sur CPU), `temperature = 0`,
-`seed = 42`, réflexion désactivée. Commandes et détail : [../benchmarks.md](../benchmarks.md).
+Mesuré sur le PC d'Alban (i7-13650HX, 16 Go, RTX 4060 8 Go), Ollama sur GPU (26/10/2026) et
+sur CPU seul (21/10/2026), `temperature = 0`, `seed = 42`, réflexion désactivée. Commandes et
+détail : [../benchmarks.md](../benchmarks.md).
 
-| Modèle           | Taille | Quantif. | RAM    | Écriture tok/s | 1er token | Bon outil (10 cas)     | Retenu |
-| ---------------- | ------ | -------- | ------ | -------------- | --------- | ---------------------- | ------ |
-| qwen3.5:4b       | 4,2B   | Q4_K_M   | 3,1 Go | 11,0           | 7,1 s     | **10/10**              | ✅     |
-| gemma4:e4b       | 7,5B   | Q4_K_M   | 1,8 Go | 16,2           | 8,6 s     | **10/10**              | plan B |
-| qwen3.5:2b       | 1,9B   | Q8_0     | 2,4 Go | 16,0           | 3,7 s     | 9/10                   |        |
-| ministral-3:3b   | 3,8B   | Q4_K_M   | 2,7 Go | 13,9           | 5,9 s     | 9/10                   |        |
-| qwen3.5:9b       | 9,0B   | Q4_K_M   | 6,2 Go | 6,4            | 12,8 s    | 9/10                   |        |
-| bonsai2 (1 bit)  | 8,2B   | Q1_0     | 1,9 Go | 16,7           | 27,2 s    | 9/10                   |        |
-| llama3.2:3b      | 3,2B   | Q4_K_M   | 2,6 Go | 15,7           | 5,7 s     | 6/10 (outils inutiles) |        |
-| granite3.1-moe   | 3,3B   | Q4_K_M   | 2,4 Go | **46,2**       | 3,0 s     | 4/10 (jamais d'outil)  |        |
-| phi4-mini        | 3,8B   | Q4_K_M   | 3,1 Go | 12,7           | 5,4 s     | 4/10 (jamais d'outil)  |        |
-| mistral:7b       | 7,2B   | Q4_K_M   | 5,0 Go | 7,6            | 14,8 s    | 4/10 (jamais d'outil)  |        |
-| nomic-embed-text | 137M   | F16      | 0,3 Go | n/a            | n/a       | n/a (embeddings)       | ✅     |
+| Modèle           | Taille | Quantif. | Mémoire | Écriture GPU  | Écriture CPU   | Réponse 128 tok GPU / CPU | Bon outil (10 cas)     | Retenu |
+| ---------------- | ------ | -------- | ------- | ------------- | -------------- | ------------------------- | ---------------------- | ------ |
+| qwen3.5:4b       | 4,2B   | Q4_K_M   | 3,1 Go  | 37 tok/s      | 11,0 tok/s     | 2,0 s / 12,9 s            | **10/10**              | ✅     |
+| gemma4:e4b       | 7,5B   | Q4_K_M   | 1,8 Go  | 64 tok/s      | 16,2 tok/s     | 1,6 s / 14,4 s            | **10/10**              | plan B |
+| qwen3.5:2b       | 1,9B   | Q8_0     | 2,4 Go  | 64 tok/s      | 16,0 tok/s     | 1,8 s / 10,1 s            | 9/10                   |        |
+| ministral-3:3b   | 3,8B   | Q4_K_M   | 2,7 Go  | 44 tok/s      | 13,9 tok/s     | 2,9 s / 14,0 s            | 9/10                   |        |
+| qwen3.5:9b       | 9,0B   | Q4_K_M   | 6,2 Go  | 20 tok/s      | 6,4 tok/s      | 4,7 s / 25,6 s            | 9/10                   |        |
+| bonsai2 (1 bit)  | 8,2B   | Q1_0     | 1,9 Go  | 61 tok/s      | 16,7 tok/s     | 2,4 s / 34,2 s            | 9/10                   |        |
+| llama3.2:3b      | 3,2B   | Q4_K_M   | 2,6 Go  | 49 tok/s      | 15,7 tok/s     | 2,3 s / 11,9 s            | 6/10 (outils inutiles) |        |
+| granite3.1-moe   | 3,3B   | Q4_K_M   | 2,4 Go  | **146 tok/s** | **46,2 tok/s** | 1,0 s / 5,8 s             | 4/10 (jamais d'outil)  |        |
+| phi4-mini        | 3,8B   | Q4_K_M   | 3,1 Go  | 38 tok/s      | 12,7 tok/s     | 2,0 s / 10,7 s            | 4/10 (jamais d'outil)  |        |
+| mistral:7b       | 7,2B   | Q4_K_M   | 5,0 Go  | 23 tok/s      | 7,6 tok/s      | 6,2 s / 31,7 s            | 4/10 (jamais d'outil)  |        |
+| nomic-embed-text | 137M   | F16      | 0,3 Go  | n/a           | n/a            | n/a                       | n/a (embeddings)       | ✅     |
 
 À retenir pour l'oral : la vitesse d'écriture suit le nombre de paramètres **actifs** (granite
 est un mélange d'experts, ~0,8B actifs, d'où 46 tok/s) ; un modèle plus gros (qwen3.5:9b) ne
 choisit pas mieux ses outils et écrit deux fois moins vite ; trois modèles n'appellent jamais
-d'outil via l'API d'Ollama.
+d'outil via l'API d'Ollama. Le GPU lit le prompt 20 à 65× plus vite mais n'écrit que 3 à 4× plus
+vite : la génération est limitée par la bande passante mémoire, pas par le calcul. Les scores
+d'outils sont identiques sur CPU et GPU.
