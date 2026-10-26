@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterator
 from typing import Any, Protocol, runtime_checkable
 
 from sensai.domain.events import Event
@@ -15,12 +15,13 @@ from sensai.domain.models import (
 
 
 class LLMProvider(Protocol):
-    async def chat_stream(
+    def chat_stream(
         self,
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
+        *,
         think: bool | str | None = None,
-    ) -> AsyncGenerator[Event]: ...
+    ) -> AsyncIterator[Event]: ...
 
 
 @runtime_checkable
