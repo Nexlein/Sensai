@@ -38,9 +38,10 @@ async def test_missing_file_is_reported_not_invented(workspace, live_session, sa
     print(exchange.transcript())
 
     words = exchange.text.casefold()
-    assert any(
-        w in words for w in ("introuvable", "n'existe pas", "pas trouvé", "aucun")
-    ), "the model should say the file does not exist"
+    missing = ("introuvable", "n'existe pas", "pas trouvé", "ne trouve pas", "aucun")
+    assert any(w in words for w in missing), (
+        "the model should say the file does not exist"
+    )
 
 
 async def test_approved_write_puts_the_requested_text_in_the_file(

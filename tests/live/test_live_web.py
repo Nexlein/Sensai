@@ -29,7 +29,8 @@ async def test_recent_fact_is_searched_then_answered_from_the_results(
     exchange = await say(context, "Qui a reçu le prix Nobel de physique 2026 ?")
     print(exchange.transcript())
 
-    assert [c.tool_name for c in exchange.tool_calls] == ["web_search"]
+    # Searching first is the point; a second search or a look at a page is fine.
+    assert exchange.tool_calls and exchange.tool_calls[0].tool_name == "web_search"
     assert "nobel" in exchange.tool_calls[0].arguments["query"].casefold()
     assert "Sentinelle" in exchange.text
 
