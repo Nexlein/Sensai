@@ -14,13 +14,16 @@ import pytest
 
 from sensai.tools.mcp import McpClient, McpTool
 
-pytestmark = pytest.mark.skipif(
-    not (
-        os.environ.get("SENSAI_LIVE_MCP")
-        and os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(
+        not (
+            os.environ.get("SENSAI_LIVE_MCP")
+            and os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
+        ),
+        reason="set SENSAI_LIVE_MCP=1 and GITHUB_PERSONAL_ACCESS_TOKEN (needs Docker)",
     ),
-    reason="set SENSAI_LIVE_MCP=1 and GITHUB_PERSONAL_ACCESS_TOKEN (needs Docker)",
-)
+]
 
 
 @pytest.fixture

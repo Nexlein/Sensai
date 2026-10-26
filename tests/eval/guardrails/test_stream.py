@@ -1,4 +1,6 @@
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from sensai.eval.guardrails import (
     MAX_SPACED_PII,
@@ -156,3 +158,42 @@ def test_card_followed_by_cvv_is_redacted_when_streamed_in_small_chunks():
         streamed, _ = _stream(text, size)
         assert streamed == redact_pii(text)[0]
         assert "4111" not in streamed
+
+
+# Property: the chunk boundaries a model happens to produce never change the output.
+
+SAMPLE_PII = [
+    "john.doe@example.com",
+    "06 12 34 56 78",
+    "+33 6 12 34 56 78",
+    VALID_CARD,
+    VALID_IBAN,
+    VALID_NIR,
+]
+PROSE_CHARS = st.text(
+    st.sampled_from("abcdefghij éèàç.,;:!?'-()0123456789@+\n"), max_size=80
+)
+
+
+@settings(max_examples=300)
+@given(
+    before=PROSE_CHARS,
+    pii=st.sampled_from(SAMPLE_PII),
+    after=PROSE_CHARS,
+    cuts=st.lists(st.integers(1, 40), max_size=40),
+)
+def test_stream_matches_one_shot_redaction_for_random_chunk_boundaries(
+    before, pii, after, cuts
+):
+    text = f"{before} {pii} {after}"
+    chunks, start = [], 0
+    for size in cuts:
+        chunks.append(text[start : start + size])
+        start += size
+    chunks.append(text[start:])
+
+    stream = PiiOutputStream()
+    streamed = "".join(stream.feed(c) for c in chunks) + stream.flush()
+
+    assert streamed == redact_pii(text)[0]
+    assert pii not in streamed

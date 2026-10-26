@@ -2,6 +2,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from sensai.tools.base import PermissionBoundary, SensitiveTool, Tool
 from sensai.tools.web import WebSearch
@@ -58,3 +60,36 @@ def test_sensitive_tool_requires_confirmation():
 def test_web_search_is_sensitive():
     assert issubclass(WebSearch, SensitiveTool)
     assert WebSearch("http://localhost").requires_confirmation is True
+
+
+# Property: whatever path the model writes, a validated path stays inside the root.
+
+SEGMENTS = st.sampled_from(
+    ["..", ".", "a", "b", "out", "", "~", "/", "a/../..", "%2e%2e"]
+)
+
+
+@pytest.fixture(scope="module")
+def confined_root(tmp_path_factory):
+    base = tmp_path_factory.mktemp("confinement")
+    root = base / "root"
+    (root / "a" / "b").mkdir(parents=True)
+    (base / "secret").mkdir()
+    try:
+        (root / "out").symlink_to(base / "secret")
+        (root / "a" / "up").symlink_to(base)
+    except OSError:
+        pass
+    return root
+
+
+@given(st.lists(SEGMENTS, max_size=8))
+def test_validated_path_never_leaves_the_allowed_root(confined_root, segments):
+    boundary = PermissionBoundary(confined_root)
+    path = "/".join(segments)
+
+    try:
+        resolved = boundary._validate_path(path)
+    except ValueError:
+        return  # rejected: fine
+    assert resolved.is_relative_to(confined_root.resolve())
