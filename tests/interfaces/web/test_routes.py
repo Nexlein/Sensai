@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from sensai.core.budget import BudgetConfig, ContextBudget
+from sensai.core.budget import BudgetConfig, ContextBudget, LLMSummarizer
 from sensai.core.commands import CommandContext
 from sensai.core.config import AppConfig
 from sensai.core.engine import ChatEngine
@@ -105,6 +105,7 @@ def test_message_streams_chunks_then_done_and_saves_the_conversation():
     chunks = [m["content"] for m in seen if m["type"] == "text_chunk"]
     assert "".join(chunks) == "hello there"
     assert len(chunks) > 1
+    assert isinstance(context.memory_store, FakeMemoryStore)
     assert [m.content for m in context.memory_store.saved[-1].messages] == [
         "hi",
         "hello there",
@@ -113,7 +114,9 @@ def test_message_streams_chunks_then_done_and_saves_the_conversation():
 
 def test_usage_is_sent_once_per_turn_not_per_chunk():
     context = _context(MockLLMProvider("one two three four", simulated_delay=0))
-    context.engine.budget = ContextBudget(BudgetConfig(max_tokens=1000), None)
+    context.engine.budget = ContextBudget(
+        BudgetConfig(max_tokens=1000), LLMSummarizer(lambda: context.engine.provider)
+    )
     client = TestClient(build_app(context))
 
     with client.websocket_connect("/ws") as ws:
@@ -134,7 +137,9 @@ class CountingProvider:
 
 def test_real_counters_are_sent_after_the_budget_line():
     context = _context(CountingProvider())
-    context.engine.budget = ContextBudget(BudgetConfig(max_tokens=1000), None)
+    context.engine.budget = ContextBudget(
+        BudgetConfig(max_tokens=1000), LLMSummarizer(lambda: context.engine.provider)
+    )
     client = TestClient(build_app(context))
 
     with client.websocket_connect("/ws") as ws:

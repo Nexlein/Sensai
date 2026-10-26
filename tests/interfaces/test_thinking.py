@@ -42,7 +42,8 @@ async def test_events_pass_through_unchanged_and_in_order():
 
     seen = [e async for e in watcher.watch(after(0, chunk("a"), chunk("b")))]
 
-    assert [e.content for e in seen] == ["a", "b"]
+    assert len(seen) == 2
+    assert [e.content for e in seen if isinstance(e, TextChunkEvent)] == ["a", "b"]
     assert calls == []
 
 

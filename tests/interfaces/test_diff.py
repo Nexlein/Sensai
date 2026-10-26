@@ -38,8 +38,14 @@ def test_diff_text_none_without_preview():
     assert diff_text(_call(None)) is None
 
 
+def _plain(call) -> str:
+    rendered = diff_text(call)
+    assert rendered is not None
+    return rendered.plain
+
+
 def test_diff_text_shows_header_counts_and_lines():
-    text = diff_text(_call(EDIT)).plain
+    text = _plain(_call(EDIT))
 
     assert text.startswith("● write_file(f.txt)\n  ⎿  +2 -1\n")
     assert "      2 - two\n" in text
@@ -49,7 +55,7 @@ def test_diff_text_shows_header_counts_and_lines():
 
 def test_diff_text_shows_every_changed_line_of_a_long_diff():
     body = "\n".join(f"+row {i}" for i in range(30))
-    text = diff_text(_call(f"@@ -0,0 +1,30 @@\n{body}")).plain
+    text = _plain(_call(f"@@ -0,0 +1,30 @@\n{body}"))
 
     assert "+30 -0" in text
     assert "row 0\n" in text
@@ -58,4 +64,4 @@ def test_diff_text_shows_every_changed_line_of_a_long_diff():
 
 
 def test_diff_text_reports_no_changes():
-    assert diff_text(_call("")).plain == "● write_file(f.txt)\n  ⎿  No changes\n"
+    assert _plain(_call("")) == "● write_file(f.txt)\n  ⎿  No changes\n"

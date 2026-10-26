@@ -1,5 +1,8 @@
+from typing import cast
+
 import pytest
 
+from sensai.core.budget.manager import SUMMARY_PREFIX
 from sensai.core.prompt import (
     PRIVACY_NOTE,
     STEP_LIMIT_NOTE,
@@ -10,10 +13,9 @@ from sensai.core.prompt import (
     format_prompt,
     prompt_entry,
 )
-from sensai.core.budget.manager import SUMMARY_PREFIX
-from sensai.domain.models import Message, ToolCall
 from sensai.core.turn import Turn
-from sensai.domain.models import Conversation, Persona
+from sensai.domain.models import Conversation, Message, Persona, ToolCall
+from sensai.domain.protocols import StructuredMemory
 
 
 def test_persona_system_instruction_prepended_once():
@@ -165,9 +167,11 @@ async def test_composer_injects_memory_only_when_enabled():
     conversation = Conversation()
     conversation.add_message("user", "hello")
 
-    on = await PromptComposer(conversation, memory=Memory()).compose(Turn("h"), False)
+    on = await PromptComposer(
+        conversation, memory=cast(StructuredMemory, Memory())
+    ).compose(Turn("h"), False)
     off = await PromptComposer(
-        conversation, memory=Memory(), memory_auto_inject=False
+        conversation, memory=cast(StructuredMemory, Memory()), memory_auto_inject=False
     ).compose(Turn("h"), False)
 
     assert any("likes tea" in m.content for m in on)
@@ -218,7 +222,7 @@ async def test_compose_parts_tags_every_message_with_its_source():
     conversation = Conversation()
     conversation.add_message("system", SUMMARY_PREFIX + "earlier talk")
     conversation.add_message("user", "hello")
-    composer = PromptComposer(conversation, memory=Memory())
+    composer = PromptComposer(conversation, memory=cast(StructuredMemory, Memory()))
 
     parts = await composer.compose_parts(
         Turn("hello", rag_context="doc", masked=True), with_tools=True, step_limit=True

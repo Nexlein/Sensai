@@ -21,6 +21,7 @@ async def test_tui_uses_shared_input_handler_and_persists_reply(monkeypatch):
     class FakeChatApp:
         def __init__(self, process):
             self.process = process
+            self.events = []
 
         async def run_async(self):
             async def render(events):

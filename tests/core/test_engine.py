@@ -114,7 +114,7 @@ class StallingLLMProvider:
         think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         await asyncio.sleep(60)
-        yield  # pragma: no cover
+        yield TextChunkEvent(content="")  # pragma: no cover
 
 
 @pytest.mark.asyncio
@@ -196,6 +196,7 @@ async def test_normal_tool_round_trip():
     # User message + Assistant (tool call) + Tool message + Assistant (final)
     assert len(conversation.messages) == 4
     assert conversation.messages[1].role == "assistant"
+    assert conversation.messages[1].tool_calls is not None
     assert conversation.messages[1].tool_calls[0].name == "dummy"
     assert conversation.messages[2].role == "tool"
     assert conversation.messages[2].content == "dummy_result"
@@ -702,11 +703,11 @@ async def test_tool_confirmation_controls_execution(
         (lambda **kwargs: 1 / 0, None),
     ],
 )
-async def test_confirmation_receives_tool_preview(preview, expected):
+async def test_confirmation_receives_tool_preview(preview, expected, monkeypatch):
     seen = []
     tool = DummyTool()
     tool.requires_confirmation = True
-    tool.preview = preview
+    monkeypatch.setattr(tool, "preview", preview, raising=False)
     registry = ToolRegistry()
     registry.register(tool)
     engine = ChatEngine(MockRoundTripProvider(), Conversation(), registry)
@@ -991,6 +992,7 @@ class FailsAfterToolProvider:
             return
         if self.exc is None:
             await asyncio.sleep(60)
+            return
         raise self.exc
 
 

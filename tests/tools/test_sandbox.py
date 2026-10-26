@@ -49,6 +49,7 @@ def test_command_isolates_the_container():
 def test_preview_shows_every_line_as_added():
     diff = RunCodeTool().preview(code="print(1)\nprint(2)")
 
+    assert diff is not None
     lines = parse_diff(diff)
     assert [(line.kind, line.text) for line in lines] == [
         ("add", "print(1)"),
@@ -57,7 +58,7 @@ def test_preview_shows_every_line_as_added():
 
 
 def test_preview_rejects_non_string_code():
-    assert RunCodeTool().preview(code=None) is None
+    assert RunCodeTool().preview(code=None) is None  # pyright: ignore[reportArgumentType]
 
 
 @pytest.mark.parametrize("code", [None, "", "  \n", 3])

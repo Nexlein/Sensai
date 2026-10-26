@@ -25,6 +25,7 @@ async def test_save_then_load_round_trips_conversation(tmp_path):
     assert [m.content for m in loaded.messages] == ["hello", "hi"]
     assert [m.role for m in loaded.messages] == ["user", "assistant"]
     assert loaded.messages[0].tool_calls is None
+    assert loaded.messages[1].tool_calls is not None
     assert loaded.messages[1].tool_calls[0].name == "search"
     assert loaded.messages[1].tool_calls[0].arguments == {"q": "hi"}
 
@@ -50,6 +51,7 @@ async def test_save_existing_conversation_updates_not_duplicates(tmp_path):
     assert row_count == 1
 
     loaded = await store.load(conversation.id)
+    assert loaded is not None
     assert [m.content for m in loaded.messages] == ["first", "second"]
 
 

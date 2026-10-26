@@ -139,6 +139,7 @@ async def test_text_before_a_tool_call_becomes_a_thought_not_an_answer():
     assistant = conversation.messages[1]
     assert assistant.content == ""
     assert assistant.thought == "I should read it"
+    assert assistant.tool_calls is not None
     assert assistant.tool_calls[0].name == "dummy"
     assert conversation.messages[-1].thought is None
 
@@ -332,6 +333,7 @@ async def test_guardrail_redacts_a_native_thought():
     shown = "".join(t.content for t in of_type(events, ThoughtEvent))
     assert "bob@example.com" not in shown
     assert "[EMAIL]" in shown
+    assert conversation.messages[-1].thought is not None
     assert "bob@example.com" not in conversation.messages[-1].thought
     (notice,) = of_type(events, GuardrailEvent)
     assert (notice.stage, notice.action) == ("output", "redact")
@@ -348,6 +350,7 @@ async def test_guardrail_redacts_text_that_became_a_thought():
 
     (thought,) = of_type(events, ThoughtEvent)
     assert "bob@example.com" not in thought.content
+    assert conversation.messages[1].thought is not None
     assert "bob@example.com" not in conversation.messages[1].thought
 
 

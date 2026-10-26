@@ -126,6 +126,7 @@ async def test_output_that_stays_invalid_becomes_an_error_verdict():
     verdict = await _judge(provider).judge(JudgeInput(question="q", answer="a"))
 
     assert not verdict.ok
+    assert verdict.error is not None
     assert "stayed invalid" in verdict.error
     assert verdict.relevance is None
     assert len(provider.prompts) == 3
@@ -155,6 +156,7 @@ async def test_slow_judge_times_out():
     verdict = await _judge(provider, timeout=0.01).judge(
         JudgeInput(question="q", answer="a")
     )
+    assert verdict.error is not None
     assert "timed out" in verdict.error
 
 
@@ -165,6 +167,7 @@ async def test_failed_claims_call_keeps_the_scores():
 
     assert verdict.relevance == 4
     assert verdict.claims == []
+    assert verdict.error is not None
     assert verdict.error.startswith("faithfulness:")
 
 

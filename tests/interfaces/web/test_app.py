@@ -1,9 +1,16 @@
 import signal
 from types import SimpleNamespace
+from typing import cast
 
 import uvicorn
 
+from sensai.core.commands import CommandContext
 from sensai.interfaces.web import app as web_app
+
+
+def _context() -> CommandContext:
+    """The app only stores the context; these tests never reach a route using it."""
+    return cast(CommandContext, SimpleNamespace())
 
 
 async def test_run_web_serves_the_app_on_the_given_address(monkeypatch, capsys):
@@ -18,7 +25,7 @@ async def test_run_web_serves_the_app_on_the_given_address(monkeypatch, capsys):
 
     monkeypatch.setattr(web_app, "QuietServer", FakeServer)
 
-    await web_app.run_web(SimpleNamespace(), host="127.0.0.1", port=9001)
+    await web_app.run_web(_context(), host="127.0.0.1", port=9001)
 
     assert seen["served"]
     assert seen["config"].host == "127.0.0.1"
@@ -29,7 +36,7 @@ async def test_run_web_serves_the_app_on_the_given_address(monkeypatch, capsys):
 def test_server_does_not_replay_the_signal_it_stopped_on(monkeypatch):
     replayed = []
     monkeypatch.setattr(signal, "raise_signal", replayed.append)
-    server = web_app.QuietServer(uvicorn.Config(web_app.build_app(SimpleNamespace())))
+    server = web_app.QuietServer(uvicorn.Config(web_app.build_app(_context())))
 
     with server.capture_signals():
         server.handle_exit(signal.SIGINT, None)  # what Ctrl+C does
@@ -42,7 +49,7 @@ def test_plain_uvicorn_server_would_replay_it(monkeypatch):
     # Guards the reason QuietServer exists: if uvicorn stops doing this, drop it.
     replayed = []
     monkeypatch.setattr(signal, "raise_signal", replayed.append)
-    server = uvicorn.Server(uvicorn.Config(web_app.build_app(SimpleNamespace())))
+    server = uvicorn.Server(uvicorn.Config(web_app.build_app(_context())))
 
     with server.capture_signals():
         server.handle_exit(signal.SIGINT, None)
@@ -51,7 +58,7 @@ def test_plain_uvicorn_server_would_replay_it(monkeypatch):
 
 
 def test_app_hides_the_generated_api_docs():
-    app = web_app.build_app(SimpleNamespace())
+    app = web_app.build_app(_context())
 
     assert app.docs_url is None
     assert app.openapi_url is None
