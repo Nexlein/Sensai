@@ -1,4 +1,6 @@
 import sqlite3
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 DEFAULT_DATA_DIR = Path(".sensai")
@@ -60,7 +62,18 @@ def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     _ensure_gitignore(db_path.parent)
 
     conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript(_SCHEMA)
-    conn.commit()
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.executescript(_SCHEMA)
+        conn.commit()
+    except BaseException:
+        conn.close()
+        raise
     return conn
+
+
+@contextmanager
+def transaction(db_path: Path | str = DEFAULT_DB_PATH) -> Iterator[sqlite3.Connection]:
+    """Yield a connection that commits on success, rolls back on error, then closes."""
+    with closing(connect(db_path)) as conn, conn:
+        yield conn
