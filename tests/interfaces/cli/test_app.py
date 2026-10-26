@@ -3,7 +3,6 @@ import os
 import signal
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import ClassVar
 
 from rich.console import Console
 
@@ -195,9 +194,9 @@ def _context() -> CommandContext:
             conversation=Conversation(),
             registry=None,
         ),
-        provider_factory=lambda *args, **kwargs: None,
-        tool_registry=None,
-        tool_registry_factory=lambda _: None,
+        provider_factory=get_provider,
+        tool_registry=ToolRegistry(),
+        tool_registry_factory=lambda _: ToolRegistry(),
         memory_store=FakeMemoryStore(),
     )
 
@@ -357,7 +356,7 @@ async def test_run_repl_reports_empty_input_and_continues():
 
 async def test_run_repl_reports_provider_error_and_continues():
     class FailingProvider:
-        async def chat_stream(self, messages, tools=None):
+        async def chat_stream(self, messages, tools=None, think=None):
             raise RuntimeError("boom")
             yield  # pragma: no cover
 
@@ -455,15 +454,17 @@ async def test_cli_confirmation_then_followup_keeps_chat_working(monkeypatch):
     class SearchTool(Tool):
         name = "web_search"
         description = "Search"
-        parameters_schema: ClassVar[dict] = {}
         requires_confirmation = True
+
+        def __init__(self) -> None:
+            self.parameters_schema = {}
 
         async def execute(self, **kwargs):
             executed.append(kwargs)
             return "Result"
 
     class Provider:
-        async def chat_stream(self, messages, tools=None):
+        async def chat_stream(self, messages, tools=None, think=None):
             if messages[-1].role == "user" and messages[-1].content == "cherche":
                 yield TextChunkEvent(content="Je vais chercher.")
                 yield ToolCallEvent(
@@ -489,5 +490,6 @@ async def test_cli_confirmation_then_followup_keeps_chat_working(monkeypatch):
         assert rendered.count("Réponse terminée.") == (2 if expected_executions else 1)
         assert "you: \nsensai:" in rendered
         assert "Réponse terminée.\n\nyou:" in rendered
+        assert isinstance(context.memory_store, FakeMemoryStore)
         assert len(context.memory_store.saved) == 2
         assert context.engine.conversation.messages[-2].content == "bonjour"

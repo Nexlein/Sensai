@@ -99,7 +99,7 @@ async def test_indexed_document_reaches_chat_prompt(tmp_path):
         def __init__(self):
             self.prompt = None
 
-        async def chat_stream(self, messages, tools=None):
+        async def chat_stream(self, messages, tools=None, think=None):
             self.prompt = messages
             yield TextChunkEvent(content="answer")
 

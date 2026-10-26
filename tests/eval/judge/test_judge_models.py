@@ -2,10 +2,10 @@ import pytest
 from pydantic import ValidationError
 
 from sensai.eval.judge import Claim, JudgeReport, JudgeVerdict
-from sensai.eval.judge.models import QualityScores
+from sensai.eval.judge.models import ClaimVerdict, QualityScores
 
 
-def _claim(verdict: str) -> Claim:
+def _claim(verdict: ClaimVerdict) -> Claim:
     return Claim(text=f"a {verdict} claim", verdict=verdict)
 
 
@@ -21,7 +21,7 @@ def test_faithfulness_is_none_without_claims():
 
 def test_unknown_claim_verdict_is_rejected():
     with pytest.raises(ValidationError):
-        Claim(text="x", verdict="maybe")
+        Claim(text="x", verdict="maybe")  # pyright: ignore[reportArgumentType]
 
 
 @pytest.mark.parametrize("value", [0, 6, -1])

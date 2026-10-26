@@ -1,16 +1,20 @@
 import json
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
 from sensai.core.bootstrap import BootstrapError, build_session
+from sensai.core.budget.summarizer import LLMSummarizer
 from sensai.domain.events import GuardrailEvent
 from sensai.domain.models import Conversation
 from sensai.eval.guardrails import RegexGuardrail
 from sensai.eval.judge.__main__ import load_items
 from sensai.eval.logger import PromptLogger, ReplyLogger
+from sensai.memory.rag.retriever import RAGRetriever
 from sensai.memory.rag.store import SQLiteVectorStore
+from sensai.providers.mock import MockLLMProvider
 
 
 async def test_build_session_loads_config_tools_and_existing_session(
@@ -44,7 +48,7 @@ async def test_build_session_loads_config_tools_and_existing_session(
     assert resumed.tool_registry_factory(None).get("remember_fact") is not None
 
 
-def _mcp_config(tmp_path, *, working="demo", broken=None):
+def _mcp_config(tmp_path, *, working: str | None = "demo", broken=None):
     server = Path(__file__).parents[1] / "tools" / "mcp_test_server.py"
     text = f'provider = "mock"\n[tools]\nfs_allowed_root = "{tmp_path}"\n'
     if working:
@@ -105,6 +109,7 @@ async def test_session_starts_when_every_mcp_server_fails(tmp_path):
 async def test_aclose_stops_the_mcp_servers(tmp_path):
     context = await build_session(config_path=_mcp_config(tmp_path))
     tool = context.tool_registry.get("demo__add")
+    assert tool is not None
 
     await context.aclose()
 
@@ -141,7 +146,7 @@ async def test_build_session_indexes_rag_documents(monkeypatch, tmp_path):
 
 
 class _FakeEmbeddings:
-    models: list[str] = []
+    models: ClassVar[list[str]] = []
 
     def __init__(self, base_url: str, model: str):
         self.models.append(model)
@@ -175,7 +180,7 @@ async def test_build_session_enables_rag_from_config(monkeypatch, tmp_path):
     context = await build_session(config_path=config_path)
 
     retriever = context.engine.retriever
-    assert retriever is not None
+    assert isinstance(retriever, RAGRetriever)
     assert retriever.top_k == 2
     assert _FakeEmbeddings.models == ["embed-x"]
     chunks = SQLiteVectorStore("idx.db").search([1.0, 0.0], top_k=50)
@@ -260,11 +265,14 @@ async def test_build_session_wires_budget_from_config(monkeypatch, tmp_path):
 async def test_budget_summarizer_follows_provider_swap(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     context = await build_session(provider_name="mock")
-    swapped = object()
+    swapped = MockLLMProvider()
 
     context.engine.provider = swapped
 
-    assert context.engine.budget.summarizer.get_provider() is swapped
+    budget = context.engine.budget
+    assert budget is not None
+    assert isinstance(budget.summarizer, LLMSummarizer)
+    assert budget.summarizer.get_provider() is swapped
 
 
 async def test_build_session_has_a_guardrail_by_default(monkeypatch, tmp_path):

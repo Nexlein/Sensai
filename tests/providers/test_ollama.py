@@ -11,6 +11,7 @@ from sensai.domain.events import (
     UsageEvent,
 )
 from sensai.domain.models import LoadedModel, Message, ModelOptions, ToolCall
+from sensai.providers.base import BaseHTTPProvider
 from sensai.providers.ollama import OllamaLLMProvider
 
 
@@ -23,7 +24,7 @@ def _lines_response(lines: list[dict], status_code: int = 200) -> httpx.MockTran
     return httpx.MockTransport(handler)
 
 
-def _patch_client(provider: OllamaLLMProvider, transport: httpx.MockTransport) -> None:
+def _patch_client(provider: BaseHTTPProvider, transport: httpx.MockTransport) -> None:
     def _get_client() -> httpx.AsyncClient:
         return httpx.AsyncClient(
             base_url=provider.base_url, timeout=provider.timeout, transport=transport
@@ -165,7 +166,11 @@ async def test_chat_stream_yields_text_chunks():
     msg = Message(role="user", content="hi")
     events = [e async for e in provider.chat_stream(messages=[msg])]
 
-    assert [e.content for e in events] == ["Hello", " world"]
+    assert [e.content for e in events if isinstance(e, TextChunkEvent)] == [
+        "Hello",
+        " world",
+    ]
+    assert len(events) == 2
 
 
 async def test_chat_stream_yields_tool_call_then_text():
@@ -367,7 +372,7 @@ async def test_chat_stream_retries_without_think_when_model_cannot_think():
 
     events = [e async for e in provider.chat_stream(messages=[], think=True)]
 
-    assert [e.content for e in events] == ["hi"]
+    assert [e.content for e in events if isinstance(e, TextChunkEvent)] == ["hi"]
     assert bodies[0]["think"] is True
     assert "think" not in bodies[1]
     assert provider.think_unsupported is True

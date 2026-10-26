@@ -11,8 +11,10 @@ class Tool(BaseTool, abc.ABC):
     parameters_schema: dict[str, Any]
     requires_confirmation: bool = False
 
+    # `*args, **kwargs` reads as "any signature": each tool takes the arguments
+    # its parameters_schema describes.
     @abc.abstractmethod
-    async def execute(self, **kwargs: Any) -> str:
+    async def execute(self, *args: Any, **kwargs: Any) -> str:
         pass
 
 

@@ -138,6 +138,7 @@ async def test_write_file_overwrites_existing_file(fs_sandbox):
 def test_write_file_preview_diffs_against_current_content(fs_sandbox):
     preview = WriteFileTool(fs_sandbox).preview("test.txt", "hello there")
 
+    assert preview is not None
     assert "-hello world" in preview
     assert "+hello there" in preview
     assert (fs_sandbox / "test.txt").read_text(encoding="utf-8") == "hello world"
@@ -146,6 +147,7 @@ def test_write_file_preview_diffs_against_current_content(fs_sandbox):
 def test_write_file_preview_new_file_is_all_additions(fs_sandbox):
     preview = WriteFileTool(fs_sandbox).preview("new.txt", "a\nb")
 
+    assert preview is not None
     assert preview.splitlines()[-2:] == ["+a", "+b"]
     assert not (fs_sandbox / "new.txt").exists()
 

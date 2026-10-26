@@ -21,7 +21,10 @@ class FailingLLMProvider:
         self.exc = exc
 
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         raise self.exc
         yield  # pragma: no cover
@@ -105,10 +108,13 @@ async def test_send_wraps_any_http_failure_and_leaves_conversation_unchanged(exc
 
 class StallingLLMProvider:
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         await asyncio.sleep(60)
-        yield  # pragma: no cover
+        yield TextChunkEvent(content="")  # pragma: no cover
 
 
 @pytest.mark.asyncio
@@ -168,7 +174,7 @@ class MockRoundTripProvider:
     def __init__(self):
         self.calls = 0
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.calls += 1
         if self.calls == 1:
             yield ToolCallEvent(tool_name="dummy", arguments={"foo": "bar"})
@@ -190,6 +196,7 @@ async def test_normal_tool_round_trip():
     # User message + Assistant (tool call) + Tool message + Assistant (final)
     assert len(conversation.messages) == 4
     assert conversation.messages[1].role == "assistant"
+    assert conversation.messages[1].tool_calls is not None
     assert conversation.messages[1].tool_calls[0].name == "dummy"
     assert conversation.messages[2].role == "tool"
     assert conversation.messages[2].content == "dummy_result"
@@ -235,7 +242,7 @@ class RecordingLLMProvider:
     def __init__(self):
         self.prompts = []
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.prompts.append(messages)
         yield TextChunkEvent(content="answer")
 
@@ -307,7 +314,7 @@ class ScriptedProvider:
         self.scripts = scripts
         self.prompts = []
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.prompts.append(list(messages))
         for event in self.scripts[len(self.prompts) - 1]:
             yield event
@@ -696,11 +703,11 @@ async def test_tool_confirmation_controls_execution(
         (lambda **kwargs: 1 / 0, None),
     ],
 )
-async def test_confirmation_receives_tool_preview(preview, expected):
+async def test_confirmation_receives_tool_preview(preview, expected, monkeypatch):
     seen = []
     tool = DummyTool()
     tool.requires_confirmation = True
-    tool.preview = preview
+    monkeypatch.setattr(tool, "preview", preview, raising=False)
     registry = ToolRegistry()
     registry.register(tool)
     engine = ChatEngine(MockRoundTripProvider(), Conversation(), registry)
@@ -978,13 +985,14 @@ class FailsAfterToolProvider:
         self.calls = 0
         self.exc = exc
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.calls += 1
         if self.calls == 1:
             yield ToolCallEvent(tool_name="dummy", arguments={})
             return
         if self.exc is None:
             await asyncio.sleep(60)
+            return
         raise self.exc
 
 

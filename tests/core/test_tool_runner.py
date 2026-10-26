@@ -172,5 +172,6 @@ async def test_store_withholds_a_blocked_result():
 
     events = [event async for event in runner.store("contact a@b.io")]
 
+    assert isinstance(events[0], GuardrailEvent)
     assert events[0].action == "block"
     assert conversation.messages[-1].content == TOOL_RESULT_WITHHELD

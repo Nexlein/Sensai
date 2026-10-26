@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from sensai.core.budget import BudgetConfig, ContextBudget
+from sensai.core.budget.summarizer import LLMSummarizer
 from sensai.core.commands import (
     CommandContext,
     ParsedCommand,
@@ -18,6 +19,7 @@ from sensai.domain.models import Conversation, LoadedModel, ModelOptions, Person
 from sensai.domain.protocols import LLMProvider
 from sensai.providers import get_provider
 from sensai.providers.mock import MockLLMProvider
+from sensai.providers.ollama import OllamaLLMProvider
 from sensai.tools.registry import ToolRegistry
 
 
@@ -106,6 +108,7 @@ async def test_dispatch_clear_empties_current_conversation():
 
     assert not result.should_exit
     assert context.engine.conversation.messages == []
+    assert isinstance(context.memory_store, FakeMemoryStore)
     assert context.memory_store.saved == [context.engine.conversation]
     assert result.message == "Conversation cleared."
 
@@ -287,6 +290,7 @@ async def test_dispatch_config_masks_api_key():
         result = await dispatch_command(
             ParsedCommand(name="config", arguments=arguments), context
         )
+        assert result.message is not None
         assert "gsk_secret" not in result.message
         assert "***" in result.message
 
@@ -941,6 +945,7 @@ async def test_config_set_option_updates_the_live_provider(tmp_path):
     )
 
     assert result.message == "options.temperature = 1.2"
+    assert isinstance(context.engine.provider, OllamaLLMProvider)
     assert context.engine.provider.options.temperature == 1.2
 
     context.config_path = tmp_path / "sensai.toml"
@@ -983,7 +988,9 @@ async def test_prompt_before_any_turn_says_nothing_was_sent():
 
 async def test_prompt_shows_the_last_model_call_against_the_budget():
     context = _context()
-    context.engine.budget = ContextBudget(BudgetConfig(max_tokens=4096), None)
+    context.engine.budget = ContextBudget(
+        BudgetConfig(max_tokens=4096), LLMSummarizer(lambda: context.engine.provider)
+    )
     _ = [e async for e in context.engine.send("what is the plan?")]
 
     result = await dispatch_command(ParsedCommand("prompt", ()), context)

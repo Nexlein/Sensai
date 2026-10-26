@@ -34,6 +34,7 @@ def test_message_without_thought_field_still_loads():
 def test_message_with_tool_calls():
     tc = ToolCall(name="search", arguments={"q": "x"})
     msg = Message(role="assistant", content="", tool_calls=[tc])
+    assert msg.tool_calls is not None
     assert msg.tool_calls == [tc]
     assert msg.tool_calls[0].name == "search"
 
@@ -98,7 +99,7 @@ def test_guardrail_verdict_findings_are_not_shared_between_instances():
 
 def test_guardrail_verdict_rejects_unknown_action():
     with pytest.raises(ValidationError):
-        GuardrailVerdict(action="explode", text="x")
+        GuardrailVerdict(action="explode", text="x")  # pyright: ignore[reportArgumentType]
 
 
 def test_guardrail_finding_holds_rule_and_category_only():

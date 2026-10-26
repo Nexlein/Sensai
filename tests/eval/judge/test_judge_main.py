@@ -25,7 +25,10 @@ class ScriptedProvider:
         self.replies = list(replies)
 
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         yield TextChunkEvent(content=self.replies.pop(0))
 

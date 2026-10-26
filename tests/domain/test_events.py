@@ -50,9 +50,9 @@ def test_guardrail_event_type_and_fields():
 
 def test_guardrail_event_rejects_unknown_stage_or_action():
     with pytest.raises(ValidationError):
-        GuardrailEvent(stage="somewhere", action="block", reason="x")
+        GuardrailEvent(stage="somewhere", action="block", reason="x")  # pyright: ignore[reportArgumentType]
     with pytest.raises(ValidationError):
-        GuardrailEvent(stage="input", action="explode", reason="x")
+        GuardrailEvent(stage="input", action="explode", reason="x")  # pyright: ignore[reportArgumentType]
 
 
 def test_thought_event_defaults_to_text_source():
@@ -65,7 +65,7 @@ def test_thought_event_defaults_to_text_source():
 
 def test_thought_event_rejects_unknown_source():
     with pytest.raises(ValidationError):
-        ThoughtEvent(content="x", source="guess")
+        ThoughtEvent(content="x", source="guess")  # pyright: ignore[reportArgumentType]
 
 
 def test_step_event_type_and_fields():

@@ -3,7 +3,8 @@ from collections.abc import AsyncIterator
 from typing import TypeVar
 
 from rich.console import Console
-from rich.control import Control, ControlType
+from rich.control import Control
+from rich.segment import ControlType
 from rich.text import Text
 
 from sensai.domain.events import (

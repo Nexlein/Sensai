@@ -21,7 +21,7 @@ class ToolOutcome:
 
 def preview(tool: BaseTool, tc: ToolCall) -> str | None:
     """What the tool would change, for the confirmation prompt; None if unknown."""
-    build = getattr(tool, "preview", None)
+    build: Callable[..., str | None] | None = getattr(tool, "preview", None)
     if not callable(build):
         return None
     try:

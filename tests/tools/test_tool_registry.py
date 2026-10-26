@@ -77,10 +77,11 @@ def test_registry_get_tools_schema():
 
 def test_build_default_registry_always_registers_web_search(tmp_path):
     from sensai.tools.registry import SEARXNG_URL, build_default_registry
+    from sensai.tools.web import WebSearch
 
     registry = build_default_registry(None)
     web_tool = registry.get("web_search")
-    assert web_tool is not None
+    assert isinstance(web_tool, WebSearch)
     assert web_tool.base_url == SEARXNG_URL
     assert {tool.name for tool in registry.list_tools()} == {"web_search", "run_python"}
 
