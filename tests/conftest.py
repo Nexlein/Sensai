@@ -16,7 +16,14 @@ import pytest
 from sensai.core.bootstrap import build_session
 from sensai.core.commands import CommandContext, CommandResult
 from sensai.core.input import process_input
-from sensai.domain.events import Event, TextChunkEvent, ToolCallEvent
+from sensai.domain.events import (
+    Event,
+    GuardrailEvent,
+    MaxStepsEvent,
+    TextChunkEvent,
+    ThoughtEvent,
+    ToolCallEvent,
+)
 from sensai.domain.models import ToolCall
 
 
@@ -28,6 +35,8 @@ class Exchange:
     result: CommandResult
     events: list[Event] = field(default_factory=list)
     confirmations: list[ToolCall] = field(default_factory=list)
+    # One per tool call, in order, as stored in the history (so after guardrails).
+    tool_results: list[str] = field(default_factory=list)
 
     @property
     def text(self) -> str:
@@ -41,10 +50,31 @@ class Exchange:
         return [e for e in self.events if isinstance(e, kind)]
 
     def transcript(self) -> str:
+        """The exchange as a live test prints it: enough to tell why an answer failed."""
         lines = [f"user: {self.prompt}"]
-        lines += [f"  tool {c.tool_name}({c.arguments})" for c in self.tool_calls]
-        lines.append(f"sensai: {self.text or self.result.message}")
+        results = iter(self.tool_results)
+        for event in self.events:
+            if isinstance(event, ThoughtEvent):
+                lines.append(f"  thought: {_clip(event.content)}")
+            elif isinstance(event, ToolCallEvent):
+                lines.append(f"  tool {event.tool_name}({event.arguments})")
+                result = next(results, None)
+                if result is not None:
+                    lines.append(f"    -> {_clip(result)}")
+            elif isinstance(event, GuardrailEvent):
+                lines.append(
+                    f"  guardrail {event.stage} {event.action}: {event.reason}"
+                )
+            elif isinstance(event, MaxStepsEvent):
+                lines.append(f"  max steps reached ({event.max_steps})")
+        lines.append(f"sensai: {self.text or self.result.message or '(no answer)'}")
         return "\n".join(lines)
+
+
+def _clip(text: str, limit: int = 300) -> str:
+    """One line, at most `limit` chars."""
+    line = " ".join(text.split())
+    return line if len(line) <= limit else line[: limit - 1] + "…"
 
 
 @pytest.fixture
@@ -104,7 +134,13 @@ def say():
             exchange.confirmations.append(tc)
             return approve
 
+        seen = {m.id for m in context.engine.conversation.messages}
         exchange.result = await process_input(context, text, render, confirm)
+        exchange.tool_results = [
+            m.content
+            for m in context.engine.conversation.messages
+            if m.role == "tool" and m.id not in seen
+        ]
         return exchange
 
     return say_
