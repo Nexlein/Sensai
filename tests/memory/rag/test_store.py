@@ -50,3 +50,12 @@ def test_search_rejects_embedding_dimension_mismatch(tmp_path):
 
     with pytest.raises(ValueError, match="dimensions"):
         store.search([1.0, 0.0, 0.0])
+
+
+def test_search_rejects_non_positive_top_k(tmp_path):
+    import pytest
+
+    store = SQLiteVectorStore(str(tmp_path / "rag.db"))
+
+    with pytest.raises(ValueError, match="top_k must be positive"):
+        store.search([1.0, 0.0], top_k=0)

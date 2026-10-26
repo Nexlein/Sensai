@@ -2,7 +2,8 @@
 
 Tools: `add` (sums two numbers), `boom` (reports a tool error), `image` (returns a
 non-text block). Run with `python mcp_test_server.py`; `--crash-on-call` makes it exit
-in the middle of a tools/call, `--hang-on-call` makes it never answer one.
+in the middle of a tools/call, `--hang-on-call` makes it never answer one, `--noisy-call`
+prints a non-JSON line before answering one.
 """
 
 import json
@@ -67,6 +68,8 @@ for line in sys.stdin:
             sys.exit(1)
         if "--hang-on-call" in sys.argv:
             time.sleep(60)
+        if "--noisy-call" in sys.argv:
+            print("server log: not JSON", flush=True)
         params = request["params"]
         result = call(params["name"], params["arguments"])
         if result is None:

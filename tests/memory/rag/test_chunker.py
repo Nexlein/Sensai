@@ -51,3 +51,40 @@ def test_missing_directory_is_an_error(tmp_path):
 
     with pytest.raises(NotADirectoryError):
         TextChunker().ingest_directory(str(tmp_path / "missing"))
+
+
+def test_ingest_keeps_only_text_and_markdown_files(tmp_path):
+    (tmp_path / "notes.md").write_text("md", encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("txt", encoding="utf-8")
+    (tmp_path / "script.py").write_text("print()", encoding="utf-8")
+    (tmp_path / "image.png").write_bytes(b"\x89PNG")
+
+    docs = TextChunker().ingest_directory(str(tmp_path))
+
+    assert sorted(doc.metadata["filename"] for doc in docs) == ["notes.md", "notes.txt"]
+
+
+def test_ingest_skips_symlink_pointing_outside_the_directory(tmp_path):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    secret = tmp_path / "secret.md"
+    secret.write_text("outside the corpus", encoding="utf-8")
+    try:
+        os.symlink(secret, corpus / "leak.md")
+    except OSError:
+        import pytest
+
+        pytest.skip("symlinks not supported here")
+
+    docs = TextChunker().ingest_directory(str(corpus))
+
+    assert docs == []
+
+
+def test_ingest_skips_files_that_are_not_utf8(tmp_path):
+    (tmp_path / "latin1.txt").write_bytes("caf\xe9".encode("latin-1"))
+    (tmp_path / "ok.md").write_text("ok", encoding="utf-8")
+
+    docs = TextChunker().ingest_directory(str(tmp_path))
+
+    assert [doc.content for doc in docs] == ["ok"]

@@ -210,3 +210,61 @@ async def test_write_file_rejects_symlinked_file_escape(fs_sandbox):
     tool = WriteFileTool(fs_sandbox)
     assert "Path traversal rejected" in await tool.execute("alias.txt", "pwned")
     assert outside_file.read_text() == "secret"
+
+
+needs_permissions = pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root ignores file permissions",
+)
+
+
+@pytest.mark.asyncio
+async def test_read_file_reports_non_utf8_content_as_error(fs_sandbox):
+    (fs_sandbox / "binary.txt").write_bytes(b"\xff\xfe\x00")
+
+    result = await ReadFileTool(fs_sandbox).execute("binary.txt")
+
+    assert result.startswith("Error:")
+
+
+@needs_permissions
+@pytest.mark.asyncio
+async def test_read_file_reports_unreadable_file_as_error(fs_sandbox):
+    locked = fs_sandbox / "locked.txt"
+    locked.write_text("x")
+    locked.chmod(0)
+    try:
+        result = await ReadFileTool(fs_sandbox).execute("locked.txt")
+    finally:
+        locked.chmod(0o600)
+
+    assert result.startswith("Error reading file:")
+
+
+@pytest.mark.asyncio
+async def test_list_dir_on_a_file_says_it_is_not_a_directory(fs_sandbox):
+    result = await ListDirTool(fs_sandbox).execute("test.txt")
+
+    assert result == "Error: Directory not found or is a file: test.txt"
+
+
+@needs_permissions
+@pytest.mark.asyncio
+async def test_list_dir_reports_unreadable_directory_as_error(fs_sandbox):
+    locked = fs_sandbox / "locked"
+    locked.mkdir()
+    locked.chmod(0)
+    try:
+        result = await ListDirTool(fs_sandbox).execute("locked")
+    finally:
+        locked.chmod(0o700)
+
+    assert result.startswith("Error listing directory:")
+
+
+@pytest.mark.asyncio
+async def test_write_file_under_a_file_reports_error_and_keeps_the_file(fs_sandbox):
+    result = await WriteFileTool(fs_sandbox).execute("test.txt/new.txt", "data")
+
+    assert result.startswith("Error writing file:")
+    assert (fs_sandbox / "test.txt").read_text() == "hello world"

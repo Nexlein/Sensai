@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 
+from sensai.core.budget import BudgetConfig, ContextBudget
 from sensai.core.commands import (
     CommandContext,
     ParsedCommand,
@@ -10,7 +11,6 @@ from sensai.core.commands import (
     format_loaded_model,
     parse_commands,
 )
-from sensai.core.budget import BudgetConfig, ContextBudget
 from sensai.core.config import DEFAULT_MODEL, AppConfig, load_config
 from sensai.core.engine import ChatEngine
 from sensai.domain.events import Event
@@ -992,3 +992,69 @@ async def test_prompt_shows_the_last_model_call_against_the_budget():
     assert "user · history" in message
     assert "what is the plan?" in message
     assert message.endswith(" / 4096 tokens (estimate)")
+
+
+async def _run(text: str, context: CommandContext):
+    command = parse_commands(text)
+    assert command is not None
+    return await dispatch_command(command, context)
+
+
+@pytest.mark.parametrize(
+    ("text", "usage"),
+    [
+        ("/effort low high", "Usage: /effort [low|medium|high|off]"),
+        ("/persona on off", "Usage: /persona [on|off]"),
+        ("/config get model base_url", "Usage: /config get [key]"),
+        ("/config set model", "Usage: /config set <key> <value>"),
+        (
+            "/config frobnicate",
+            "Usage: /config get [key] | /config set <key> <value> | /config save",
+        ),
+    ],
+)
+async def test_malformed_commands_answer_with_their_usage(text, usage):
+    context = _context()
+    before = context.config.model_copy(deep=True)
+
+    result = await _run(text, context)
+
+    assert result.message == usage
+    assert context.config == before
+
+
+@pytest.mark.parametrize(
+    ("text", "prefix"),
+    [
+        ("/model qwen3:8b", "Could not switch model:"),
+        ("/config set base_url http://localhost:1", "Could not update base_url:"),
+    ],
+)
+async def test_provider_failure_keeps_the_current_provider(text, prefix):
+    from sensai.domain.errors import ProviderError
+
+    def failing_factory(*args, **kwargs):
+        raise ProviderError("unreachable")
+
+    context = _context()
+    context.provider_factory = failing_factory
+    provider = context.engine.provider
+    before = context.config.model_copy(deep=True)
+
+    result = await _run(text, context)
+
+    assert result.message == f"{prefix} unreachable"
+    assert context.engine.provider is provider
+    assert context.config == before
+
+
+async def test_config_save_reports_a_write_failure(tmp_path):
+    context = _context()
+    context.config_path = tmp_path / "missing-dir" / "file.toml" / "nested.toml"
+    (tmp_path / "missing-dir").mkdir()
+    (tmp_path / "missing-dir" / "file.toml").write_text("not a directory")
+
+    result = await _run("/config save", context)
+
+    assert result.message
+    assert "saved" not in result.message.lower()
