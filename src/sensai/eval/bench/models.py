@@ -121,7 +121,7 @@ def bench_speed(
         parameters=str(details.get("parameter_size", "?")),
         quantization=str(details.get("quantization_level", "?")),
         load_seconds=cold.load_seconds,
-        prompt_tokens=_median([r.prompt_tokens for r in warm]),
+        prompt_tokens=int(_median([r.prompt_tokens for r in warm])),
         prompt_rate=_median([r.prompt_rate or 0 for r in warm]),
         reply_rate=_median([r.reply_rate or 0 for r in warm]),
         first_token_seconds=_median([r.first_token_seconds for r in warm]),

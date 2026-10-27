@@ -10,7 +10,14 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    JsonValue,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from sensai.core.budget import BudgetConfig
 from sensai.core.config_file import ConfigError, flatten, read_document, update_file
@@ -38,7 +45,7 @@ DEFAULT_BASE_URL = "http://localhost:11434"
 DEFAULT_CONFIG_PATH = Path("sensai.toml")
 DEFAULT_EFFORT = "low"
 DEFAULT_NUM_CTX = 8192
-RESTART = {"restart": True}
+RESTART: dict[str, JsonValue] = {"restart": True}
 _SERVER_NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 

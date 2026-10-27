@@ -46,6 +46,8 @@ Pour les deux lignes ci-dessus, ✅ signifie que les mesures et observations son
 pas que tous les modèles ou tous les cas réussissent. Les essais bornés, l’incompatibilité
 d’outils de Gemma 3, l’identité incertaine de l’alias historique Bonsai et les sous-cas non exercés
 sont explicités dans les documents liés.
+Les campagnes du 27 octobre ont été jouées avant le rebase sur `dev` : elles restent
+des observations de cette version, pas une validation de la version rebasée.
 
 ## Critères notés
 

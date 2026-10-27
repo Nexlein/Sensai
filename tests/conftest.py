@@ -8,13 +8,15 @@ the CLI does, through `build_session`. `say` sends one input through
 import textwrap
 import time
 from collections import Counter, defaultdict
-from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import httpx
 import pytest
+from _pytest.terminal import TerminalReporter
 
 from sensai.core.bootstrap import build_session
 from sensai.core.commands import CommandContext, CommandResult
@@ -287,7 +289,9 @@ class SpecReporter:
 
     def __init__(self, config: pytest.Config) -> None:
         self.config = config
-        self.terminal = config.pluginmanager.getplugin("terminalreporter")
+        self.terminal = cast(
+            TerminalReporter, config.pluginmanager.getplugin("terminalreporter")
+        )
         self.titles: dict[str, tuple[str, str]] = {}
         self.outcomes: list[Outcome] = []
         self.current_module: str | None = None
@@ -384,7 +388,9 @@ def write_markdown(path: Path, outcomes: list[Outcome], seconds: float) -> None:
 
 @pytest.hookimpl(trylast=True)
 def pytest_configure(config: pytest.Config) -> None:
-    terminal = config.pluginmanager.getplugin("terminalreporter")
+    terminal = cast(
+        TerminalReporter | None, config.pluginmanager.getplugin("terminalreporter")
+    )
     plain = config.getoption("--classic") or config.get_verbosity() != 0
     if terminal is None or plain or hasattr(config, "workerinput"):
         return

@@ -1,4 +1,5 @@
 """Prompt composition, prompt log and /prompt."""
+
 from typing import cast
 
 import pytest

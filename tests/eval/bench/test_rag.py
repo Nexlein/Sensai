@@ -137,6 +137,7 @@ async def test_a_dropped_call_is_retried_once(monkeypatch):
     answer, usage = await rag._answer(_engine(provider), "Code du portail ?")
 
     assert answer == "Je ne trouve pas cette information."
+    assert usage is not None
     assert usage.prompt_tokens == 120
 
 

@@ -3,11 +3,9 @@ import json
 import math
 import operator
 import sqlite3
+from array import array
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
-
-
-from array import array
 
 from sensai.domain.models import Chunk, ScoredChunk
 

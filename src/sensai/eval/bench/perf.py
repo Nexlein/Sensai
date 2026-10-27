@@ -11,13 +11,13 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 from sensai.core.bootstrap import build_session
-from sensai.core.budget import BudgetConfig, ContextBudget
+from sensai.core.budget import BudgetConfig, ContextBudget, LLMSummarizer
 from sensai.core.config import AppConfig, load_config, save_config
 from sensai.core.engine import ChatEngine
 from sensai.core.prompt import PromptComposer
@@ -98,13 +98,14 @@ def _startup(repeat: int) -> Stat:
     return Stat(tuple(runs))
 
 
-def _engine_turn(guarded: bool, reply_words: int) -> Callable[[], object]:
+def _engine_turn(guarded: bool, reply_words: int) -> Callable[[], Awaitable[None]]:
     reply = " ".join(["mot"] * reply_words)
+    provider = MockLLMProvider(default_response=reply, simulated_delay=0)
     engine = ChatEngine(
-        MockLLMProvider(default_response=reply, simulated_delay=0),
+        provider,
         Conversation(),
         guardrail=RegexGuardrail() if guarded else None,
-        budget=ContextBudget(BudgetConfig(), None),
+        budget=ContextBudget(BudgetConfig(), LLMSummarizer(lambda: provider)),
     )
 
     async def turn() -> None:
@@ -185,7 +186,10 @@ def run_perf(repeat: int = 5, quick: bool = False) -> list[PerfResult]:
     for turns in sizes:
         conversation = _conversation(turns)
         composer = PromptComposer(
-            conversation, ContextBudget(BudgetConfig(max_tokens=10**9), None)
+            conversation,
+            ContextBudget(
+                BudgetConfig(max_tokens=10**9), LLMSummarizer(MockLLMProvider)
+            ),
         )
         add(
             "prompt",

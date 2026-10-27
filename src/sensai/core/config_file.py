@@ -2,7 +2,7 @@
 
 import os
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, MutableMapping
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +54,7 @@ def _parent(document: TOMLDocument, parts: list[str], create: bool) -> Any:
                 return None
             node[part] = tomlkit.table(is_super_table=len(parts) > 2)
         node = node[part]
-        if not isinstance(node, Mapping):
+        if not isinstance(node, MutableMapping):
             return None
     return node
 

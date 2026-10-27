@@ -10,6 +10,7 @@ objects other components hold (the provider's `ModelOptions`, the budget's
 import json
 import tomllib
 import types
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin
@@ -213,7 +214,7 @@ def format_value(key: str, value: Any) -> str:
 
 
 def sources(
-    config: AppConfig, path: Path | None, unsaved: set[str] = frozenset()
+    config: AppConfig, path: Path | None, unsaved: AbstractSet[str] = frozenset()
 ) -> dict[str, Source]:
     """Where each current value comes from.
 

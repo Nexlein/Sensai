@@ -2,6 +2,13 @@
 
 What is fast, what is slow, and where the models stop working.
 
+**Version provenance:** the RTX 4070 measurements, quality checks, live tool tests and
+35 demo cases recorded on 2026-10-27 used the pre-rebase code at `4c018f9` (the measurement
+code is unchanged from `513d531`). Rebasing onto `dev` at `70260d3` preserves these results
+as historical evidence; it adds changes to prompt wording/date, memory, guardrails,
+dependencies and the sandbox image. The model campaigns were not rerun after that rebase
+and do not certify the updated runtime.
+
 **Machine**: Intel i7-13650HX (14 cores, 20 threads), 15 GB of RAM, NVIDIA RTX 4060 Laptop
 (8 GB), Linux, Python 3.14, Ollama 0.40. Every model suite was run twice: on **CPU** (CPU-only
 Ollama build, 2026-10-21) and on **GPU** (`ollama-cuda`, 2026-10-26, every model fully in

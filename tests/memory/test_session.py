@@ -1,4 +1,5 @@
 """Session persistence."""
+
 import sqlite3
 from contextlib import closing
 

@@ -450,6 +450,7 @@ async def test_dispatch_config_save_rejects_arguments(tmp_path):
     )
 
     assert not result.should_exit
+    assert context.config_path is not None
     assert not context.config_path.exists()
     assert result.message == "Usage: /config save"
 
@@ -998,11 +999,14 @@ async def _run(text: str, context: CommandContext):
     [
         ("/effort low high", "Usage: /effort [low|medium|high|off]"),
         ("/persona on off", "Usage: /persona [on|off]"),
-        ("/config get model base_url", "Usage: /config get [key]"),
+        (
+            "/config get model base_url",
+            "Usage: /config [show [key]] | get <key> | set <key> <value> | reset <key> | keys [key] | save",
+        ),
         ("/config set model", "Usage: /config set <key> <value>"),
         (
             "/config frobnicate",
-            "Usage: /config get [key] | /config set <key> <value> | /config save",
+            "Usage: /config [show [key]] | get <key> | set <key> <value> | reset <key> | keys [key] | save",
         ),
     ],
 )
@@ -1019,8 +1023,8 @@ async def test_malformed_commands_answer_with_their_usage(text, usage):
 @pytest.mark.parametrize(
     ("text", "prefix"),
     [
-        ("/model qwen3:8b", "Could not switch model:"),
-        ("/config set base_url http://localhost:1", "Could not update base_url:"),
+        ("/model qwen3:8b", "Could not switch model: "),
+        ("/config set base_url http://localhost:1", ""),
     ],
 )
 async def test_provider_failure_keeps_the_current_provider(text, prefix):
@@ -1036,7 +1040,7 @@ async def test_provider_failure_keeps_the_current_provider(text, prefix):
 
     result = await _run(text, context)
 
-    assert result.message == f"{prefix} unreachable"
+    assert result.message == f"{prefix}unreachable"
     assert context.engine.provider is provider
     assert context.config == before
 
@@ -1051,13 +1055,16 @@ async def test_config_save_reports_a_write_failure(tmp_path):
 
     assert result.message
     assert "saved" not in result.message.lower()
+
+
 COMMENTED_FILE = '# team settings\nmodel = "qwen3.5:4b"  # default model\n'
 
 
 def _saved_context(tmp_path, text: str = COMMENTED_FILE) -> CommandContext:
     context = _context()
     context.config_path = tmp_path / "sensai.toml"
-    context.config_path.write_text(text)
+    path = tmp_path / "sensai.toml"
+    path.write_text(text)
     return context
 
 
@@ -1068,6 +1075,7 @@ async def _config(context: CommandContext, *arguments: str) -> str:
 
 async def test_config_set_saves_the_key_and_keeps_comments(tmp_path):
     context = _saved_context(tmp_path)
+    assert context.config_path is not None
 
     message = await _config(context, "set", "options.temperature", "0.7")
 
@@ -1080,6 +1088,7 @@ async def test_config_set_saves_the_key_and_keeps_comments(tmp_path):
 
 async def test_config_set_accepts_values_with_spaces(tmp_path):
     context = _saved_context(tmp_path)
+    assert context.config_path is not None
 
     await _config(context, "set", "persona.name", "Sensai", "Collecte")
 
@@ -1089,6 +1098,7 @@ async def test_config_set_accepts_values_with_spaces(tmp_path):
 
 async def test_config_set_any_documented_key(tmp_path):
     context = _saved_context(tmp_path)
+    assert context.config_path is not None
 
     await _config(context, "set", "guardrails.injection", "flag")
     await _config(context, "set", "budget.keep_recent_turns", "6")
@@ -1101,6 +1111,7 @@ async def test_config_set_any_documented_key(tmp_path):
 
 async def test_invalid_value_changes_neither_session_nor_file(tmp_path):
     context = _saved_context(tmp_path)
+    assert context.config_path is not None
 
     message = await _config(context, "set", "budget.threshold", "2")
 
@@ -1111,6 +1122,7 @@ async def test_invalid_value_changes_neither_session_nor_file(tmp_path):
 
 async def test_failed_provider_switch_keeps_the_previous_model(tmp_path):
     context = _saved_context(tmp_path)
+    assert context.config_path is not None
 
     message = await _config(context, "set", "provider", "nowhere")
 
@@ -1121,6 +1133,7 @@ async def test_failed_provider_switch_keeps_the_previous_model(tmp_path):
 
 async def test_config_reset_restores_the_default_and_drops_the_key(tmp_path):
     context = _saved_context(tmp_path, "[options]\nseed = 7\n# note\ntop_p = 0.9\n")
+    assert context.config_path is not None
     context.config.options.seed = 7
 
     message = await _config(context, "reset", "options.seed")
@@ -1133,6 +1146,7 @@ async def test_config_reset_restores_the_default_and_drops_the_key(tmp_path):
 
 async def test_autosave_off_keeps_changes_in_the_session(tmp_path):
     context = _saved_context(tmp_path)
+    assert context.config_path is not None
 
     await _config(context, "set", "autosave", "false")
     message = await _config(context, "set", "options.seed", "3")
@@ -1192,6 +1206,7 @@ async def test_config_rejects_unknown_actions():
 
 async def test_model_effort_and_persona_changes_are_saved(tmp_path):
     context = _saved_context(tmp_path)
+    assert context.config_path is not None
     context.engine.persona = Persona(
         id="c", name="Collecte", description="", system_instruction="Tu es Collecte."
     )

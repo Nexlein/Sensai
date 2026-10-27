@@ -1,5 +1,10 @@
 # Prompts de test et limites du modèle
 
+**Version testée :** code de `4c018f9`, avant le rebase sur `dev` (`70260d3`). Les réponses
+ci-dessous sont conservées telles qu’observées. Les corrections du prompt, de la mémoire,
+des guardrails et de la sandbox apportées par `dev` peuvent changer ces comportements ;
+les 35 cas n’ont pas été rejoués sur la version rebasée.
+
 Campagne jouée le **27 octobre 2026** sur la configuration de démo : `qwen3.5:4b`, persona
 Collecte activée, RAG sur `data/collecte/` avec `nomic-embed-text`, guardrails et outils activés.
 Machine : Ryzen 7 7840HS, RTX 4070 Laptop 8 Go, RAM visible 14,9 Gio, Ollama 0.34.3.

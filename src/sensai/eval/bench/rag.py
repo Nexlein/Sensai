@@ -13,13 +13,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sensai.core.budget import BudgetConfig, ContextBudget
+from sensai.core.budget import BudgetConfig, ContextBudget, LLMSummarizer
 from sensai.core.components import build_guardrail, load_persona
 from sensai.core.config import GuardrailsConfig, PersonaConfig
 from sensai.core.engine import ChatEngine
 from sensai.domain.errors import ProviderError
 from sensai.domain.events import TextChunkEvent, UsageEvent
 from sensai.domain.models import Conversation, ModelOptions
+from sensai.domain.protocols import ContextRetriever
 from sensai.eval.bench.models import normalize
 from sensai.memory.rag.chunker import TextChunker
 from sensai.memory.rag.retriever import RAGRetriever
@@ -160,7 +161,7 @@ async def run_condition(
     condition: Condition,
     questions: list[Question],
     model: str,
-    retriever: RAGRetriever | None,
+    retriever: ContextRetriever | None,
     persona_file: Path,
     base_url: str,
 ) -> ConditionResult:
@@ -180,7 +181,7 @@ async def run_condition(
             provider,
             Conversation(),
             retriever=retriever if condition.rag else None,
-            budget=ContextBudget(BudgetConfig(), None),
+            budget=ContextBudget(BudgetConfig(), LLMSummarizer(lambda: provider)),
             guardrail=build_guardrail(GuardrailsConfig()),
             reasoning=True,
             think=False,

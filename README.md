@@ -32,7 +32,7 @@ answering team leaders from their own rule books without sending data anywhere
 
 ## Quick start
 
-Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), [Ollama](https://ollama.com/).
+Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/) 0.13.5+, [Ollama](https://ollama.com/).
 Docker is optional (sandbox, SearXNG).
 
 ```bash
