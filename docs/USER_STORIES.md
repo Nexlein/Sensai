@@ -607,6 +607,36 @@ Acceptance criteria:
 
 ## Feature: Benchmarks
 
+As a team member comparing French quality, I want a replayable set of identical language tasks for each model, so that differences come from the models rather than different questions.
+
+Acceptance criteria:
+
+- `python -m sensai.eval.bench french --models <names>` runs six fixed tasks: explanation, resident message, grammar correction, summary, professional register and missing information.
+- Every task uses temperature 0, seed 42, an 8 192-token context and an output limit of 512 tokens; thinking is disabled where supported.
+
+As a reviewer, I want the full French answers saved for manual assessment, so that the reported quality judgement can be checked against the actual text.
+
+Acceptance criteria:
+
+- Reports retain the model name, exact prompt, full answer and possible output-limit truncation in JSON and readable Markdown, with a checkpoint per completed model.
+- The suite does not invent an automatic language score; the documented review states its rubric and limits.
+
+As a team member comparing model responsiveness, I want the speed suite to measure the arrival of the first streamed answer text, so that the reported delay reflects what the user waits for.
+
+Acceptance criteria:
+
+- The speed suite times the first non-empty answer content from the HTTP request start; empty chunks and thinking chunks do not end the timer.
+- Each model uses an explicit 8 192-token context, temperature 0, seed 42 and thinking off where supported.
+- The report includes the median of three warm runs, Ollama's allocated VRAM, and NVIDIA's memory allocation for Ollama processes when available; unavailable driver counters are not reported as zero.
+
+As a team member running benchmarks on a laptop, I want completed model results saved immediately, so that a later interruption does not lose the whole campaign.
+
+Acceptance criteria:
+
+- Each completed model has a JSON and Markdown checkpoint under the chosen output directory's `models/` folder.
+- JSON checkpoints retain the cold sample and every warm sample, including streamed first-token latency and server counters.
+- A later model failure leaves earlier checkpoints readable.
+
 As a team member preparing the defense, I want to measure which models fit our machines, so that our model choice rests on numbers.
 
 Acceptance criteria:

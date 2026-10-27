@@ -1,6 +1,6 @@
 """`python -m sensai.eval.bench <suite>`: run a benchmark, print it, save it.
 
-Suites: perf (Sensai's code, no model), speed, tools, effort, context, rag.
+Suites: perf (Sensai's code, no model), speed, tools, effort, context, rag, french.
 Results go to `reports/bench/<suite>.json` and `.md`.
 """
 
@@ -21,7 +21,7 @@ from sensai.eval.bench.ollama import DEFAULT_URL, OllamaBench
 from sensai.eval.bench.timing import human_seconds, table
 
 ROOT = Path(__file__).resolve().parents[4]
-SUITES = ("perf", "speed", "tools", "effort", "context", "rag")
+SUITES = ("perf", "speed", "tools", "effort", "context", "rag", "french")
 DEFAULT_MODEL = "qwen3.5:4b"
 
 
@@ -101,7 +101,26 @@ def run_speed(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]:
     for name in _models(args, client):
         print(f"  speed: {name}", file=sys.stderr)
         try:
-            results.append(models.bench_speed(client, name, args.runs))
+            result = models.bench_speed(client, name, args.runs)
+            results.append(result)
+            # Keep completed models even if the next model or the machine stops.
+            checkpoint = name.replace("/", "_").replace(":", "_")
+            save(
+                Path(args.out) / "models",
+                checkpoint,
+                table(
+                    ["model", "First token (warm median)", "VRAM (Ollama)", "context"],
+                    [
+                        [
+                            result.model,
+                            f"{result.first_token_seconds:.3f} s",
+                            _gb(result.vram_bytes),
+                            result.context_length or "-",
+                        ]
+                    ],
+                ),
+                result,
+            )
         except (RuntimeError, httpx.HTTPError) as exc:
             print(f"    skipped: {exc}", file=sys.stderr)
     client.unload_all()
@@ -111,11 +130,17 @@ def run_speed(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]:
             r.parameters,
             r.quantization,
             _gb(r.memory_bytes),
-            "GPU" if r.vram_bytes else "CPU",
+            _gb(r.vram_bytes),
+            _gb(r.nvidia_vram_bytes) if r.nvidia_vram_bytes is not None else "-",
+            r.context_length or "-",
+            ("GPU" if r.vram_bytes == r.memory_bytes else "GPU + CPU")
+            if r.vram_bytes
+            else "CPU",
             f"{r.load_seconds:.1f} s",
             _rate(r.prompt_rate),
             _rate(r.reply_rate),
-            f"{r.first_token_seconds:.1f} s",
+            f"{r.first_token_seconds:.3f} s",
+            f"{r.samples[0].first_token_seconds:.3f} s" if r.samples else "-",
             f"{r.reply_seconds:.1f} s",
         ]
         for r in sorted(results, key=lambda r: -r.reply_rate)
@@ -125,11 +150,15 @@ def run_speed(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]:
         "params",
         "quant",
         "memory",
+        "VRAM (Ollama)",
+        "VRAM (NVIDIA process)",
+        "context",
         "runs on",
         "cold load",
         "prefill tok/s",
         "decode tok/s",
-        "1st token",
+        "First token (warm median)",
+        "First token (cold)",
         "reply (128 tok)",
     ]
     return table(headers, rows), results
@@ -189,6 +218,26 @@ def run_effort(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]
         "time",
     ]
     return table(headers, rows), results
+
+
+def run_french(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]:
+    results = []
+    for name in _models(args, client):
+        print(f"  french: {name}", file=sys.stderr)
+        answers = models.bench_french(client, name)
+        results.extend(answers)
+        client.unload(name)
+        checkpoint = name.replace("/", "_").replace(":", "_")
+        save(Path(args.out) / "models", checkpoint, _french_answers(answers), answers)
+    return _french_answers(results), results
+
+
+def _french_answers(results: list[dict[str, Any]]) -> str:
+    return "\n\n".join(
+        f"### {r['model']} · {r['case']}\n\n"
+        f"**Prompt** : {r['prompt']}\n\n**Réponse** :\n\n{r['answer']}"
+        for r in results
+    )
 
 
 def run_context(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]:
@@ -318,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
                 "effort": run_effort,
                 "context": run_context,
                 "rag": run_rag,
+                "french": run_french,
             }[args.suite]
             text, data = runner(args, client)
     except httpx.ConnectError:

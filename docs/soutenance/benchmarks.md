@@ -57,20 +57,24 @@ uv run python -m sensai.eval.bench rag     # 3 min sur GPU, ~35 min sur CPU
 ## A/B 2 : pré-prompt générique vs spécialisé
 
 Mesuré par le même script (conditions B et C ci-dessus) : **même exactitude (82 %)**, mais la
-persona fait citer la source **15 fois sur 18 au lieu de 3** et donne des réponses plus courtes
+persona fait mentionner un fichier `.md` **15 fois sur 18 au lieu de 3** et donne des réponses plus courtes
 (1,9 s contre 3,2 s). La persona change la forme et la traçabilité, pas ce que le modèle sait.
-Bascule en direct avec `/persona off` / `/persona on`.
+Le script compte la présence de `.md` dans la réponse : il ne vérifie ni l’existence du fichier
+ni la validité de la citation. Bascule en direct avec `/persona off` / `/persona on`.
 
-## A/B 3 : compression du budget (M2)
+## A/B 3 : compression du budget (M2) — essai non réalisé
 
 Session longue (30 tours scriptés) avec `budget.max_tokens = 2048` vs compression désactivée.
 Métriques : tokens de prompt au tour 30, latence au tour 30, et le modèle se souvient-il d'un fait
 donné au tour 2 (oui / non). Montre le compromis « coût de contexte vs perte d'information ».
 
-## A/B 4 : température
+La comparaison sans compression demande encore une bascule : le budget est toujours actif
+dans la configuration actuelle. Aucun résultat n’est consigné pour cet essai.
+
+## A/B 4 : température — essai non réalisé
 
 Questions 1 à 10, condition B, `temperature` 0.0 vs 0.7 vs 1.2, 5 passages chacune sans `seed`.
-Métriques : exactitude moyenne et variance entre passages.
+Métriques : exactitude moyenne et variance entre passages. Aucun résultat n’est encore consigné.
 
 ## Autres mesures
 

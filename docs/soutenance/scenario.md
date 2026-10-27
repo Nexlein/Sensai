@@ -44,8 +44,10 @@ signalements) et dépend d'un budget public serré.
 
 ## Cohérence avec la latence locale
 
-Un modèle 4B quantifié sur CPU produit de l'ordre de 5 à 20 tokens/s (à mesurer, voir
-[observabilite.md](observabilite.md#débit-tokenss)). Une réponse de 150 tokens prend donc 10 à 30 s.
+Sur le PC d’Alban, `qwen3.5:4b` atteint 11 tokens/s sur CPU et 37 sur GPU, réflexion
+désactivée ([mesures](../benchmarks.md#models-speed-and-memory)). À ce débit, générer
+150 tokens demande environ 14 s sur CPU ou 4 s sur GPU, auxquels s’ajoutent le traitement
+du prompt et, si nécessaire, le chargement du modèle.
 
 - **Acceptable** : au bureau, briefing ou rédaction d'un rapport. 20 s contre 15 minutes de rédaction.
 - **Non acceptable** : en cabine pendant la conduite ou en assistant vocal temps réel. **Exclu du
@@ -119,5 +121,9 @@ Règles :
 - Pour un rapport d'incident, suis la structure de procedure-incidents.md et demande les champs manquants.
 ```
 
-À mesurer : taux de citation de la source et taux de « je ne sais pas » correct, avec et sans ce
+Comparaison mesurée : taux de mention d’un fichier `.md` et taux de refus correct, avec et sans ce
 pré-prompt (voir [benchmarks.md](benchmarks.md#ab-2--pré-prompt-générique-vs-spécialisé)).
+
+La persona fait passer les réponses mentionnant un fichier `.md` de 3/18 à 15/18, sans
+changer l’exactitude. Ce compteur ne vérifie pas que la source citée existe ni qu’elle appuie
+la réponse ; il ne faut pas le présenter comme un taux de « citations correctes ».

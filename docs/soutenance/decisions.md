@@ -20,18 +20,18 @@ raisons RGPD.
 
 ## Décisions majeures et arbitrages
 
-### 1. Base vectorielle : SQLite + cosinus en Python
+### 1. Base vectorielle : SQLite + cosinus
 
-| Alternative                    | Écartée parce que                                                                                        |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| ChromaDB, Qdrant               | Service ou dépendance lourde de plus ; Qdrant demande un serveur. Corpus de quelques centaines de chunks |
-| FAISS                          | Index approximatif utile au-delà de ~100 000 vecteurs ; pas notre échelle                                |
-| `sqlite-vec`                   | Bonne option, extension C à charger : moins portable sur les postes Windows d'une collectivité           |
-| **SQLite + cosinus Python** ✅ | `sqlite3` dans la stdlib, un seul fichier, zéro service. Recherche linéaire : quelques ms ici            |
+| Alternative             | Raison du choix ou du rejet                                                                              |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| ChromaDB, Qdrant        | Service ou dépendance lourde de plus ; Qdrant demande un serveur. Corpus de quelques centaines de chunks |
+| FAISS                   | Index approximatif utile au-delà de ~100 000 vecteurs ; pas notre échelle                                |
+| `sqlite-vec`            | Bonne option, extension C à charger : moins portable sur les postes Windows d'une collectivité           |
+| **SQLite + cosinus** ✅ | `sqlite3` dans la stdlib, un seul fichier, zéro service ; produit scalaire en C                          |
 
-**Arbitrage** : simplicité de déploiement contre passage à l'échelle. `SQLiteVectorStore.search`
-charge tous les vecteurs à chaque requête : linéaire, acceptable jusqu'à quelques milliers de
-chunks, au-delà ce sera le goulot.
+**Arbitrage** : déploiement simple contre recherche linéaire. `SQLiteVectorStore.search` parcourt
+les vecteurs, calcule le produit scalaire en C et ne charge le texte que des meilleurs résultats :
+30 ms pour 1 000 chunks sur le PC mesuré ([benchmarks](../benchmarks.md#sensais-own-code)).
 
 ### 2. Taille des chunks : 500 caractères, chevauchement 50, top 5
 
@@ -83,7 +83,7 @@ LangChain, notre matériel).
 | **Envoyer `options` (`num_ctx`, `temperature`, `seed`) dès le MVP**                            | Troncature silencieuse du prompt par Ollama, benchmarks non rejouables          | Quelques lignes dans le provider                    |
 | **Compter les tokens avec les champs d'Ollama** (`prompt_eval_count`) et calibrer l'estimation | Estimation fausse en français                                                   | Champs déjà renvoyés par l'API                      |
 | **Découpage RAG par paragraphe/titre Markdown** au lieu de caractères                          | Règles coupées en deux, sources moins citables                                  | Pur Python                                          |
-| **`sqlite-vec`** pour la recherche vectorielle                                                 | Recherche linéaire en Python si le corpus grossit                               | Extension SQLite, reste local                       |
+| **`sqlite-vec`** pour la recherche vectorielle                                                 | Recherche linéaire si le corpus grossit                                         | Extension SQLite, reste local                       |
 | **Prompt caching via `keep_alive` + préfixe système stable**                                   | Temps avant le premier token : le prefill est recalculé quand le préfixe change | Ollama réutilise le cache KV d'un préfixe identique |
 | **Bench A/B écrit en même temps que chaque feature**                                           | Améliorations non prouvées en fin de projet                                     | Réutilise `build_session` et le juge EV1            |
 | **Logger structuré unique (prompt, tokens, durées) dès le début**                              | Débogage à l'aveugle des réponses du modèle                                     | stdlib `logging` + JSONL                            |

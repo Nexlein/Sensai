@@ -97,6 +97,158 @@ for every model, against 3–27 s on CPU. Cold load (disk to memory): 1–6 s on
 - Every model fits in the 8 GB of VRAM; qwen3.5:9b (6.2 GB) leaves little room for a larger
   window.
 
+## First token and VRAM: RTX 4070 follow-up
+
+Measured on 2026-10-27, NVIDIA RTX 4070 Laptop GPU (8 GB), NVIDIA driver 580.178.04,
+Ollama 0.34.3, on AC power. These are separate measurements from Alban's historical
+RTX 4060 results above. Identical tags do not guarantee identical model revisions;
+the new campaign records model digests and the parameter/quantization metadata actually
+returned by Ollama.
+
+Scope: the ten historical dialogue models plus `sensai-llama3.2` and `gemma3:4b`, for
+twelve dialogue models. The defense table's eleventh historical row, `nomic-embed-text`,
+is an embedding model and is not part of this first-token benchmark.
+
+Same French summary prompt as the speed suite; `num_ctx = 8192`, `temperature = 0`,
+`seed = 42`, thinking off where supported, at most 128 generated tokens. First token is
+timed from the HTTP request to the first non-empty answer chunk. Warm figures are the
+median of three calls with different prompt prefixes; cold is one call after unloading
+the model (the operating system's disk cache is not cleared). VRAM is the sum of memory
+allocated to Ollama processes reported by `nvidia-smi`, including CUDA overhead, after the
+calls, in decimal GB. Only one model is loaded at a time. These are snapshots, not peaks.
+Ollama's separate `size_vram` counter is retained in JSON for comparison: for `gemma4:e4b`
+it returned an implausible 0.26 GB, so this table consistently uses the driver counter.
+
+| Model                          | Params | Quant       | First token, warm median | First token, cold | VRAM, NVIDIA (GB) |
+| ------------------------------ | ------ | ----------- | ------------------------ | ----------------- | ----------------- |
+| granite3.1-moe                 | 3.3B   | Q4_K_M      | 0.094 s                  | 4.590 s           | 2.89              |
+| qwen3.5:2b                     | 1.9B   | Q8_0        | 0.100 s                  | 6.111 s           | 3.30              |
+| gemma4:e4b                     | 7.5B   | Q4_K_M      | 0.213 s                  | 14.299 s          | 4.98              |
+| Bonsai 8B (official candidate) | 8.19B  | Q1_0 (tags) | 0.245 s                  | 7.062 s           | 2.66              |
+| llama3.2:3b                    | 3.2B   | Q4_K_M      | 0.142 s                  | 4.081 s           | 3.27              |
+| ministral-3:3b                 | 3.8B   | Q4_K_M      | 0.152 s                  | 4.551 s           | 4.23              |
+| phi4-mini                      | 3.8B   | Q4_K_M      | 0.129 s                  | 4.580 s           | 3.87              |
+| qwen3.5:4b                     | 4.2B   | Q4_K_M      | 0.238 s                  | 7.426 s           | 4.19              |
+| mistral:7b                     | 7.2B   | Q4_K_M      | 0.284 s                  | 4.008 s           | 5.78              |
+| qwen3.5:9b                     | 9.7B   | Q4_K_M      | 0.377 s                  | 8.826 s           | 6.86              |
+| sensai-llama3.2                | 3.2B   | Q4_K_M      | 0.136 s                  | 2.193 s           | 3.27              |
+| gemma3:4b                      | 3.9B   | Q4_K_M      | 0.205 s                  | 5.093 s           | 4.21              |
+
+Raw samples, model identities and machine metadata are saved locally under
+`reports/bench/2026-10-27-rtx4070/` (ignored by Git). Temporary model downloads are removed
+after measurement; models installed before the campaign are preserved.
+
+The historical alias `bonsai2` is not a public Ollama tag. The official
+[PrismML Bonsai 8B Q1_0](https://huggingface.co/prism-ml/Bonsai-8B-gguf) matches its listed
+8.2B parameter count and 1-bit format, so it is tested here under its explicit source name.
+This is a candidate reconstruction: Alban's original digest and Modelfile are unknown.
+The public [Bonsai 2](https://ollama.com/library/bonsai-2) family uses ternary weights and
+is not substituted for the historical 8.2B Q1_0 entry.
+The two models missing from Alban's table, `sensai-llama3.2` and
+`gemma3:4b`, are included here for responsiveness and VRAM. Their additional quality checks
+are reported in the [RAG and French follow-up](#added-models-rag-and-french-quality) below.
+
+For Bonsai, `/api/ps` reports quantization as `unknown`, while `/api/tags` identifies
+`Q1_0` (retained in `model.json`); the table uses that explicit metadata. Its recorded text
+starts with English deliberation despite thinking being disabled: this measures first
+visible text, not correctness or the arrival of a useful final answer.
+
+## Added models: RAG and French quality
+
+Follow-up on 2026-10-27 for `sensai-llama3.2:latest` and `gemma3:4b` only, on the same
+RTX 4070 Laptop GPU (8 GB), AMD Ryzen 7 7840HS, Ollama 0.34.3. Their speed/VRAM figures
+are in the first-token table above; this campaign completes their quality checks, not those
+of all twelve dialogue models.
+
+### RAG: the existing 22 questions and three conditions
+
+The existing `data/bench/rag-questions.jsonl` corpus is replayed through `ChatEngine`, with
+guardrails, context budget, retrieval and persona as selected by each condition. One fresh
+conversation per question; `temperature = 0`, `seed = 42`, `num_ctx = 8192`, thinking off.
+`nomic-embed-text` indexes the same `data/collecte/` corpus (26 chunks, default top 5).
+There are 18 answerable and 4 unanswerable questions: 66 replies per model, 132 saved replies.
+
+The score below is the existing automatic heuristic: all expected keyword groups must occur,
+or a recognised refusal phrase for an unanswerable question. It does not establish full factual
+correctness. `.md` mentions count 18 answerable questions only, and do not validate citations.
+
+| Model           | Condition           | Keyword/refusal score | Facts | Refusals | `.md` mentioned |
+| --------------- | ------------------- | --------------------- | ----- | -------- | --------------- |
+| sensai-llama3.2 | no RAG, persona     | 5/22 (22.7%)          | 2/18  | 3/4      | 7/18            |
+| sensai-llama3.2 | RAG, generic prompt | 15/22 (68.2%)         | 14/18 | 1/4      | 0/18            |
+| sensai-llama3.2 | RAG, persona        | 17/22 (77.3%)         | 13/18 | 4/4      | 0/18            |
+| gemma3:4b       | no RAG, persona     | 9/22 (40.9%)          | 5/18  | 4/4      | 12/18           |
+| gemma3:4b       | RAG, generic prompt | 17/22 (77.3%)         | 14/18 | 3/4      | 1/18            |
+| gemma3:4b       | RAG, persona        | 18/22 (81.8%)         | 14/18 | 4/4      | 14/18           |
+
+Inspection of the RAG + persona answers shows limits hidden by those counters:
+
+- Both answer **13 h 00** for sector A instead of the corpus's **5 h 30**.
+- Llama mentions no `.md` file in its 18 answerable replies despite the persona asking for sources.
+- Gemma mentions a `.md` file 14 times, but cites `securite-collecte.md` for the orange sticker,
+  bulky-waste quota, biodegradable bags and Tilleuls roadworks, whose expected sources differ.
+- On question 21, Gemma asserts that the operations manager launched Hérisson before saying
+  the information is missing. The refusal phrase still makes the automatic test pass.
+
+These are evaluation results, not changes to the assistant's model or prompt.
+
+### Tool calling: capability and the existing ten cases
+
+| Model           | Result                                                    | Limit observed                                                                                                   |
+| --------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| sensai-llama3.2 | 9/10 choices correct; no tool on the four plain questions | Misses `remember_fact`                                                                                           |
+| gemma3:4b       | Native tool calling unavailable through this Ollama model | Ollama advertises no `tools` capability; the suite skips the calls, so its raw 0/10 is not ten observed failures |
+
+The tool-choice suite checks requested names/arguments without executing the tools. These
+results therefore do not prove successful file writes, web searches or memory updates.
+
+### French: six fixed tasks, saved answers and a qualitative review
+
+`python -m sensai.eval.bench french` runs the same six prompts for every selected model,
+with the system instruction « Tu es Sensai. Réponds en français. », no RAG and no collecte
+persona. Settings: temperature 0, seed 42, context 8192, at most 512 output tokens, thinking
+off where supported. None of the twelve replies reached that output limit.
+
+The review checks three distinct aspects: French/comprehensibility, grammar/agreements, and
+preservation of the requested task and meaning. Verdicts below concern task adherence:
+**Conforms** means the task and supplied meaning are preserved; **Partial** flags a defect
+or unsupported addition; **Off target** flags a different topic or incorrect core meaning.
+This is a qualitative inspection of the saved replies, not an automatic linguistic score.
+
+| Task                  | sensai-llama3.2 | gemma3:4b  | Observation                                                                                                                                   |
+| --------------------- | --------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| explanation           | Off target      | Off target | Both define a ripeur as a fruit worker rather than the collection job.                                                                        |
+| resident_message      | Partial         | Partial    | Llama: missing object in « vous avez sorti »; Gemma: awkward « non-passage de votre bac » and invented sign-off. Both add a day not supplied. |
+| grammar               | Conforms        | Conforms   | Both produce « Les trois bennes jaunes sont arrivées en retard et les équipages sont fatigués. »                                              |
+| summary               | Conforms        | Partial    | Llama preserves all key facts. Gemma also retains them but adds an unsupported purpose, « Pour faciliter le tri ».                            |
+| professional_register | Off target      | Off target | Both switch to school results; Llama refuses unrelated exam advice, Gemma requests replacement of a grade report.                             |
+| missing_information   | Conforms        | Conforms   | Both say the supplied text gives no telephone number, without inventing one.                                                                  |
+
+All six replies from each model are understandable French. Both pass the targeted agreement
+correction. This does not make their answers reliable: fluent wording masks the wrong job
+definition and off-topic reformulation. Six tasks are a small test set, not a general ranking
+of French proficiency. The RAG + persona conditions above assess the actual specialised context
+separately from these generic language tasks.
+
+### Evidence and replay
+
+Raw responses, model digests and the qualitative case review are saved under
+`reports/bench/2026-10-27-rtx4070/quality/` (ignored by Git): `rag.json`, `answers.jsonl`,
+each model's `french.json`/`french.md` and `tools.json`, and `french-review.json`.
+The French corpus is fixed in `eval/bench/models.py`; its answers are not automatically graded.
+Replay requires the two dialogue models to be installed (`sensai-llama3.2` is the project's
+custom model) and `nomic-embed-text` for retrieval. The two temporary downloads from this
+campaign were removed after the tests, as requested.
+
+```bash
+ollama pull gemma3:4b
+ollama pull nomic-embed-text
+uv run python -m sensai.eval.bench french --models sensai-llama3.2:latest,gemma3:4b --out reports/bench/quality-replay/french
+uv run python -m sensai.eval.bench tools --models sensai-llama3.2:latest,gemma3:4b --out reports/bench/quality-replay/tools
+uv run python -m sensai.eval.bench rag --models sensai-llama3.2:latest --out reports/bench/quality-replay/llama
+uv run python -m sensai.eval.bench rag --models gemma3:4b --out reports/bench/quality-replay/gemma
+```
+
 ## Models: picking the right tool
 
 `python -m sensai.eval.bench tools`: 10 prompts with Sensai's real tool list. 4 need no
@@ -226,6 +378,20 @@ Index: 26 chunks in 0.8 s, one retrieval 24 ms.
 | Bigger model?               | qwen3.5:9b fits, but no gain in tool choice, half the speed                                    | same                                         |
 
 ## Reproduce
+
+The speed suite now measures the first non-empty streamed answer text from request start
+(rather than estimating it as load time plus prefill time). It fixes `num_ctx = 8192`
+and reports Ollama's `size_vram` separately from total loaded memory. When `nvidia-smi` is
+available, it also records the memory allocated to Ollama processes, including CUDA overhead.
+Both are snapshots after the calls, not sampled peaks. Unavailable NVIDIA counters are
+shown as missing, not zero. Historical figures above retain their original method and hardware.
+The local NVIDIA counter is omitted when `--base-url` points to a remote Ollama server.
+
+The first call follows a model unload; it does not clear the operating system's disk cache.
+Three subsequent calls supply the warm median. Their prompts have different prefixes to
+avoid reusing the prompt cache. JSON results retain all four samples, and each completed
+model is saved under `models/` before the next starts. Use a separate `--out` directory for
+each machine or campaign to keep earlier results.
 
 ```bash
 uv run python -m sensai.eval.bench perf                      # ~5 s, no model

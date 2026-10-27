@@ -53,7 +53,10 @@ class FakeOllama:
         if path == "/api/chat":
             if payload["model"] not in self.loaded:
                 self.loaded.append(payload["model"])
-            return httpx.Response(200, json=self.reply(payload))
+            reply = self.reply(payload)
+            if payload.get("stream"):
+                return httpx.Response(200, text=json.dumps(reply) + "\n")
+            return httpx.Response(200, json=reply)
         if path == "/api/ps":
             return httpx.Response(
                 200,

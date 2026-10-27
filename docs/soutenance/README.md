@@ -39,8 +39,8 @@ Les user stories restent dans [`../USER_STORIES.md`](../USER_STORIES.md).
 | Exemples dans le README partout                    | ⚠️   | Exemples présents par feature ; ajouter ceux de cette doc une fois les features faites                                                                                         |
 | Débit (tokens/s) : le voir, le savoir, l'expliquer | ✅   | Affiché après chaque réponse ; mesuré pour 10 modèles ([modeles.md](modeles.md#tableau-des-modèles-testés)), machines dans [observabilite.md](observabilite.md#débit-tokenss)  |
 | Consommation RAM / VRAM                            | ✅   | `/ps` (taille, CPU/GPU, contexte). Voir [observabilite.md](observabilite.md#ram-et-vram)                                                                                       |
-| Prompts de test                                    | ⚠️   | [prompts-de-test.md](prompts-de-test.md), à jouer et remplir                                                                                                                   |
-| Tableau des modèles + benchmarks                   | ✅   | [modeles.md](modeles.md#tableau-des-modèles-testés) (10 modèles), `python -m sensai.eval.bench`                                                                                |
+| Prompts de test                                    | ❌   | [prompts-de-test.md](prompts-de-test.md) : aucun résultat observé consigné                                                                                                     |
+| Tableau des modèles + benchmarks                   | ⚠️   | [modeles.md](modeles.md#tableau-des-modèles-testés) : tableau rempli ; périmètre différent de la liste initiale de l'issue #83                                                 |
 
 ## Critères notés
 
@@ -72,3 +72,7 @@ Dans l'ordre, ce qui bloque un prérequis éliminatoire :
 7. Réflexion désactivée par défaut : `/effort low` coûte 50 s sur GPU et ~7 min sur CPU pour une addition avec qwen3.5:4b, contre 3 s / 16 s sans (voir [../code-review.md](../code-review.md)).
 
 Chaque feature ajoutée apporte ses deux user stories dans `docs/USER_STORIES.md`.
+
+Pour terminer l’issue #83 : jouer et consigner les prompts de test, justifier le modèle retenu
+et expliciter l’évolution de la liste des modèles. Les mesures du premier token et de VRAM du
+27 octobre sont dans le [complément RTX 4070](../benchmarks.md#first-token-and-vram-rtx-4070-follow-up).

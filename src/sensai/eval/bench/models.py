@@ -5,6 +5,7 @@ finds the same orders of magnitude.
 """
 
 import re
+import subprocess
 import unicodedata
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -50,6 +51,33 @@ class SpeedResult:
     vram_bytes: int
     context_length: int | None
     error: str = ""
+    samples: list[ChatResult] = field(default_factory=list)
+    nvidia_vram_bytes: int | None = None
+
+
+def nvidia_vram_bytes() -> int | None:
+    """Loaded Ollama process allocations, including CUDA overhead, when available."""
+    try:
+        output = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-compute-apps=process_name,used_gpu_memory",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        ).stdout
+        sizes = [
+            int(size.strip()) * 1024 * 1024
+            for line in output.splitlines()
+            for name, size in [line.rsplit(",", 1)]
+            if "ollama" in name.lower()
+        ]
+        return sum(sizes) if sizes else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
 
 
 def _median(values: list[float]) -> float:
@@ -66,17 +94,28 @@ def bench_speed(
     cached prefix: the prefill rate stays a real prefill rate.
     """
     think = think_off(client, model)
-    options = {**FIXED, "num_predict": reply_tokens}
+    options = {**FIXED, "num_predict": reply_tokens, "num_ctx": 8192}
     client.unload_all()
 
     def call(salt: int) -> ChatResult:
         text = f"Note {salt}.\n" + SPEED_TEXT * 6 + "\n" + SPEED_QUESTION
-        return client.chat(model, [{"role": "user", "content": text}], options, think)
+        return client.chat(
+            model, [{"role": "user", "content": text}], options, think, stream=True
+        )
 
     cold = call(0)
     warm = [call(index) for index in range(1, runs + 1)]
-    entry = next((m for m in client.loaded() if m.name == model), None)
-    details = entry.details if entry else {}
+    entry = next(
+        (
+            m
+            for m in client.loaded()
+            if m.name.removesuffix(":latest") == model.removesuffix(":latest")
+        ),
+        None,
+    )
+    if entry is None:
+        raise RuntimeError(f"No loaded memory counters for {model}")
+    details = entry.details
     return SpeedResult(
         model=model,
         parameters=str(details.get("parameter_size", "?")),
@@ -87,9 +126,11 @@ def bench_speed(
         reply_rate=_median([r.reply_rate or 0 for r in warm]),
         first_token_seconds=_median([r.first_token_seconds for r in warm]),
         reply_seconds=_median([r.wall_seconds for r in warm]),
-        memory_bytes=entry.size if entry else 0,
-        vram_bytes=entry.size_vram if entry else 0,
-        context_length=entry.context_length if entry else None,
+        memory_bytes=entry.size,
+        vram_bytes=entry.size_vram,
+        context_length=entry.context_length,
+        samples=[cold, *warm],
+        nvidia_vram_bytes=nvidia_vram_bytes() if client.is_local else None,
     )
 
 
@@ -262,3 +303,81 @@ def bench_effort(
 
 def as_dicts(items: list[Any]) -> list[dict[str, Any]]:
     return [asdict(item) for item in items]
+
+
+FRENCH_CASES = (
+    (
+        "explanation",
+        (
+            "Explique en deux phrases simples ce qu'est un ripeur à une personne qui "
+            "ne connaît pas ce métier."
+        ),
+    ),
+    (
+        "resident_message",
+        (
+            "Rédige un court message poli à un habitant : son bac n'a pas été collecté "
+            "parce qu'il était sorti après le passage de la benne. Propose de le sortir "
+            "la veille de la prochaine collecte. N'invente aucune date ni coordonnée."
+        ),
+    ),
+    (
+        "grammar",
+        (
+            "Corrige uniquement l'orthographe et les accords, sans ajouter de phrase : "
+            "« Les trois benne jaune est arrivé en retard et les équipage sont fatigué. »"
+        ),
+    ),
+    (
+        "summary",
+        (
+            "Résume en deux phrases, en conservant les informations importantes : "
+            "« La collecte du secteur C est décalée du mardi au jeudi cette semaine. "
+            "Les bacs doivent être sortis mercredi après 19 h. Les encombrants restent "
+            "sur rendez-vous. »"
+        ),
+    ),
+    (
+        "professional_register",
+        (
+            "Reformule en une phrase professionnelle, en vouvoyant l'habitant et sans "
+            "ajouter de fait : « T'as sorti ton bac trop tard, remets-le pour le prochain passage. »"
+        ),
+    ),
+    (
+        "missing_information",
+        (
+            "Réponds en français, en une phrase, sans inventer d'information : quel est "
+            "le numéro de téléphone du service usagers ? Le texte fourni indique seulement "
+            "« Le service usagers répond le matin. »"
+        ),
+    ),
+)
+
+
+def bench_french(client: OllamaBench, model: str) -> list[dict[str, Any]]:
+    """Collect fixed French tasks for manual review; do not invent an automatic grade."""
+    think = think_off(client, model)
+    results = []
+    for case, prompt in FRENCH_CASES:
+        result = client.chat(
+            model,
+            [
+                {"role": "system", "content": "Tu es Sensai. Réponds en français."},
+                {"role": "user", "content": prompt},
+            ],
+            {**FIXED, "num_ctx": 8192, "num_predict": 512},
+            think,
+        )
+        results.append(
+            {
+                "model": model,
+                "case": case,
+                "prompt": prompt,
+                "answer": result.content,
+                "reply_tokens": result.reply_tokens,
+                "possible_truncation": result.reply_tokens >= 512,
+                "seconds": result.wall_seconds,
+            }
+        )
+    return results

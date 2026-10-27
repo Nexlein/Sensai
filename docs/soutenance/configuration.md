@@ -6,7 +6,8 @@ Une valeur invalide donne une `ConfigError` en une ligne, jamais une trace Pytho
 
 ## Ce qui existe aujourd'hui
 
-Exemple complet, valeurs par défaut sauf mention :
+Exemple détaillé (`interface = "web"` est un choix pour la démo ; le défaut est `cli`).
+La référence complète des clés est dans [../configuration.md](../configuration.md) :
 
 ```toml
 interface = "web"                  # cli | tui | web
@@ -43,6 +44,9 @@ replies_path = "logs/replies.jsonl"
 ```
 
 Le RAG et les outils web/sandbox se pilotent aussi depuis le fichier :
+
+Les clés `[tools]` ci-dessous complètent la section déjà définie ; ne pas créer une seconde
+table `[tools]` dans le même fichier TOML.
 
 ```toml
 [rag]                              # R1, désactivé par défaut
@@ -106,8 +110,8 @@ sans erreur. **Corrigé** : `options.num_ctx` vaut 8192 par défaut et est toujo
 (mesure dans [benchmarks.md](benchmarks.md)).
 
 Section `[options]` (le nom `[model]` est impossible : la clé `model = "..."` existe déjà au
-niveau racine du TOML). Chaque clé est facultative ; une clé absente n'est pas envoyée, et sans
-section la requête est inchangée :
+niveau racine du TOML). Les autres clés absentes ne sont pas envoyées ; `num_ctx = 8192`
+reste envoyé par défaut, même sans cette section :
 
 ```toml
 [options]
@@ -117,6 +121,9 @@ top_p = 0.9
 seed = 42             # rend les benchmarks rejouables
 num_predict = 512     # longueur max de la réponse
 ```
+
+Avec `num_predict = 512` et `num_ctx = 8192`, régler aussi `[budget] max_tokens = 7680`
+au plus, sinon la validation refuse cette combinaison.
 
 Envoyée telle quelle dans la requête :
 
@@ -140,14 +147,14 @@ la réponse n'a plus de place. `AppConfig` le vérifie au chargement (`ConfigErr
 
 | Paramètre     | Expérience                                              | Ce qu'on observe                                                                                                      |
 | ------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `temperature` | Même question 5 fois à 0.0, puis à 1.2, `seed` non fixé | 0.0 : réponses identiques. 1.2 : formulations variées, plus d'inventions                                              |
-| `temperature` | Prompt factuel du corpus à 0.0 et 1.2                   | Exactitude qui baisse avec la température (mesurable avec le bench)                                                   |
-| `num_ctx`     | 2048 vs 8192 avec RAG `top_k = 5` et une longue session | 2048 : le modèle perd la persona et les sources ; 8192 : RAM plus haute (`ollama ps`)                                 |
+| `temperature` | Même question 5 fois à 0.0, puis à 1.2, `seed` non fixé | Observer la variabilité et les inventions éventuelles (essai à faire)                                                 |
+| `temperature` | Prompt factuel du corpus à 0.0 et 1.2                   | Comparer l'exactitude ; effet non encore mesuré                                                                       |
+| `num_ctx`     | 2048 vs 8192 avec RAG `top_k = 5` et une longue session | Comparer la mémoire et la conservation des informations ; cet essai précis reste à faire                              |
 | `num_ctx`     | Mesure mémoire                                          | Le cache KV grossit linéairement avec `num_ctx` (calcul dans [modeles.md](modeles.md#cache-kv-et-taille-du-contexte)) |
 | `num_ctx`     | Temps avant le premier token avec un long prompt        | Plus de contexte = plus de `prompt_eval_duration`                                                                     |
 
 Pour la démo, prévoir `/config set options.temperature 1.2` et `/config set options.num_ctx 2048`
-en direct (avec `budget.max_tokens` ≤ 2048), puis rejouer la même question. Le changement
+en direct (avec `budget.max_tokens` ≤ `2048 - num_predict`, ou 2048 si `num_predict` est absent), puis rejouer la même question. Le changement
 s'applique au tour suivant ; `/config set options.<clé> none` le retire, `/config save` l'écrit
 dans `sensai.toml`.
 
@@ -158,10 +165,11 @@ sensibilité à la température. Profils proposés (fichiers `profiles/<nom>.tom
 
 | Profil                | `model`           | `num_ctx` | `temperature` | `think` | Pourquoi                                                     |
 | --------------------- | ----------------- | --------- | ------------- | ------- | ------------------------------------------------------------ |
-| Défaut (CPU, 16 Go)   | `qwen3.5:4b`      | 8192      | 0.2           | `"low"` | Outils fiables, français correct, tient en RAM               |
+| CPU conseillé (16 Go) | `qwen3.5:4b`      | 8192      | 0.2           | `false` | Évite la longue réflexion par défaut du code                 |
 | Machine faible (8 Go) | `qwen3.5:4b` Q4   | 4096      | 0.2           | `false` | Moins de cache KV ; pas de raisonnement pour gagner du temps |
 | Llama 3.2 3B          | `sensai-llama3.2` | 8192      | 0.2           | `null`  | Modelfile dédié (`ollama/Modelfile`), pas de mode thinking   |
 | Juge (EV1)            | modèle plus gros  | 8192      | 0.0           | `null`  | Notation stable et rejouable                                 |
 | Démo créativité       | identique         | identique | 1.2           | —       | Uniquement pour montrer l'effet de la température            |
 
-`budget.max_tokens` suit `num_ctx` dans chaque profil.
+`budget.max_tokens` reste au plus égal à `num_ctx - num_predict` dans chaque profil
+(ou `num_ctx` si `num_predict` est absent).

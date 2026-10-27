@@ -1,9 +1,10 @@
 """A small synchronous client of the Ollama HTTP API, for measuring models.
 
-Unlike `OllamaLLMProvider`, it waits for whole answers and keeps the server's
-own counters (tokens and nanosecond durations), which is what a benchmark needs.
+It keeps the server's counters (tokens and nanosecond durations) and optionally
+times the first streamed answer text for responsiveness measurements.
 """
 
+import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,6 +28,7 @@ class ChatResult:
     reply_seconds: float
     total_seconds: float
     wall_seconds: float
+    measured_first_token_seconds: float | None = None
 
     @property
     def prompt_rate(self) -> float | None:
@@ -38,6 +40,8 @@ class ChatResult:
 
     @property
     def first_token_seconds(self) -> float:
+        if self.measured_first_token_seconds is not None:
+            return self.measured_first_token_seconds
         return self.load_seconds + self.prompt_seconds
 
     @property
@@ -70,6 +74,7 @@ class OllamaBench:
         self.client = client or httpx.Client(
             base_url=base_url, timeout=httpx.Timeout(30.0, read=None)
         )
+        self.is_local = self.client.base_url.host in {"localhost", "127.0.0.1", "::1"}
         self._capabilities: dict[str, list[str]] = {}
 
     def chat(
@@ -79,11 +84,13 @@ class OllamaBench:
         options: dict[str, Any] | None = None,
         think: bool | str | None = None,
         tools: list[dict[str, Any]] | None = None,
+        *,
+        stream: bool = False,
     ) -> ChatResult:
         payload: dict[str, Any] = {
             "model": model,
             "messages": messages,
-            "stream": False,
+            "stream": stream,
         }
         if options:
             payload["options"] = options
@@ -92,13 +99,47 @@ class OllamaBench:
         if tools:
             payload["tools"] = tools
         start = time.perf_counter()
-        response = self.client.post("/api/chat", json=payload)
+        first_token = None
+        if stream:
+            content, thinking, tool_calls = [], [], []
+            data = {}
+            with self.client.stream("POST", "/api/chat", json=payload) as response:
+                if response.is_error:
+                    response.read()
+                    raise RuntimeError(
+                        f"Ollama error [{response.status_code}]: {response.text}"
+                    )
+                for line in response.iter_lines():
+                    if not line.strip():
+                        continue
+                    chunk = json.loads(line)
+                    if chunk.get("error"):
+                        raise RuntimeError(f"Ollama error: {chunk['error']}")
+                    message = chunk.get("message") or {}
+                    if message.get("content") and first_token is None:
+                        first_token = time.perf_counter() - start
+                    content.append(message.get("content") or "")
+                    thinking.append(message.get("thinking") or "")
+                    tool_calls.extend(message.get("tool_calls") or [])
+                    if chunk.get("done"):
+                        data = chunk
+                if not data:
+                    raise RuntimeError("Ollama stream ended without final counters")
+            if first_token is None:
+                raise RuntimeError("Ollama stream returned no answer text")
+            data["message"] = {
+                "content": "".join(content),
+                "thinking": "".join(thinking),
+                "tool_calls": tool_calls,
+            }
+        else:
+            response = self.client.post("/api/chat", json=payload)
+            if response.is_error:
+                raise RuntimeError(
+                    f"Ollama error [{response.status_code}]: {response.text}"
+                )
+            data = response.json()
         wall = time.perf_counter() - start
-        if response.is_error:
-            raise RuntimeError(
-                f"Ollama error [{response.status_code}]: {response.text}"
-            )
-        data = response.json()
         message = data.get("message") or {}
         return ChatResult(
             content=message.get("content") or "",
@@ -111,6 +152,7 @@ class OllamaBench:
             reply_seconds=_seconds(data, "eval_duration"),
             total_seconds=_seconds(data, "total_duration"),
             wall_seconds=wall,
+            measured_first_token_seconds=first_token,
         )
 
     def loaded(self) -> list[Loaded]:
