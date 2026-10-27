@@ -72,6 +72,28 @@ Imposé par le sujet, mais aussi utile : le pipeline complet tient dans `core/en
 `core/streaming.py` et `core/tool_runner.py`, et nous a obligés à comprendre le format d'outils
 d'Ollama, le streaming NDJSON et le découpage des PII entre chunks.
 
+### 7. Modèle principal : Qwen 3.5 4B
+
+Nous retenons `qwen3.5:4b` pour son compromis entre appels d’outils, exploitation des documents
+et coût matériel. Il réussit les six actions d’outils réellement exécutées, sans appel inutile
+sur les quatre questions simples. Il obtient également 19/22 au benchmark automatique RAG avec
+persona. Sur la machine d’Alban, son débit atteint 37 tokens/s sur GPU et 11 tokens/s sur CPU.
+Les essais d’exécution et de qualité ont été réalisés séparément sur la RTX 4070 ;
+les [protocoles et résultats](../benchmarks.md#ticket-83-live-tool-execution-on-the-six-requested-models)
+distinguent ces mesures des débits historiques d’Alban sur RTX 4060.
+
+Llama 3.2 exécute aussi les six actions, mais appelle inutilement des outils sur les quatre
+questions simples. Mistral et Phi n’exécutent aucune des six actions ; Gemma 3 ne prend pas en
+charge les outils natifs dans Ollama. Gemma 4 reste une alternative plus rapide, avec 10/10 au
+test de choix d’outils et 18/22 au benchmark RAG, mais sans validation équivalente sur les 35 cas
+de démo.
+
+Ce choix ne garantit pas la fiabilité des réponses. Qwen peut inventer après un résultat
+d’outil correct, manquer une information présente dans le corpus ou mal respecter une consigne.
+Le score RAG repose sur des mots-clés, sans vérifier toutes les affirmations ni les citations.
+Les [résultats des 35 cas](prompts-de-test.md) documentent ces limites ; les écritures restent
+soumises à confirmation et les réponses sensibles doivent être vérifiées.
+
 ## Alternatives : si c'était à refaire
 
 Chaque proposition résout un goulot identifié et reste dans les règles (Ollama local, sans

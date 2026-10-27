@@ -201,6 +201,8 @@ These are evaluation results, not changes to the assistant's model or prompt.
 
 The tool-choice suite checks requested names/arguments without executing the tools. These
 results therefore do not prove successful file writes, web searches or memory updates.
+The later [six-model live execution follow-up](#ticket-83-live-tool-execution-on-the-six-requested-models)
+checks those effects through the engine.
 
 ### French: six fixed tasks, saved answers and a qualitative review
 
@@ -410,3 +412,239 @@ by the out-of-memory killer, which is why the RAG suite retries a dropped call o
 Using the GPU on Arch: install `ollama-cuda` at **the same version** as `ollama` (a mismatch
 makes every model load crash with a segmentation fault), restart the service, then check with
 `/ps` in Sensai or `ollama ps` that the model shows `100% GPU`.
+
+## Remaining ten models: RAG and French quality
+
+Completed on 2026-10-27, on the same RTX 4070 Laptop GPU, Ryzen 7 7840HS and Ollama
+0.34.3 as the two-model follow-up above. The ten model digests match their RTX 4070
+speed-campaign metadata. This completes the **RAG + persona and six French tasks for
+all twelve dialogue models**; it does not complete all three RAG conditions for every model.
+The Bonsai entry is the explicit PrismML candidate described above, not a recovered
+identity for Alban's undocumented `bonsai2` alias.
+
+### Scope and accelerated protocol
+
+The RAG corpus, 22 questions (18 answerable, four unanswerable), 26 indexed chunks,
+top 5 retrieval, persona, guardrails and fresh conversation per question are unchanged.
+Temperature 0, seed 42, context 8192 and thinking off are unchanged. The first five models
+(Qwen 4B, Gemma 4, Qwen 2B, Ministral and Qwen 9B) completed all three existing conditions.
+At the user's request to accelerate, the remaining five completed only **RAG + persona**.
+This gives 440 completed RAG answers and 60 French answers for the ten-model follow-up.
+
+Granite produced a prolonged answer during its first unbounded RAG call. For Granite,
+Phi, Mistral and Bonsai, RAG output was then capped at **512 tokens per call**. Other RAG
+models retain the existing unbounded output setting. The last column below counts calls
+that reached this limit; these are potentially truncated answers, not verified completed
+replies. Their keyword/refusal scores must be read with this qualification. An interrupted
+unbounded call is excluded from the completed results. French uses the existing 512-token
+limit for every model, including the previous two models.
+
+The battery interruption was resumed from completed per-condition and French checkpoints;
+only the incomplete condition was restarted. Partial logs are not counted as extra trials.
+The machine was on AC power when the campaign resumed.
+
+### RAG + persona: the same automatic heuristic
+
+| Model                              | Keyword/refusal score | Facts | Refusals | `.md` mentioned | Calls at output limit |
+| ---------------------------------- | --------------------- | ----- | -------- | --------------- | --------------------- |
+| qwen3.5:4b                         | 19/22                 | 15/18 | 4/4      | 15/18           | 0                     |
+| gemma4:e4b                         | 18/22                 | 14/18 | 4/4      | 14/18           | 0                     |
+| qwen3.5:2b                         | 17/22                 | 14/18 | 3/4      | 13/18           | 0                     |
+| ministral-3:3b                     | 18/22                 | 15/18 | 3/4      | 15/18           | 0                     |
+| qwen3.5:9b                         | 18/22                 | 14/18 | 4/4      | 15/18           | 0                     |
+| Bonsai 8B Q1_0 (candidat officiel) | 19/22                 | 15/18 | 4/4      | 12/18           | 10                    |
+| llama3.2:3b                        | 17/22                 | 13/18 | 4/4      | 0/18            | 0                     |
+| granite3.1-moe                     | 15/22                 | 13/18 | 2/4      | 10/18           | 10                    |
+| phi4-mini                          | 16/22                 | 12/18 | 4/4      | 3/18            | 0                     |
+| mistral:7b                         | 18/22                 | 15/18 | 3/4      | 13/18           | 1                     |
+
+Granite and Bonsai each reach the RAG output limit on 10/22 calls; Mistral reaches it on
+1/22, Phi on none. Bonsai also emits English deliberation in its RAG answer field: keywords
+in that text can pass the scorer without a completed French answer. Its 19/22 therefore
+does not establish the same practical answer quality as Qwen 4B's 19/22.
+
+These are keyword/refusal matches, not a manually verified factual-accuracy percentage.
+`.md` mentions are not validated citations. For example, Qwen 4B's 19/22 includes a refusal
+for the stolen-bin question that merely mentions “service usagers”, and a partial assertion
+about Hérisson's founder before refusing the missing year. It still answers 13 h 00 instead
+of 5 h 30 for sector A, and cites `modeles-courriers.md` for the bulky-waste quota and
+`securite-collecte.md` for the 1 May schedule. Those are concrete limits of the selected
+model and of this automatic scorer. The scores evaluate the full retrieval/guardrail/model
+pipeline, not model knowledge in isolation.
+
+### French: qualitative review of the six saved tasks
+
+Same prompts and instructions as the two-model follow-up. **C** = conforms to the requested
+task and supplied facts; **P** = partial, with a language, meaning, addition or format defect;
+**H** = wrong topic/core meaning or no completed requested answer. These labels describe
+six individual outputs; they are not a general French-proficiency score.
+
+| Model                              | Job explanation | Resident message | Agreements | Summary | Professional register | Missing number |
+| ---------------------------------- | --------------- | ---------------- | ---------- | ------- | --------------------- | -------------- |
+| qwen3.5:4b                         | H               | P                | P          | C       | P                     | C              |
+| gemma4:e4b                         | H               | C                | C          | P       | H                     | C              |
+| qwen3.5:2b                         | P               | H                | P          | H       | H                     | C              |
+| ministral-3:3b                     | H               | P                | C          | P       | P                     | P              |
+| qwen3.5:9b                         | H               | H                | P          | P       | H                     | C              |
+| Bonsai 8B Q1_0 (candidat officiel) | H               | H                | H          | C       | H                     | H              |
+| llama3.2:3b                        | H               | P                | C          | C       | H                     | C              |
+| granite3.1-moe                     | H               | P                | P          | P       | H                     | H              |
+| phi4-mini                          | H               | P                | H          | H       | H                     | C              |
+| mistral:7b                         | H               | C                | P          | P       | H                     | C              |
+
+Notable observations, preserved with one verdict and explanation per saved answer:
+
+- Qwen 4B defines a ripeur as a data-recovery professional, changes “bac” to “sac”, leaves
+  “benne” singular in the agreement correction and changes “sorti” to “retiré” in the reformulation.
+- Gemma 4, Ministral and Llama 3.2 correctly repair all targeted agreements. Gemma 4 and
+  Llama preserve the facts in the summary; Gemma adds an introductory sentence beyond the
+  requested two. Ministral adds “ce week-end” to a Thursday collection.
+- Qwen 2B changes the resident message into driving-licence correspondence. Qwen 9B invents
+  glass-bin details and changes the late-bin cause. Phi changes “bennes” to “buses”.
+- Gemma 4, Qwen 2B/9B, Llama, Granite, Phi and Mistral turn the professional reformulation
+  into an exam, diploma or application subject. Qwen 4B and Ministral keep the collection topic
+  but alter or add meaning. Bonsai does not complete the requested reformulation.
+- Granite invents the number `123 456 789`. The other eight non-Bonsai models decline to
+  invent a telephone number; Ministral exceeds the requested single sentence.
+- Bonsai gives five English deliberations cut at 512 tokens; only its two-sentence French
+  summary is completed and conforms. This is an observed failure of this model/template and
+  output budget, not evidence about the undocumented historical `bonsai2` model.
+
+No model conforms to all six generic tasks. RAG + persona is tested separately above;
+these results do not support an unqualified “good French” claim for the chosen model.
+
+### Evidence, replay and selection
+
+Completed per-condition JSON, all French answers, model digests, original/resumed environment,
+`french-review.json`, `rag-output-limits.json` and `replay.py` are saved under
+`reports/bench/2026-10-27-rtx4070/quality-ten/` (ignored by Git). The previous two models'
+evidence remains under `quality/`. Completed checkpoints are authoritative; the append-only
+answer log also contains interrupted/restarted work. Temporary downloads are removed after
+their tests; the five models installed before the campaign are preserved.
+
+`replay.py` resumes the final accelerated RAG + persona protocol. To rerun the two control
+conditions as well, use the existing `rag` suite with its default three conditions. The
+512-token caps of this follow-up are recorded explicitly rather than changing the runtime
+or benchmark defaults in source code.
+
+The final selection and reasons are in [the defense model notes](soutenance/modeles.md#bilan-des-douze-modèles).
+
+## Ticket #83: live tool execution on the six requested models
+
+Completed on 2026-10-27. This follow-up executes the actual tools through `ChatEngine` and
+`ToolRunner`, including the follow-up model response, rather than checking tool names alone.
+The six ticket names are resolved explicitly as `qwen3.5:4b`, `llama3.2:latest`,
+`sensai-llama3.2:latest`, `mistral:7b`, `phi4-mini:latest` and `gemma3:4b`.
+Llama's `latest` digest matches the previously measured `llama3.2:3b` digest. All six
+live-test digests match their RTX 4070 speed-campaign identities.
+
+**Demo measurement machine**: AMD Ryzen 7 7840HS, NVIDIA RTX 4070 Laptop GPU (8 GB),
+14.9 GiB OS-visible system RAM (`MemTotal = 15624164 kB`), Ollama 0.34.3, NVIDIA driver
+580.178.04, Python 3.14.8. The table below uses this machine's measured speed/size data,
+not the historical RTX 4060 figures from Alban.
+
+| Model           | Quantization | `ollama ps` SIZE (GB) | Decode tok/s | First token, warm (s) | Live tool tasks    | No-tool controls |
+| --------------- | ------------ | --------------------- | ------------ | --------------------- | ------------------ | ---------------- |
+| qwen3.5:4b      | Q4_K_M       | 3.34                  | 72.0         | 0.238                 | 6/6                | 4/4              |
+| llama3.2        | Q4_K_M       | 3.11                  | 105.4        | 0.142                 | 6/6                | 0/4              |
+| sensai-llama3.2 | Q4_K_M       | 3.11                  | 103.9        | 0.136                 | 3/6                | 4/4              |
+| mistral:7b      | Q4_K_M       | 5.61                  | 53.2         | 0.284                 | 0/6                | 4/4              |
+| phi4-mini       | Q4_K_M       | 3.70                  | 86.4         | 0.129                 | 0/6                | 4/4              |
+| gemma3:4b       | Q4_K_M       | 3.03                  | 80.8         | 0.205                 | Non pris en charge | n/a              |
+
+SIZE is the total loaded-model memory returned by `/api/ps` (the source of `ollama ps`),
+in decimal GB. On GPU it is not a measurement of host RAM RSS. NVIDIA process VRAM,
+including CUDA overhead, remains separately documented in the first-token table above.
+Decode and first-token figures are the saved three-warm-run medians of the same fixed
+summary prompt. They were not remeasured during tool execution. RAG and French results for
+these six identities are in the two quality follow-ups above; their settings and scoring
+limitations remain applicable.
+
+### Execution protocol
+
+The same existing ten `TOOL_CASES` prompts are sent to every supported model: four direct
+questions that require no tools, followed by file read, directory listing, file write, web
+search, memory storage and Python execution. Settings are temperature 0, seed 42,
+context 8192, thinking off, at most 512 generated tokens per model call, five tool rounds
+and 60 seconds per case. Each case uses a fresh conversation, the default guardrails and
+all default tool schemas, without RAG or persona, matching the isolated tool-choice suite.
+
+The four controls only check abstention from tools; they do not grade the correctness of
+the direct answer. A tool task passes the operational check when the expected real tool
+produces the requested effect, with no additional unexpected tool and no engine error.
+A completed tool operation is **not** proof that the final model response is faithful.
+Every one of the 50 completed replies was separately inspected; those reviews are saved.
+
+The file tools operate on a temporary copy of `data/collecte/`; writes are verified by
+reopening `notes/test.md`. Memory uses a temporary SQLite database, reopened through a
+second connection to check persistence. Entity/key names are not prescribed: the stored
+fact must associate collection sector with B, regardless of which field describes the sector.
+The actual SearXNG service on localhost is used, and Python really runs in the project's
+Docker sandbox (`python:3.12-alpine`), with exit status and stdout checked against 11122453.
+Neither web search nor sandbox execution is mocked. Their direct preflight calls succeeded.
+
+Sensitive confirmations are approved by the harness only when the requested tool matches
+the current test. Unexpected sensitive calls are declined through the normal confirmation
+callback; the engine then ends that turn, as in production. Read, listing and memory calls
+use the actual default confirmation policies. Temporary files and facts are removed after
+each case. The SearXNG container was stopped again after testing; models downloaded solely
+for this follow-up were removed, preserving the five original installed models.
+
+### Actual effects, separately from final answers
+
+| Model           | Read file | List directory | Write file | Web search | Store memory | Run Python |
+| --------------- | --------- | -------------- | ---------- | ---------- | ------------ | ---------- |
+| qwen3.5:4b      | OK        | OK             | OK         | OK         | OK           | OK         |
+| llama3.2        | OK        | OK             | OK         | OK         | OK           | OK         |
+| sensai-llama3.2 | OK        | Échec          | OK         | OK         | Échec        | Échec      |
+| mistral:7b      | Échec     | Échec          | Échec      | Échec      | Échec        | Échec      |
+| phi4-mini       | Échec     | Échec          | Échec      | Échec      | Échec        | Échec      |
+| gemma3:4b       | n/a       | n/a            | n/a        | n/a        | n/a          | n/a        |
+
+- **Qwen 4B**: all six requested operations succeed, and all four controls avoid tools.
+  The Python reply matches real stdout and the stored memory survives reopening. However,
+  the web reply adds DEEE to the biodéchets discussion and omits source links. File reading
+  returns the real file to the model, which presents a summary rather than the complete text.
+  Its direct definition of a ripeur is also wrong. **10/10 operational checks do not mean
+  ten correct or fully conforming answers.**
+- **Llama 3.2**: all six requested effects succeed, but all four direct questions trigger
+  unnecessary tool requests. Its file reply reverses “Ne pas les imbriquer” into an instruction
+  to nest packaging. Its web reply adds paint, plastics and glass to a biodéchets list.
+  Real execution does not prevent invention after the tool result.
+- **Sensai Llama**: three of six tool tasks pass. Listing itself succeeds, but an extra
+  `read_file` uses the wrong relative path and the final answer wrongly reports that an
+  existing file is missing; that task therefore fails. Memory is not stored. Python receives
+  a string timeout instead of a number, the actual tool rejects it, and the final response
+  nevertheless invents `11190883`. The file reply is cut at the 512-token limit. The direct
+  capital question gets a textual tool expression instead of an answer, although it passes
+  the no-native-tool control.
+- **Mistral and Phi**: no native tool is invoked on the six requested actions, despite text
+  and JSON-like expressions mentioning tools. Mistral invents file contents and a wrong
+  multiplication result. Phi requests textual confirmation without emitting a real native
+  call. Their four abstention controls pass, which does not validate their direct answers.
+- **Gemma 3**: Ollama advertises `completion` and `vision` without `tools`. An actual
+  `/api/chat` request with the tool schemas returns **HTTP 400**, “does not support tools”.
+  This is a verified incompatibility, not six observed failed executions or a 0/10 score.
+
+The output limit was reached on one Mistral reply and one Sensai Llama reply. Search
+results are live and can change independently of temperature/seed; this is a single fixed
+case pass per model, not a statistical reliability estimate or a tool-use training change.
+
+### Evidence and completion of the ticket line
+
+`reports/bench/2026-10-27-rtx4070/live-tools/` (ignored by Git) contains the replay harness,
+environment and model identities, successful service preflights, every raw event, tool
+arguments/results, confirmations, SQLite snapshots, final answers and their qualitative
+reviews, per-model results and a six-model summary. There are **50 completed cases on five
+models and one rejected capability probe on Gemma 3**, not 60 completed tool dialogues.
+
+To replay, install the six exact tags, start the project's SearXNG service, make the sandbox
+image available, then run the saved `replay.py` with `uv run --no-sync python`. It resumes
+saved case checkpoints; use a fresh output directory or remove only its case checkpoints
+for a new campaign. This harness is a recorded benchmark, not a new runtime feature.
+
+The ticket's per-model measurement/evaluation line is now covered: quantization, loaded
+memory counter, decode speed, streamed first token, live tool execution/capability, RAG and
+French have recorded results for the six requested models. This means **evaluated**, not
+“all models pass”. The 35 demo prompts and the justification in `decisions.md` remain
+separate unfinished tasks.
