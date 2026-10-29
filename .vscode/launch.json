@@ -1,0 +1,42 @@
+{
+  // F5 runs sensai under debugpy with the uv virtualenv (make setup first).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Chat: CLI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/sensai",
+      "args": ["chat", "--ui", "cli"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Chat: TUI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/sensai",
+      "args": ["chat", "--ui", "tui"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Chat: web",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/sensai",
+      "args": ["chat", "--ui", "web"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Tests: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-x"],
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal"
+    }
+  ]
+}

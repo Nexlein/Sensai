@@ -31,7 +31,10 @@ dist/
 wheels/
 
 # IDE and Editor files
-.vscode/
+# Editor: share debug configs and recommended extensions, keep personal settings local
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
 .idea/
 *.swp
 *.swo
