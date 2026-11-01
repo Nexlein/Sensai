@@ -3,6 +3,7 @@
 import asyncio
 
 import pytest
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from sensai.core.budget import BudgetConfig, ContextBudget, LLMSummarizer
@@ -12,6 +13,7 @@ from sensai.core.engine import ChatEngine
 from sensai.domain.events import TextChunkEvent, ToolCallEvent, UsageEvent
 from sensai.domain.models import Conversation, Message
 from sensai.interfaces.web.app import build_app
+from sensai.interfaces.web.routes import WebTurn
 from sensai.providers import get_provider
 from sensai.providers.mock import MockLLMProvider
 from sensai.tools.registry import ToolRegistry, build_default_registry
@@ -349,3 +351,57 @@ def test_disconnecting_mid_turn_cancels_it_and_drops_the_unanswered_message():
         _until(ws, "text_chunk")
 
     assert context.engine.conversation.messages == []
+
+
+class BuggyProvider:
+    """Fails with an error no layer translates, like a bug in a component."""
+
+    async def chat_stream(self, messages, tools=None, think=None):
+        raise KeyError("boom")
+        yield
+
+
+def test_unexpected_error_is_one_error_line_and_the_page_is_released():
+    client = TestClient(build_app(_context(BuggyProvider())))
+
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "message", "text": "hi"})
+        seen = _until(ws, "done")
+
+    errors = [m["message"] for m in seen if m["type"] == "error"]
+    assert errors == ["Unexpected error — 'boom'"]
+
+
+def test_a_frame_that_is_not_json_is_ignored():
+    client = TestClient(build_app(_context(MockLLMProvider("ok", simulated_delay=0))))
+
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_text("not json")
+        ws.send_json({"type": "message", "text": "hi"})
+        assert any(m["type"] == "text_chunk" for m in _until(ws, "done"))
+
+
+class ClosedSocket:
+    """A socket whose page is gone: every send fails like Starlette's does."""
+
+    async def send_json(self, data):
+        raise WebSocketDisconnect(code=1006)
+
+
+async def test_a_turn_whose_page_is_gone_ends_quietly():
+    turn = WebTurn(_context(SlowProvider()), ClosedSocket())  # type: ignore[arg-type]
+    await turn.handle({"type": "message", "text": "slow"})
+    await asyncio.sleep(0.05)
+
+    await turn.close()  # cancels the turn; nothing may escape
+
+    assert turn._task is not None and turn._task.done()
+    assert turn._task.exception() is None
+
+
+async def test_a_failed_turn_on_a_closed_page_raises_nothing():
+    turn = WebTurn(_context(BuggyProvider()), ClosedSocket())  # type: ignore[arg-type]
+
+    await turn._run("hi")

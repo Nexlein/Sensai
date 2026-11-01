@@ -2,6 +2,8 @@
 
 import asyncio
 import contextlib
+import json
+import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,7 @@ from sensai.interfaces.prompts import tool_confirmation
 from sensai.interfaces.usage import format_metrics, format_usage
 
 INDEX_PATH = Path(__file__).parent / "index.html"
+logger = logging.getLogger(__name__)
 
 
 def history_payload(context: CommandContext) -> dict[str, Any]:
@@ -71,6 +74,11 @@ class WebTurn:
         elif kind == "stop" and self.busy and self._task is not None:
             self._task.cancel()
 
+    async def _send(self, payload: dict[str, Any]) -> None:
+        """Send to the page; a page that is already gone is not an error."""
+        with contextlib.suppress(WebSocketDisconnect, RuntimeError):
+            await self.websocket.send_json(payload)
+
     async def close(self) -> None:
         if self._task is not None and not self._task.done():
             self._task.cancel()
@@ -79,7 +87,7 @@ class WebTurn:
 
     async def _start(self, text: str) -> None:
         if self.busy:
-            await self.websocket.send_json(
+            await self._send(
                 {"type": "error", "message": "A reply is already in progress."}
             )
             return
@@ -98,20 +106,18 @@ class WebTurn:
                     continue
                 payload = event_payload(event)
                 if payload is not None:
-                    await self.websocket.send_json(payload)
+                    await self._send(payload)
         finally:
             if usage is not None:
-                await self.websocket.send_json(
-                    {"type": "usage", "message": format_usage(usage)}
-                )
+                await self._send({"type": "usage", "message": format_usage(usage)})
             if metrics:
-                await self.websocket.send_json({"type": "usage", "message": metrics})
+                await self._send({"type": "usage", "message": metrics})
 
     async def _confirm_tool(self, tc: ToolCall) -> bool:
         question = tool_confirmation(tc)
         loop = asyncio.get_running_loop()
         self._confirmation = loop.create_future()
-        await self.websocket.send_json(
+        await self._send(
             {
                 "type": "confirm",
                 "title": question.title,
@@ -130,18 +136,18 @@ class WebTurn:
                 self.context, text, self._render, confirm_tool=self._confirm_tool
             )
             if result.reset_view:
-                await self.websocket.send_json(history_payload(self.context))
+                await self._send(history_payload(self.context))
             if result.message:
-                await self.websocket.send_json(
-                    {"type": "notice", "message": result.message}
-                )
+                await self._send({"type": "notice", "message": result.message})
         except (EmptyInputError, ProviderError) as exc:
-            await self.websocket.send_json(
-                {"type": "error", "message": error_text(exc)}
-            )
+            await self._send({"type": "error", "message": error_text(exc)})
         except asyncio.CancelledError:
-            await self.websocket.send_json({"type": "notice", "message": "Stopped."})
-        await self.websocket.send_json({"type": "done"})
+            await self._send({"type": "notice", "message": "Stopped."})
+        except Exception as exc:  # noqa: BLE001 - last boundary before the page
+            # A bug in any layer must still release the page: one line, no traceback.
+            logger.warning("Web turn failed: %r", exc)
+            await self._send({"type": "error", "message": error_text(exc)})
+        await self._send({"type": "done"})
 
 
 def build_router(context: CommandContext) -> APIRouter:
@@ -155,10 +161,13 @@ def build_router(context: CommandContext) -> APIRouter:
     async def chat(websocket: WebSocket) -> None:
         await websocket.accept()
         turn = WebTurn(context, websocket)
-        await websocket.send_json(history_payload(context))
         try:
+            await websocket.send_json(history_payload(context))
             while True:
-                data = await websocket.receive_json()
+                try:
+                    data = json.loads(await websocket.receive_text())
+                except (ValueError, KeyError):
+                    continue  # not a JSON text frame: ignored like an unknown payload
                 if isinstance(data, dict):
                     await turn.handle(data)
         except WebSocketDisconnect:
