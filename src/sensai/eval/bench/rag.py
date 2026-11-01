@@ -232,13 +232,24 @@ class IndexResult:
     retrieval_seconds: float
 
 
+DEFAULT_EMBED_MODEL = "nomic-embed-text"
+DEFAULT_TOP_K = 5
+
+
 async def build_retriever(
-    corpus: Path, db: Path, base_url: str, embed_model: str = "nomic-embed-text"
+    corpus: Path,
+    db: Path,
+    base_url: str,
+    embed_model: str = DEFAULT_EMBED_MODEL,
+    top_k: int = DEFAULT_TOP_K,
 ) -> tuple[RAGRetriever, IndexResult]:
-    """Index the corpus once and time indexing and one retrieval."""
+    """Index the corpus once and time indexing and one retrieval.
+
+    The defaults are the published runs; pass `[rag]` values to measure a config."""
     retriever = RAGRetriever(
         OllamaEmbeddingProvider(base_url=base_url, model=embed_model),
         SQLiteVectorStore(str(db)),
+        top_k=top_k,
     )
     start = time.perf_counter()
     count = await retriever.index_directory(str(corpus), TextChunker())
@@ -256,8 +267,10 @@ async def bench_rag(
     db: Path,
     base_url: str,
     conditions: tuple[Condition, ...] = CONDITIONS,
+    embed_model: str = DEFAULT_EMBED_MODEL,
+    top_k: int = DEFAULT_TOP_K,
 ) -> tuple[IndexResult, list[ConditionResult]]:
-    retriever, index = await build_retriever(corpus, db, base_url)
+    retriever, index = await build_retriever(corpus, db, base_url, embed_model, top_k)
     results = [
         await run_condition(
             condition, questions, model, retriever, persona_file, base_url
@@ -311,9 +324,11 @@ async def bench_temperature(
     base_url: str,
     temperatures: tuple[float, ...] = TEMPERATURES,
     runs: int = 5,
+    embed_model: str = DEFAULT_EMBED_MODEL,
+    top_k: int = DEFAULT_TOP_K,
 ) -> list[TemperatureResult]:
     """RAG with persona at each temperature, `runs` times, seed left unset."""
-    retriever, _ = await build_retriever(corpus, db, base_url)
+    retriever, _ = await build_retriever(corpus, db, base_url, embed_model, top_k)
     results = []
     for temperature in temperatures:
         condition = Condition(

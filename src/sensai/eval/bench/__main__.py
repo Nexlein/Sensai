@@ -304,6 +304,8 @@ def run_rag(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]:
             ROOT / "personas" / "collecte.md",
             out / "rag-bench.db",
             args.base_url,
+            embed_model=args.embed_model,
+            top_k=args.top_k,
         )
     )
     client.unload_all()
@@ -331,7 +333,8 @@ def run_rag(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]:
         "prompt tok",
     ]
     text = (
-        f"Model: {model} · {len(questions)} questions · index: {index.chunks} chunks in "
+        f"Model: {model} · embedding: {args.embed_model}, top {args.top_k} · "
+        f"{len(questions)} questions · index: {index.chunks} chunks in "
         f"{human_seconds(index.seconds)}, one retrieval {human_seconds(index.retrieval_seconds)}"
         "\n\n" + table(headers, rows)
     )
@@ -352,6 +355,8 @@ def run_temperature(args: argparse.Namespace, client: OllamaBench) -> tuple[str,
             out / "rag-bench.db",
             args.base_url,
             runs=args.repeat,
+            embed_model=args.embed_model,
+            top_k=args.top_k,
         )
     )
     client.unload_all()
@@ -375,7 +380,8 @@ def run_temperature(args: argparse.Namespace, client: OllamaBench) -> tuple[str,
         "source cited (mean)",
     ]
     text = (
-        f"Model: {model} · RAG + persona · {len(questions)} questions · "
+        f"Model: {model} · RAG + persona (embedding: {args.embed_model}, "
+        f"top {args.top_k}) · {len(questions)} questions · "
         f"{args.repeat} runs per temperature, no seed\n\n" + table(headers, rows)
     )
     return text, results
@@ -408,6 +414,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--questions", default=str(ROOT / "data" / "bench" / "rag-questions.jsonl")
+    )
+    parser.add_argument(
+        "--embed-model",
+        default=rag.DEFAULT_EMBED_MODEL,
+        help="rag, temperature: embedding model (sensai.example.toml uses bge-m3)",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=rag.DEFAULT_TOP_K,
+        help="rag, temperature: chunks per question",
     )
     return parser
 
