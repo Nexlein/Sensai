@@ -1,25 +1,28 @@
-# Sensai configuration for the Régie de collecte du Val-Brûlé (defense setup).
+# Sensai configuration.
 #
 # Copy it once, then edit your copy (sensai.toml is ignored by Git):
 #   cp sensai.example.toml sensai.toml
 #
 # Priority: CLI flags > sensai.toml > built-in defaults. Every section is optional.
-# This file turns on exactly the features we present, and turns the others off.
+# It works as is: a local chat in your browser, with memory, guardrails and file access.
+# To answer from your own documents with your own assistant sheet, turn on [persona] and [rag]
+# below (the demo/ folder holds two ready examples: demo/tek1 and demo/collecte).
 #
-#   On:  X1 Web UI, A5 Persona, R1 RAG, EV2 Guardrails, M3 Structured memory,
-#        T4 File access, A3 Confirmation before writing, M1 Sessions (--session).
+#   On:  X1 Web UI, EV2 Guardrails, M3 Structured memory, T4 File access,
+#        A3 Confirmation before writing, M1 Sessions (--session).
+#   Opt-in below: A5 Persona, R1 RAG.
 #   Off: T1 MCP, T2 Sandbox, T3 Web search, A1 Reasoning loop, M2 Compression,
 #        EV1 Reply logging for the judge.
 
 interface = "web"                    # X1: cli | tui | web (http://127.0.0.1:8000)
-provider = "ollama"                  # local model only: user data never leaves the PC
+provider = "ollama"                  # local model only: your data never leaves the PC
 model = "qwen3.5:4b"
 base_url = "http://localhost:11434"
 autosave = false                     # changes made in a session (/persona off...) stay in the session
 
 [options]                            # sent to Ollama with every request
 temperature = 0.0                    # measured best for factual answers (docs/benchmarks.md)
-seed = 42                            # same question, same answer: rehearsals match the show
+seed = 42                            # same question, same answer
 num_ctx = 8192                       # context window, in tokens
 num_predict = 1024                   # longest reply, in tokens
 
@@ -27,14 +30,14 @@ num_predict = 1024                   # longest reply, in tokens
 max_tokens = 7168                    # must stay <= num_ctx - num_predict
 enabled = false                      # M2 off: tokens are counted, old turns are kept as is
 
-[persona]                            # A5: the Régie assistant, first in every prompt
-enabled = true                       # /persona off and /persona on switch it live
-name = "Sensai Collecte"
-file = "demo/collecte/persona.md"
+[persona]                            # A5: your assistant sheet, first in every prompt
+enabled = false                      # true, then point file at your sheet
+name = "Sensai"
+# file = "demo/tek1/persona.md"
 
-[rag]                                # R1: answers come from the Régie documents
-enabled = true
-dir = "demo/collecte/docs"
+[rag]                                # R1: answers come from your own documents
+enabled = false                      # true, then point dir at your documents
+# dir = "demo/tek1/docs"
 model = "bge-m3"                     # multilingual: finds French documents nomic-embed-text misses
 db = "rag.db"
 top_k = 3                            # 3 excerpts: enough with bge-m3, and a shorter prompt to read
