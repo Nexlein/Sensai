@@ -51,20 +51,22 @@ des observations de cette version, pas une validation de la version rebasée.
 
 ## Critères notés
 
-| Critère                                     | État | Document                                                                             |
-| ------------------------------------------- | ---- | ------------------------------------------------------------------------------------ |
-| 7. Culture IA (4 pts)                       | ⚠️   | [modeles.md](modeles.md), à répéter à l'oral                                         |
-| 9. Amélioration mesurée (3 pts)             | ✅   | [benchmarks.md](benchmarks.md) : A/B RAG et persona, script rejouable                |
-| Tests qui affichent plus que « OK »         | ✅   | [tests.md](tests.md) : chaque test par titre, ✓/✗, résumé par zone                   |
-| Limites du modèle (hallucination, codename) | ⚠️   | [prompts-de-test.md](prompts-de-test.md#limites-du-modèle)                           |
-| Scénario, persona, latence                  | ⚠️   | [scenario.md](scenario.md) : scénario fixé, à valider par l'équipe                   |
-| Jeu de données cohérent                     | ⚠️   | [`data/collecte/`](../../data/collecte/) : base à enrichir                           |
-| 2 user stories par feature                  | ✅   | [`../USER_STORIES.md`](../USER_STORIES.md) ; s'entraîner au quiz « story → feature » |
-| Démo théâtralisée                           | ⚠️   | [demo-script.md](demo-script.md), à répéter                                          |
-| RGPD + fuite + contraintes techniques       | ⚠️   | [securite-rgpd.md](securite-rgpd.md)                                                 |
-| Coûts-bénéfices                             | ⚠️   | [couts-benefices.md](couts-benefices.md) : hypothèses à confirmer                    |
-| Sécurité montrée dans le code               | ✅   | [securite-rgpd.md](securite-rgpd.md#où-le-code-se-protège)                           |
-| 16. Décisions et alternatives (6 pts)       | ⚠️   | [decisions.md](decisions.md)                                                         |
+| Critère                                     | État | Document                                                                                                             |
+| ------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
+| 7. Culture IA (4 pts)                       | ⚠️   | [modeles.md](modeles.md), à répéter à l'oral                                                                         |
+| 9. Amélioration mesurée (3 pts)             | ✅   | [benchmarks.md](benchmarks.md) : A/B RAG et persona, script rejouable                                                |
+| Tests qui affichent plus que « OK »         | ✅   | [tests.md](tests.md) : chaque test par titre, ✓/✗, résumé par zone                                                   |
+| Limites du modèle (hallucination, codename) | ⚠️   | [prompts-de-test.md](prompts-de-test.md#limites-du-modèle)                                                           |
+| Scénario, persona, latence                  | ⚠️   | [scenario.md](scenario.md) : scénario fixé, à valider par l'équipe                                                   |
+| Jeu de données cohérent                     | ⚠️   | [`data/collecte/`](../../data/collecte/) : base à enrichir                                                           |
+| 2 user stories par feature                  | ✅   | [`../USER_STORIES.md`](../USER_STORIES.md) ; s'entraîner au quiz « story → feature »                                 |
+| Démo théâtralisée                           | ⚠️   | [demo-script.md](demo-script.md), à répéter                                                                          |
+| RGPD + fuite + contraintes techniques       | ⚠️   | [securite-rgpd.md](securite-rgpd.md)                                                                                 |
+| Coûts-bénéfices                             | ⚠️   | [couts-benefices.md](couts-benefices.md) : hypothèses à confirmer                                                    |
+| Sécurité montrée dans le code               | ✅   | [securite-rgpd.md](securite-rgpd.md#où-le-code-se-protège)                                                           |
+| 16. Décisions et alternatives (6 pts)       | ⚠️   | [decisions.md](decisions.md)                                                                                         |
+| Ordre du prompt justifié                    | ✅   | [observabilite.md](observabilite.md#pourquoi-cet-ordre) : règle par bloc, alternatives écartées                      |
+| Pivots et features retirées                 | ✅   | [decisions.md](decisions.md#pivots--features-modifiées-ou-retirées-en-cours-de-route) : date, raison, impact, commit |
 
 ## Priorités de développement avant la soutenance
 
