@@ -446,6 +446,9 @@ Acceptance criteria:
 - The Stop button cancels the current reply and leaves no unanswered message in the history.
 - A second message sent while a reply is in progress is refused with a message, not queued.
 - A failing model server shows a one-line error in the page and the page stays usable.
+- Any other error during a turn also shows one line in the page and releases it; the terminal gets one line, never a traceback.
+- Closing or reloading the page during a reply, or a frame that is not JSON, leaves no error in the terminal.
+- If port 8000 is taken, Sensai says so in one line and does not print the page address.
 
 ## Feature: Domain Persona
 
@@ -528,6 +531,7 @@ Acceptance criteria:
 - `[options]` accepts `temperature`, `num_ctx`, `top_p`, `seed` and `num_predict`; each one set is sent in the `options` field of `/api/chat`, and `num_ctx` shows in the `CONTEXT` column of `ollama ps`.
 - Without an `[options]` section the request is unchanged.
 - `budget.max_tokens` above `num_ctx - num_predict` is rejected at startup with a one-line config error.
+- Without `num_ctx` in the file, the window grows to hold `budget.max_tokens + num_predict`, so setting `num_predict` alone never stops startup.
 - `temperature = 0` with `seed = 42` gives the same reply twice for the same prompt.
 
 As a user demonstrating the effect of a setting, I want to change a model option during a session, so that I can replay the same question and compare the replies.

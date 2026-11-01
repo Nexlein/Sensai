@@ -379,8 +379,9 @@ jouée pour de vrai, mais les gros téléchargements sont déjà faits, pour ne 
 salle. À faire par Alban, une seule fois :
 
 ```bash
-# Ollama (ollama-cuda pour NVIDIA, ollama-rocm pour AMD), uv et Git
-sudo pacman -S ollama-cuda uv git
+# Ollama pour carte NVIDIA, uv et Git. ollama-cuda doit avoir la même version que ollama :
+# sinon chaque modèle plante au chargement (segmentation fault).
+sudo pacman -S ollama ollama-cuda uv git
 sudo systemctl enable --now ollama
 ollama pull qwen3.5:4b
 ollama pull bge-m3

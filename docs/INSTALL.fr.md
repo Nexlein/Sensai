@@ -29,8 +29,9 @@ demandé) :
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-Sous Arch Linux, passez plutôt par les paquets : `sudo pacman -S ollama-cuda uv git` avec une carte
-NVIDIA (`ollama-rocm` pour AMD, `ollama` sans carte graphique), puis
+Sous Arch Linux, passez plutôt par les paquets : `sudo pacman -S ollama ollama-cuda uv git` avec une
+carte NVIDIA (`ollama-rocm` pour AMD, `ollama` seul sans carte graphique ; `ollama-cuda` doit avoir la
+même version que `ollama`), puis
 `sudo systemctl enable --now ollama`. uv et Git sont alors installés aussi : l'étape 3 et la ligne Git
 de l'étape 4 sont déjà faites.
 

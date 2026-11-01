@@ -35,8 +35,9 @@ If it prints a version number, go to step 2. Otherwise install it (it asks for y
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-On Arch Linux, use the packages instead: `sudo pacman -S ollama-cuda uv git` for an NVIDIA card
-(`ollama-rocm` for AMD, `ollama` without a graphics card), then `sudo systemctl enable --now ollama`.
+On Arch Linux, use the packages instead: `sudo pacman -S ollama ollama-cuda uv git` for an NVIDIA card
+(`ollama-rocm` for AMD, `ollama` alone without a graphics card; keep `ollama-cuda` at the same
+version as `ollama`), then `sudo systemctl enable --now ollama`.
 uv and Git are then installed too, so step 3 and the Git line of step 4 are already done.
 
 ### 2. Download the two models
