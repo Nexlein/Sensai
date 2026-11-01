@@ -10,66 +10,70 @@ collecte les ordures ménagères, les emballages, les biodéchets et les encombr
 22 bennes, un dépôt central. La régie traite des données d'usagers (adresses, téléphones,
 signalements) et dépend d'un budget public serré.
 
-## Utilisateurs cibles
+## Utilisateur cible : Camille Roux, service usagers
 
-### Persona principale : Karim, chef d'équipe collecte
+Fiche personnage complète, à connaître avant de jouer : [persona.md](persona.md).
 
-- 44 ans, 18 ans de métier, encadre 3 équipages (chauffeur + 2 ripeurs).
-- Prise de poste à 5 h 15 au dépôt, retour vers 12 h 30.
-- Poste de travail : un PC partagé au bureau du dépôt, pas de GPU, réseau de la collectivité.
-- Pas développeur, à l'aise avec un navigateur, peu avec un terminal → interface **web** pendant la démo.
+- 29 ans, au service usagers de la régie depuis 3 ans. Répond à environ 40 appels et mails par jour
+  (« mon bac n'a pas été vidé », « quel jour passe le jaune ? », encombrants, réclamations).
+- Poste de travail : PC de la collectivité sous Linux. Fonctionne avec ou sans carte graphique
+  (30 s à 1 min par réponse sans, mesuré).
+- Pas développeur, à l'aise avec un navigateur → interface **web**. Sait suivre un guide et
+  copier-coller des commandes : c'est Camille qui installe Sensai pendant la pièce, avec le README pour
+  seule aide (acte 0 de [demo-script.md](demo-script.md)).
+- Manipule des données personnelles en permanence (téléphones, adresses mail) : la DSI a interdit
+  ChatGPT. C'est ce qui justifie un modèle local **et** les guardrails PII.
 
 **Besoins métier** :
 
-1. **Briefing du matin** : retrouver vite la consigne du jour (secteur, plan hivernal, rue en travaux).
-2. **Rapports d'incident au retour** : bac non conforme, dépôt sauvage, presqu'accident. Aujourd'hui
-   rédigés à la main en 15 à 20 minutes, souvent incomplets.
-3. **Réponses aux ripeurs** : « ce bac, on le prend ou pas ? », « la marche arrière dans l'impasse,
-   c'est autorisé ? » → réponse sourcée dans le règlement et les fiches sécurité.
-
-### Persona secondaire : Léa, agente du service usagers
-
-- Répond au téléphone et aux mails des usagers (« pourquoi mon bac n'a pas été vidé ? »).
-- Manipule des données personnelles en permanence (nom, adresse, téléphone, email) → justifie
-  les guardrails PII.
+1. **Répondre vite et juste** : jour de collecte par commune, motifs de refus, plan hivernal. Les
+   réponses sont dans six documents différents.
+2. **Rédiger les courriers aux usagers** selon les modèles officiels, avec sa signature, et les ranger.
+   Aujourd'hui 10 à 15 minutes par courrier.
+3. **Ne jamais exposer les données des usagers**, y compris quand le texte vient d'un formulaire en
+   ligne qui peut contenir n'importe quoi.
+4. **Ne pas recevoir d'information inventée** : une fausse date de collecte, c'est un usager qui
+   rappelle en colère.
 
 ## Pourquoi un assistant local
 
-| Contrainte                    | Conséquence                                                            |
-| ----------------------------- | ---------------------------------------------------------------------- |
-| Données d'usagers (RGPD)      | Rien ne sort du dépôt : Ollama local, pas d'API cloud (Groq désactivé) |
-| Budget public                 | Pas d'abonnement par token, matériel déjà présent ou un mini-PC        |
-| Réseau du dépôt parfois coupé | Fonctionne hors ligne (sauf recherche web, optionnelle)                |
-| Documents internes            | Règlement, fiches sécurité, plan hivernal → RAG sur `data/collecte/`   |
+| Contrainte               | Conséquence                                                            |
+| ------------------------ | ---------------------------------------------------------------------- |
+| Données d'usagers (RGPD) | Rien ne sort du dépôt : Ollama local, pas d'API cloud (Groq désactivé) |
+| Budget public            | Pas d'abonnement par token, matériel déjà présent ou un mini-PC        |
+| Réseau parfois coupé     | Fonctionne hors ligne (sauf recherche web, optionnelle)                |
+| Documents internes       | Règlement, fiches sécurité, plan hivernal → RAG sur `data/collecte/`   |
 
 ## Cohérence avec la latence locale
 
 Un modèle 4B quantifié sur CPU produit de l'ordre de 5 à 20 tokens/s (à mesurer, voir
 [observabilite.md](observabilite.md#débit-tokenss)). Une réponse de 150 tokens prend donc 10 à 30 s.
 
-- **Acceptable** : au bureau, briefing ou rédaction d'un rapport. 20 s contre 15 minutes de rédaction.
-- **Non acceptable** : en cabine pendant la conduite ou en assistant vocal temps réel. **Exclu du
-  scope** (et dangereux : l'agent ne doit pas manipuler d'écran en conduisant).
+- **Acceptable** : au bureau, pour un courrier ou une question pendant un appel. 30 s à 1 min contre
+  5 minutes de recherche ou 15 minutes de rédaction. Mesures réelles dans [demo-script.md](demo-script.md#temps-mesurés-1er-novembre-pc-de-nielsen-sur-secteur).
+- **Non acceptable** : un assistant vocal temps réel au téléphone. **Exclu du scope**.
 - Le streaming rend l'attente supportable : le premier mot arrive après le temps de traitement du
   prompt, pas après la réponse complète. L'indicateur « thinking… N s » montre que rien n'est figé.
 
 ## Features au service du scénario
 
-| Feature                    | Usage dans le scénario                                                           |
-| -------------------------- | -------------------------------------------------------------------------------- |
-| R1 RAG                     | Règlement de collecte, consignes de tri, fiches sécurité, plan hivernal          |
-| EV2 Guardrails PII         | Léa colle un mail d'usager : email et téléphone masqués avant le modèle          |
-| EV2 Injection              | Un usager écrit « ignore tes instructions » dans un formulaire de réclamation    |
-| T4 Fichiers                | Lire / écrire les rapports d'incident dans `rapports/`                           |
-| A3 Confirmation humaine    | Karim valide chaque écriture de rapport avant qu'elle ait lieu                   |
-| M3 Mémoire structurée      | Retient « secteur de Karim = B », « équipage 2 = benne 14 »                      |
-| M1 Sessions                | Reprendre le rapport commencé la veille (`--session incident-1018`)              |
-| M2 Budget de tokens        | Longues journées de questions sans dépasser le contexte                          |
-| X1 Web UI                  | Interface pour un utilisateur non technique                                      |
-| EV1 Juge / EV4 Adversarial | Prouver que les réponses sont fidèles aux documents et que les attaques échouent |
+Présentées (12 étoiles), activées par [`sensai.example.toml`](../../sensai.example.toml) :
 
-Hors scénario mais présent dans le code (à présenter comme « capacités techniques », pas comme besoin
-de Karim) : sandbox Python (T2), MCP (T1), Groq. Voir [decisions.md](decisions.md).
+| Feature                 | ⭐  | Usage dans le scénario                                                         |
+| ----------------------- | --- | ------------------------------------------------------------------------------ |
+| X1 Web UI               | 1   | Interface pour un utilisateur non technique                                    |
+| A5 Persona              | 1   | « Sensai Collecte » : vocabulaire métier, sources citées, « je ne sais pas »   |
+| R1 RAG                  | 2   | Calendrier des secteurs, consignes de tri, plan hivernal, modèles de courriers |
+| T4 Fichiers             | 1   | Enregistrer les courriers aux usagers dans `courriers/`                        |
+| A3 Confirmation humaine | 1   | Camille valide chaque courrier, aperçu à l'appui, avant qu'il soit écrit       |
+| M3 Mémoire structurée   | 2   | Retient la signature de Camille et la réutilise dans les courriers             |
+| EV2 Guardrails          | 3   | Mail d'usager : téléphone et email masqués ; injection bloquée                 |
+| M1 Sessions             | 1   | Reprendre la journée de la veille (`--session usagers`)                        |
+
+Présentes dans le code mais coupées pour la soutenance (à présenter comme « capacités techniques »
+si le jury demande, pas comme besoin de Camille) : M2 compression (`[budget] compress = false`), A1
+raisonnement, EV1 juge, EV4 suite adversariale, T2 sandbox, T3 recherche web, T1 MCP, Groq. Voir
+[decisions.md](decisions.md).
 
 ## Jeu de données
 
@@ -77,7 +81,7 @@ Dossier [`data/collecte/`](../../data/collecte/), au format Markdown (ingéré t
 
 | Fichier                     | Contenu                                                       | Sert à tester                    |
 | --------------------------- | ------------------------------------------------------------- | -------------------------------- |
-| `consignes-tri.md`          | Quel déchet dans quel bac, refus de collecte                  | Questions de tri des ripeurs     |
+| `consignes-tri.md`          | Quel déchet dans quel bac, refus de collecte                  | Motifs de refus, encombrants     |
 | `calendrier-secteurs.md`    | Secteurs A à D, jours et horaires                             | Faits locaux inconnus du modèle  |
 | `securite-collecte.md`      | Règles internes de sécurité (marche arrière, marchepied, EPI) | Réponses sourcées, non inventées |
 | `procedure-incidents.md`    | Types d'incidents, délais, contenu d'un rapport               | Rédaction de rapport             |

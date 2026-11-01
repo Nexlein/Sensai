@@ -6,15 +6,15 @@ jamais sur « on connaissait déjà ».
 
 ## Features volontairement non implémentées
 
-| Feature                       | Pourquoi on l'a exclue (architecture et scénario)                                                                                                                                                          |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A2 Multi-agents**           | Chaque agent = un appel modèle de plus. Sur CPU à ~15 tok/s, trois agents en série triplent une latence déjà de 10 à 30 s. Les besoins de Karim (chercher, rédiger) tiennent dans une boucle ReAct unique. |
-| **R2 RAG avancé (reranking)** | Un reranker est un second modèle à charger et à appeler sur chaque chunk : RAM et latence en plus pour un corpus de quelques dizaines de pages, où la recherche cosinus suffit.                            |
-| **Assistant vocal en cabine** | Hors scope pour la sécurité (conduite) et incompatible avec la latence CPU.                                                                                                                                |
-| **X5 Planification**          | Pas de besoin : les tournées sont planifiées dans l'outil métier existant, pas dans l'assistant.                                                                                                           |
+| Feature                       | Pourquoi on l'a exclue (architecture et scénario)                                                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A2 Multi-agents**           | Chaque agent = un appel modèle de plus. Sur CPU à ~15 tok/s, trois agents en série triplent une latence déjà de 10 à 30 s. Les besoins de Camille (chercher, rédiger) tiennent dans une boucle ReAct unique. |
+| **R2 RAG avancé (reranking)** | Un reranker est un second modèle à charger et à appeler sur chaque chunk : RAM et latence en plus pour un corpus de quelques dizaines de pages, où la recherche cosinus suffit.                              |
+| **Assistant vocal en cabine** | Hors scope pour la sécurité (conduite) et incompatible avec la latence CPU.                                                                                                                                  |
+| **X5 Planification**          | Pas de besoin : les tournées sont planifiées dans l'outil métier existant, pas dans l'assistant.                                                                                                             |
 
 Présent dans le code mais hors scénario (à assumer) : sandbox Python (T2), MCP (T1), Groq. Ils
-prouvent l'extensibilité de l'architecture, pas un besoin de Karim. La sandbox peut se justifier
+prouvent l'extensibilité de l'architecture, pas un besoin de Camille. La sandbox peut se justifier
 pour les calculs (les petits modèles se trompent en arithmétique), Groq est à désactiver pour
 raisons RGPD.
 
@@ -71,6 +71,21 @@ retrouverait plus de choses, mais opaque et impossible à corriger précisément
 Imposé par le sujet, mais aussi utile : le pipeline complet tient dans `core/engine.py`,
 `core/streaming.py` et `core/tool_runner.py`, et nous a obligés à comprendre le format d'outils
 d'Ollama, le streaming NDJSON et le découpage des PII entre chunks.
+
+### 7. Décisions mesurées en répétant la démo (1er novembre)
+
+Trois problèmes trouvés en jouant le script sur le PC de démo, chacun corrigé avec une mesure avant et
+après. Ce sont de bons exemples d'« amélioration mesurée » à raconter au jury.
+
+| Problème constaté                                                                | Mesure avant                                                    | Correction                                                                 | Mesure après                                                      |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Raisonnement coupé, mais qwen3.5 réfléchit quand même (`thinking.default: true`) | **540 s** pour une question, 4 073 tokens de réflexion cachée   | Sensai envoie `think: false` quand `[reasoning] enabled = false`           | **3,9 s**                                                         |
+| `nomic-embed-text` (anglais) ne retrouve pas nos documents français              | Calendrier au rang 10, plan hivernal au rang 15 (sur 26 chunks) | `bge-m3`, modèle d'embedding multilingue, et `top_k = 3`                   | Calendrier au rang 2, plan hivernal au rang 1 ; prompt plus court |
+| Le modèle 4B lit mal un tableau Markdown (colonne voisine)                       | « bac jaune le mardi et le vendredi » (colonne du bac marron)   | Calendrier réécrit en une phrase par secteur dans `calendrier-secteurs.md` | « le mercredi », correct                                          |
+
+Écarté : réordonner le prompt pour profiter du cache d'Ollama. Mesuré : avec qwen3.5 sur CPU, le cache
+ne sert que si la requête prolonge exactement la précédente (cas des appels d'outils dans un même tour),
+pas d'un tour à l'autre.
 
 ## Alternatives : si c'était à refaire
 

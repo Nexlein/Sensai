@@ -33,7 +33,7 @@ raisonnement mémorisées, mais plus de mémoire et moins de vitesse.
 - 4B en Q4 : tient largement, ~10 à 25 tok/s sur CPU.
 - 7B en Q4 : tient, environ deux fois plus lent que le 4B (deux fois plus d'octets lus par token).
 - 70B en Q4 : 42 Go de poids, **ne tient pas** dans 32 Go. Même sur une machine à 64 Go, ~1 tok/s
-  sur CPU : une réponse de 200 tokens prend plus de 3 minutes. Inutilisable pour Karim.
+  sur CPU : une réponse de 200 tokens prend plus de 3 minutes. Inutilisable pour Camille.
 
 Compromis : le 70B raisonne mieux, suit mieux les consignes et hallucine moins, mais le temps de
 réponse sort du cadre du scénario ([scenario.md](scenario.md#cohérence-avec-la-latence-locale)).
@@ -90,7 +90,7 @@ haute précision.
 1. **Tool calling fiable à 4B** : nos features clés (fichiers, mémoire, rapport d'incident) reposent
    sur des appels d'outils. Llama 3.2 3B inventait le contenu après avoir lu un fichier ; il a fallu
    un Modelfile spécial (`ollama/Modelfile`) pour le cadrer.
-2. **Français** : utilisateurs francophones (Karim, Léa).
+2. **Français** : utilisateurs francophones (Camille, service usagers).
 3. **Taille** : 4B en Q4 tient sur un PC de dépôt sans GPU avec un débit compatible du scénario.
 4. **Raisonnement réglable** : `think` (`/effort`) permet d'arbitrer qualité contre latence en direct.
 5. **Licence Apache 2.0** : déploiement possible dans une collectivité sans contrainte de licence.
