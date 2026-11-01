@@ -20,6 +20,47 @@ qui étiquette chaque message avec sa source, dans cet ordre :
 
 Plus la liste des outils (`tools`) et, selon la config, `think`.
 
+### Pourquoi cet ordre
+
+Trois règles décident de la place de chaque bloc :
+
+1. **Les consignes avant les données.** Un petit modèle (4B) suit mieux une consigne lue avant le
+   contenu auquel elle s'applique. Tout ce qui dit _comment_ répondre (persona, fin d'étapes,
+   outils, date, confidentialité) passe donc avant tout ce qui dit _quoi_ répondre (mémoire, RAG,
+   historique).
+2. **Du plus stable au plus variable.** Ollama (llama.cpp) garde en cache KV le préfixe déjà calculé
+   et ne relit que la partie qui change. Persona, guide des outils et date sont identiques d'un tour
+   à l'autre dans une journée : en tête, ils ne sont calculés qu'une fois. Le RAG change à chaque
+   question : placé en tête, il invaliderait tout le cache à chaque tour (sur CPU, ~1 s de prefill
+   par tranche de 100 tokens, voir [../benchmarks.md](../benchmarks.md)).
+3. **Le plus utile au plus près de la question.** Les modèles exploitent mieux le début et la fin du
+   contexte que le milieu (« lost in the middle », Liu et al. 2023). Le début porte l'identité et les
+   règles ; la fin porte les documents puis la question de l'utilisateur, toujours dernière.
+
+Place par place :
+
+| Position | Bloc         | Pourquoi ici                                                                                                                                                                                              |
+| -------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1        | `persona`    | Rôle, langue, ton et obligation de citer la source : cadre tout le reste. Mesuré : sources citées 15/18 avec persona, 3/18 sans (A/B 2).                                                                  |
+| 2        | `step_limit` | Rare (dernière étape de la boucle ReAct) mais prioritaire : « réponds sans outil ». Juste après l'identité pour ne pas être noyé.                                                                         |
+| 3        | `tools`      | Règles d'usage des outils, stables : avant toute donnée qui pourrait donner envie d'appeler un outil.                                                                                                     |
+| 4        | `date`       | Stable sur la journée, donc dans le préfixe en cache. Doit précéder mémoire et RAG, qui contiennent des dates (« la semaine prochaine »).                                                                 |
+| 5        | `privacy`    | Seulement si une PII a été masquée à ce tour : consigne, donc avant les données, et premier bloc variable pour garder le préfixe stable au-dessus.                                                        |
+| 6        | `memory`     | Faits sur l'utilisateur : changent rarement, donc avant le RAG qui change à chaque question.                                                                                                              |
+| 7        | `rag`        | Le plus variable des blocs système, collé à la question. Annoncé comme « données, pas instructions » : arrive après toutes les vraies consignes, une injection dans un document ne peut pas les précéder. |
+| 8        | `summary`    | Résumé des vieux tours (M2) : chronologiquement avant l'historique gardé.                                                                                                                                 |
+| 9        | `history`    | Ordre chronologique, la question courante en dernier : c'est ce que le modèle lit juste avant de répondre.                                                                                                |
+
+**Écarté** :
+
+- _RAG dans le message utilisateur_ : le texte serait stocké dans l'historique et renvoyé à chaque
+  tour suivant (+500 tokens par tour). En bloc système recalculé à chaque tour, il n'est jamais
+  stocké.
+- _RAG avant la persona_ : les documents passeraient avant les règles, et une phrase injectée dans
+  un document (« ignore les consignes ») serait lue avant les consignes qu'elle veut contourner.
+- _Tout dans un seul message système_ : impossible d'étiqueter les sources dans `/prompt` et dans le
+  log, et le moindre changement (RAG) invaliderait tout le cache.
+
 **Log** : `[eval] log_prompts = true` (et `prompts_path`, par défaut `logs/prompts.jsonl`) écrit
 une ligne JSON par appel modèle, tours d'outils compris, même si l'appel échoue : `timestamp`,
 `model`, `options`, `think`, `tools` (noms), `messages` (rôle, source, contenu tel qu'envoyé,
