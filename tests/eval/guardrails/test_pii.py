@@ -143,23 +143,31 @@ def test_redact_is_idempotent():
     assert matches == []
 
 
+def _scan_seconds(text: str) -> float:
+    start = time.perf_counter()
+    find_pii(text)
+    find_injection(text)
+    return time.perf_counter() - start
+
+
 @pytest.mark.parametrize(
-    "hostile",
+    "unit, count",
     [
-        "1-" * 100_000,
-        "1 " * 100_000,
-        "a@" * 100_000,
-        "a." * 100_000,
-        "ignore " * 20_000,
-        "give me your " * 20_000,
-        "donne-moi ton " * 20_000,
+        ("1-", 25_000),
+        ("1 ", 25_000),
+        ("a@", 25_000),
+        ("a.", 25_000),
+        ("ignore ", 5_000),
+        ("give me your ", 5_000),
+        ("donne-moi ton ", 5_000),
     ],
 )
-def test_detectors_stay_linear_on_hostile_input(hostile):
-    start = time.perf_counter()
-    find_pii(hostile)
-    find_injection(hostile)
-    assert time.perf_counter() - start < 2.0
+def test_detectors_stay_linear_on_hostile_input(unit, count):
+    # 4x the input costs about 4x the time when linear, 16x with backtracking. A ratio,
+    # not a fixed number of seconds, so a slow or busy machine does not fail it.
+    small = max(_scan_seconds(unit * count), 1e-3)
+    large = _scan_seconds(unit * count * 4)
+    assert large / small < 8
 
 
 def test_email_with_over_long_local_part_is_still_redacted():
