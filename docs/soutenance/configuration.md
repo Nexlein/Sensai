@@ -116,6 +116,9 @@ l'installation (`cp sensai.example.toml sensai.toml`). Le test
 `test_shipped_example_config_turns_on_only_the_presented_features` (`tests/core/test_config.py`)
 casse la CI si le fichier dérive.
 
+`autosave = false` dans ce fichier : un `/persona off` pendant la pièce reste dans la session et ne
+réécrit pas `sensai.toml`.
+
 Restent actifs quelle que soit la config, car ce sont des prérequis : compteur de tokens (estimation
 en direct et vrais comptes), débit, `/prompt`, `[eval] log_prompts`, `/ps`, erreurs en une ligne.
 

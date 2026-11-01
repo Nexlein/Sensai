@@ -196,7 +196,8 @@ uv run sensai config keys rag                      # what each RAG setting does
 ```
 
 Inside a session, `/config set` applies a change to the next turn and **saves it at once**
-(`autosave = true`), keeping your comments in the file. Invalid values are refused with one
+(`autosave = true`), keeping your comments in the file. `sensai.example.toml` sets
+`autosave = false`, so a session never rewrites the demo file. Invalid values are refused with one
 line. Full reference, every key, live vs restart: [docs/configuration.md](docs/configuration.md).
 
 ```toml

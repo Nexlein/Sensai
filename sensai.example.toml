@@ -15,9 +15,10 @@ interface = "web"                    # X1: cli | tui | web (http://127.0.0.1:800
 provider = "ollama"                  # local model only: user data never leaves the PC
 model = "qwen3.5:4b"
 base_url = "http://localhost:11434"
+autosave = false                     # changes made in a session (/persona off...) stay in the session
 
 [options]                            # sent to Ollama with every request
-temperature = 0.2                    # low = factual, repeatable answers
+temperature = 0.0                    # measured best for factual answers (docs/benchmarks.md)
 seed = 42                            # same question, same answer: rehearsals match the show
 num_ctx = 8192                       # context window, in tokens
 num_predict = 1024                   # longest reply, in tokens

@@ -78,7 +78,7 @@ Prompt log: `PromptComposer.compose_parts` returns `PromptPart`s (message + sour
 
 Real usage: providers end a call with a `UsageEvent` (Ollama: `done` object, ns → s; Groq: `usage` or `x_groq.usage`), which carries computed `reply_rate`, `prompt_rate` and `first_token_seconds`. `RoundStream` keeps it on `Round.usage` and passes it on; the UIs show `interfaces/usage.format_metrics` of the last one under the budget line (nothing when no counters), and the prompt log adds `usage` and `estimate_error`. The 4-chars/token estimate still drives the budget.
 
-Defense config: `sensai.example.toml` (root, versioned) turns on only the presented features (X1, A5, R1, EV2, M3, T4, A3, M1) and off the rest; `test_shipped_example_config_turns_on_only_the_presented_features` guards it. It also sets `[budget] enabled = false` (M2 summarization off, token count kept). User install guide: README "Install and run" + `docs/INSTALL.fr.md`.
+Defense config: `sensai.example.toml` (root, versioned) turns on only the presented features (X1, A5, R1, EV2, M3, T4, A3, M1) and off the rest; `test_shipped_example_config_turns_on_only_the_presented_features` guards it. It also sets `[budget] enabled = false` (M2 summarization off, token count kept) and `autosave = false`. User install guide: README "Install and run" + `docs/INSTALL.fr.md`.
 
 Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`).
 
