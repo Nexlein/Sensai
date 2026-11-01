@@ -28,13 +28,15 @@ INDEX_PATH = Path(__file__).parent / "index.html"
 
 
 def history_payload(context: CommandContext) -> dict[str, Any]:
-    """Past user and assistant messages, so a reload shows the resumed session."""
+    """Session id and past user and assistant messages, so a reload shows the
+    resumed session. The page replaces what it shows with them."""
+    conversation = context.engine.conversation
     messages = [
         {"role": m.role, "content": m.content}
-        for m in context.engine.conversation.messages
+        for m in conversation.messages
         if m.role in ("user", "assistant") and m.content
     ]
-    return {"type": "history", "messages": messages}
+    return {"type": "history", "session": conversation.id, "messages": messages}
 
 
 def event_payload(event: Event) -> dict[str, Any] | None:
@@ -127,6 +129,8 @@ class WebTurn:
             result = await process_input(
                 self.context, text, self._render, confirm_tool=self._confirm_tool
             )
+            if result.reset_view:
+                await self.websocket.send_json(history_payload(self.context))
             if result.message:
                 await self.websocket.send_json(
                     {"type": "notice", "message": result.message}

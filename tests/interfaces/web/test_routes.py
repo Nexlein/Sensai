@@ -98,7 +98,11 @@ def test_message_streams_chunks_then_done_and_saves_the_conversation():
     client = TestClient(build_app(context))
 
     with client.websocket_connect("/ws") as ws:
-        assert ws.receive_json() == {"type": "history", "messages": []}
+        assert ws.receive_json() == {
+            "type": "history",
+            "session": context.engine.conversation.id,
+            "messages": [],
+        }
         ws.send_json({"type": "message", "text": "hi"})
         seen = _until(ws, "done")
 
@@ -174,6 +178,18 @@ def test_history_replays_the_resumed_conversation():
     ]
 
 
+def test_history_names_the_resumed_session():
+    conversation = Conversation(id="depot")
+    client = TestClient(
+        build_app(_context(MockLLMProvider(), conversation=conversation))
+    )
+
+    with client.websocket_connect("/ws") as ws:
+        history = ws.receive_json()
+
+    assert history["session"] == "depot"
+
+
 def test_slash_command_goes_through_the_shared_handler():
     client = TestClient(build_app(_context(MockLLMProvider())))
 
@@ -183,6 +199,35 @@ def test_slash_command_goes_through_the_shared_handler():
         seen = _until(ws, "done")
 
     assert {"type": "notice", "message": "Conversation cleared."} in seen
+
+
+@pytest.mark.parametrize("command", ["/clear", "/new"])
+def test_clear_and_new_redraw_the_page_before_the_notice(command):
+    context = _context(MockLLMProvider("ok", simulated_delay=0))
+    client = TestClient(build_app(context))
+
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "message", "text": "hi"})
+        _until(ws, "done")
+        ws.send_json({"type": "message", "text": command})
+        seen = _until(ws, "done")
+
+    kinds = [m["type"] for m in seen]
+    assert kinds == ["history", "notice", "done"]
+    assert seen[0]["messages"] == []
+    assert seen[0]["session"] == context.engine.conversation.id
+
+
+def test_other_commands_leave_the_page_as_it_is():
+    client = TestClient(build_app(_context(MockLLMProvider())))
+
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "message", "text": "/help"})
+        seen = _until(ws, "done")
+
+    assert "history" not in [m["type"] for m in seen]
 
 
 @pytest.mark.parametrize("text", ["", "   "])
