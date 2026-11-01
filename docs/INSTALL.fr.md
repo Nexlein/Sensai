@@ -1,6 +1,6 @@
 # Installer et lancer Sensai (Ubuntu / Debian)
 
-[English version in the README](../README.md#-install-and-run-ubuntu--debian)
+[English version in the README](../README.md#install-and-run-ubuntu--debian)
 
 Sensai est un assistant IA qui tourne entièrement sur votre ordinateur, avec [Ollama](https://ollama.com/).
 Rien de ce que vous tapez n'est envoyé à un service en ligne. Il répond à partir de vos propres
