@@ -1,3 +1,5 @@
+"""JSONL loggers: turns, replies, prompts."""
+
 import json
 from pathlib import Path
 

@@ -1,3 +1,5 @@
+"""HTTP provider base."""
+
 import httpx
 import pytest
 

@@ -1,3 +1,5 @@
+"""TUI app."""
+
 from sensai.core.commands import CommandContext
 from sensai.core.config import AppConfig
 from sensai.core.engine import ChatEngine

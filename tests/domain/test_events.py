@@ -1,3 +1,5 @@
+"""Domain events, including usage counters."""
+
 import pytest
 from pydantic import ValidationError
 

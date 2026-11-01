@@ -1,3 +1,5 @@
+"""SQLite schema."""
+
 import pathlib
 import sqlite3
 from contextlib import closing

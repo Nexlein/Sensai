@@ -1,3 +1,5 @@
+"""Ollama provider, with optional live tests against a real model."""
+
 import json
 import os
 

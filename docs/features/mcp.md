@@ -1,6 +1,6 @@
 # MCP in Sensai
 
-How Sensai talks to MCP servers, explained from scratch. Written for someone who has never used MCP or tool calling. For the short "how do I configure it" version, see the MCP section of the [README](../README.md).
+How Sensai talks to MCP servers, explained from scratch. Written for someone who has never used MCP or tool calling. For the short "how do I configure it" version, see the MCP section of the [README](../../README.md).
 
 ## Contents
 

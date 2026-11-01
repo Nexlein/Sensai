@@ -1,3 +1,5 @@
+"""Tool registry."""
+
 import inspect
 import json
 import re

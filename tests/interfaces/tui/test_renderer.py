@@ -1,3 +1,5 @@
+"""TUI renderer."""
+
 import asyncio
 from collections.abc import AsyncIterator
 

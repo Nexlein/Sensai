@@ -1,6 +1,9 @@
+import heapq
 import json
 import math
+import operator
 import sqlite3
+from array import array
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 
@@ -11,6 +14,23 @@ def _validate_embedding(embedding: list[float] | None) -> list[float]:
     if not embedding or not all(math.isfinite(value) for value in embedding):
         raise ValueError("Every stored chunk needs a non-empty, finite embedding")
     return embedding
+
+
+def _dot(v1: "list[float] | array[float]", v2: "list[float] | array[float]") -> float:
+    """Dot product in C when the interpreter has `math.sumprod` (3.12+)."""
+    sumprod = getattr(math, "sumprod", None)
+    if sumprod is not None:
+        return sumprod(v1, v2)
+    return sum(map(operator.mul, v1, v2))
+
+
+def _decode(raw: bytes | str) -> "array[float]":
+    """A stored embedding: packed doubles, or JSON from indexes built before."""
+    if isinstance(raw, bytes):
+        vector = array("d")
+        vector.frombytes(raw)
+        return vector
+    return array("d", json.loads(raw))
 
 
 def cosine_similarity(v1: list[float], v2: list[float]) -> float:
@@ -64,7 +84,7 @@ class SQLiteVectorStore:
                     chunk.doc_id,
                     chunk.text,
                     json.dumps(chunk.metadata),
-                    json.dumps(_validate_embedding(chunk.embedding)),
+                    array("d", _validate_embedding(chunk.embedding)).tobytes(),
                 ),
             )
 
@@ -80,30 +100,47 @@ class SQLiteVectorStore:
             self._insert_chunks(conn, chunks)
 
     def search(self, query_embedding: list[float], top_k: int = 5) -> list[ScoredChunk]:
-        """Return the top K chunks for a compatible query embedding."""
-        _validate_embedding(query_embedding)
+        """Return the top K chunks for a compatible query embedding.
+
+        Only the vectors are read to score every chunk (packed doubles, C dot
+        product); text and metadata are then fetched for the K best alone.
+        """
+        query = _validate_embedding(query_embedding)
         if top_k <= 0:
             raise ValueError("top_k must be positive")
+        query_norm = math.sqrt(_dot(query, query))
         with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT id, doc_id, text, metadata, embedding FROM chunks"
-            ).fetchall()
-
-        results = []
-        for cid, doc_id, text, meta_str, emb_str in rows:
-            if not emb_str:
-                continue
-            embedding = json.loads(emb_str)
-            results.append(
-                ScoredChunk(
-                    id=cid,
-                    doc_id=doc_id,
-                    text=text,
-                    metadata=json.loads(meta_str) if meta_str else {},
-                    embedding=embedding,
-                    score=cosine_similarity(query_embedding, embedding),
+            scored = []
+            for rowid, raw in conn.execute("SELECT rowid, embedding FROM chunks"):
+                if not raw:
+                    continue
+                vector = _decode(raw)
+                if len(vector) != len(query):
+                    raise ValueError("Embedding dimensions do not match")
+                norm = math.sqrt(_dot(vector, vector))
+                score = (
+                    _dot(query, vector) / (query_norm * norm)
+                    if query_norm and norm
+                    else 0.0
                 )
+                scored.append((score, rowid, vector))
+            best = heapq.nlargest(top_k, scored, key=operator.itemgetter(0))
+            rows = {
+                row[0]: row[1:]
+                for row in conn.execute(
+                    "SELECT rowid, id, doc_id, text, metadata FROM chunks WHERE rowid IN "
+                    f"({','.join('?' * len(best))})",
+                    [rowid for _, rowid, _ in best],
+                )
+            }
+        return [
+            ScoredChunk(
+                id=rows[rowid][0],
+                doc_id=rows[rowid][1],
+                text=rows[rowid][2],
+                metadata=json.loads(rows[rowid][3]) if rows[rowid][3] else {},
+                embedding=list(vector),
+                score=score,
             )
-
-        results.sort(key=lambda chunk: chunk.score, reverse=True)
-        return results[:top_k]
+            for score, rowid, vector in best
+        ]

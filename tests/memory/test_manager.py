@@ -1,3 +1,5 @@
+"""Structured memory (M3): facts and entities."""
+
 import sqlite3
 from pathlib import Path
 

@@ -1,3 +1,5 @@
+"""Chat engine: one turn, streaming, tools, guardrails, errors."""
+
 import asyncio
 import json
 from collections.abc import AsyncGenerator

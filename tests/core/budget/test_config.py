@@ -1,3 +1,5 @@
+"""Budget settings: limits and defaults."""
+
 import pytest
 from pydantic import ValidationError
 

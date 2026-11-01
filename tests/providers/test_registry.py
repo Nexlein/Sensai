@@ -1,3 +1,5 @@
+"""Provider registry."""
+
 import pytest
 
 from sensai.domain.errors import ProviderError

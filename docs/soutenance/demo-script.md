@@ -1,6 +1,7 @@
 # Script de démo : « Une matinée au dépôt »
 
-Scène de théâtre en 4 actes, environ 12 minutes. Un seul système lancé du début à la fin, une seule
+Scène de théâtre en 4 actes, environ 12 minutes hors relance du benchmark RAG complet
+(~3 minutes de plus sur le GPU mesuré). Un seul système lancé du début à la fin, une seule
 session : pas de bascule entre démos déconnectées (exigence du sujet).
 
 ## Distribution
@@ -14,7 +15,24 @@ session : pas de bascule entre démos déconnectées (exigence du sujet).
 
 ## Préparation (avant d'entrer en salle)
 
+Dans `sensai.toml`, configurer explicitement les sections suivantes : la persona et les logs
+de prompts sont désactivés par défaut, tandis que la réflexion vaut `low`.
+
+```toml
+[persona]
+enabled = true
+name = "Sensai Collecte"
+file = "personas/collecte.md"
+
+[eval]
+log_prompts = true
+
+[reasoning]
+think = false
+```
+
 ```bash
+# Seulement si le service Ollama n’est pas déjà démarré :
 ollama serve &
 ollama pull qwen3.5:4b
 ollama pull nomic-embed-text
@@ -88,15 +106,15 @@ utilise le modèle de [modeles-courriers.md] sans jamais afficher le numéro ni 
 **Ingénieur** :
 
 1. Montre le **prompt complet reconstitué** du dernier tour (system + RAG + mémoire + historique) :
-   `/prompt` ou `logs/prompts.jsonl` (à implémenter, voir [observabilite.md](observabilite.md)).
+   `/prompt` ou `logs/prompts.jsonl` (voir [observabilite.md](observabilite.md)).
 2. Montre le **compteur de tokens** et le **débit** du dernier tour (tokens/s), puis `ollama ps` pour la RAM.
 3. Relance **en direct** le benchmark A/B RAG :
 
    ```bash
-   uv run python -m sensai.eval.bench --questions docs/soutenance/bench-questions.jsonl
+   uv run python -m sensai.eval.bench rag
    ```
 
-   Annonce le résultat : exactitude avec RAG vs sans RAG, latence moyenne (voir
+   Annonce le résultat : exactitude avec RAG vs sans RAG, latence médiane (voir
    [benchmarks.md](benchmarks.md)).
 
 4. Lance la suite adversariale (pas besoin d'Ollama, 2 s) :

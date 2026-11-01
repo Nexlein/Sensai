@@ -1,3 +1,5 @@
+"""LLM judge command line."""
+
 import json
 from collections.abc import AsyncGenerator
 from typing import Any

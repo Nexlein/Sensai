@@ -1,3 +1,5 @@
+"""Chat engine reasoning loop: steps, thoughts, step limit."""
+
 import pytest
 
 from sensai.core.engine import ChatEngine

@@ -1,3 +1,5 @@
+"""LLM judge (EV1): relevance, coherence, faithfulness."""
+
 import asyncio
 import json
 import os
