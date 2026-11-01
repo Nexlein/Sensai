@@ -96,6 +96,8 @@ class Condition:
     name: str
     rag: bool
     persona: bool
+    temperature: float = 0.0
+    seed: int | None = 42
 
 
 CONDITIONS = (
@@ -168,7 +170,9 @@ async def run_condition(
     provider = OllamaLLMProvider(
         base_url=base_url,
         model=model,
-        options=ModelOptions(temperature=0, seed=42, num_ctx=8192),
+        options=ModelOptions(
+            temperature=condition.temperature, seed=condition.seed, num_ctx=8192
+        ),
     )
     persona = (
         load_persona(PersonaConfig(name="Sensai Collecte", file=str(persona_file)))
@@ -261,3 +265,73 @@ async def bench_rag(
         for condition in conditions
     ]
     return index, results
+
+
+TEMPERATURES = (0.0, 0.7, 1.2)
+
+
+@dataclass
+class TemperatureResult:
+    """One temperature, run several times with no seed so sampling can vary."""
+
+    temperature: float
+    runs: list[ConditionResult]
+
+    @property
+    def accuracies(self) -> list[float]:
+        return [run.accuracy for run in self.runs]
+
+    @property
+    def mean_accuracy(self) -> float:
+        return sum(self.accuracies) / len(self.accuracies) if self.runs else 0.0
+
+    @property
+    def stable(self) -> int:
+        """Questions graded the same (right or wrong) in every run."""
+        grades = zip(*([row["correct"] for row in run.answers] for run in self.runs))
+        return sum(len(set(grade)) == 1 for grade in grades)
+
+    @property
+    def identical(self) -> int:
+        """Questions answered word for word the same in every run."""
+        texts = zip(*([row["answer"] for row in run.answers] for run in self.runs))
+        return sum(len(set(text)) == 1 for text in texts)
+
+    @property
+    def questions(self) -> int:
+        return len(self.runs[0].answers) if self.runs else 0
+
+
+async def bench_temperature(
+    model: str,
+    questions: list[Question],
+    corpus: Path,
+    persona_file: Path,
+    db: Path,
+    base_url: str,
+    temperatures: tuple[float, ...] = TEMPERATURES,
+    runs: int = 5,
+) -> list[TemperatureResult]:
+    """RAG with persona at each temperature, `runs` times, seed left unset."""
+    retriever, _ = await build_retriever(corpus, db, base_url)
+    results = []
+    for temperature in temperatures:
+        condition = Condition(
+            f"T={temperature}",
+            rag=True,
+            persona=True,
+            temperature=temperature,
+            seed=None,
+        )
+        results.append(
+            TemperatureResult(
+                temperature,
+                [
+                    await run_condition(
+                        condition, questions, model, retriever, persona_file, base_url
+                    )
+                    for _ in range(runs)
+                ],
+            )
+        )
+    return results

@@ -1,6 +1,7 @@
 """`python -m sensai.eval.bench <suite>`: run a benchmark, print it, save it.
 
-Suites: perf (Sensai's code, no model), speed, tools, effort, context, rag, french.
+Suites: perf (Sensai's code, no model), speed, tools, effort, context, rag,
+temperature, french.
 Results go to `reports/bench/<suite>.json` and `.md`.
 """
 
@@ -21,7 +22,16 @@ from sensai.eval.bench.ollama import DEFAULT_URL, OllamaBench
 from sensai.eval.bench.timing import human_seconds, table
 
 ROOT = Path(__file__).resolve().parents[4]
-SUITES = ("perf", "speed", "tools", "effort", "context", "rag", "french")
+SUITES = (
+    "perf",
+    "speed",
+    "tools",
+    "effort",
+    "context",
+    "rag",
+    "temperature",
+    "french",
+)
 DEFAULT_MODEL = "qwen3.5:4b"
 
 
@@ -328,6 +338,49 @@ def run_rag(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]:
     return text, {"index": index, "conditions": results}
 
 
+def run_temperature(args: argparse.Namespace, client: OllamaBench) -> tuple[str, Any]:
+    model = args.models.split(",")[0] if args.models else DEFAULT_MODEL
+    questions = rag.load_questions(Path(args.questions))
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    results = asyncio.run(
+        rag.bench_temperature(
+            model,
+            questions,
+            ROOT / "data" / "collecte",
+            ROOT / "personas" / "collecte.md",
+            out / "rag-bench.db",
+            args.base_url,
+            runs=args.repeat,
+        )
+    )
+    client.unload_all()
+    rows = [
+        [
+            r.temperature,
+            f"{r.mean_accuracy:.0%}",
+            f"{min(r.accuracies):.0%}–{max(r.accuracies):.0%}",
+            f"{r.stable}/{r.questions}",
+            f"{r.identical}/{r.questions}",
+            f"{sum(run.cited for run in r.runs) / len(r.runs):.1f}/{r.runs[0].answerable}",
+        ]
+        for r in results
+    ]
+    headers = [
+        "temperature",
+        "mean accuracy",
+        "min–max",
+        "same grade every run",
+        "same words every run",
+        "source cited (mean)",
+    ]
+    text = (
+        f"Model: {model} · RAG + persona · {len(questions)} questions · "
+        f"{args.repeat} runs per temperature, no seed\n\n" + table(headers, rows)
+    )
+    return text, results
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m sensai.eval.bench", description=__doc__
@@ -340,7 +393,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--base-url", default=DEFAULT_URL)
     parser.add_argument("--out", default=str(ROOT / "reports" / "bench"))
-    parser.add_argument("--repeat", type=int, default=5, help="perf: samples per case")
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=5,
+        help="perf: samples per case; temperature: runs per value",
+    )
     parser.add_argument("--quick", action="store_true", help="perf: small sizes only")
     parser.add_argument(
         "--runs", type=int, default=3, help="speed: warm runs per model"
@@ -367,6 +425,7 @@ def main(argv: list[str] | None = None) -> int:
                 "effort": run_effort,
                 "context": run_context,
                 "rag": run_rag,
+                "temperature": run_temperature,
                 "french": run_french,
             }[args.suite]
             text, data = runner(args, client)
