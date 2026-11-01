@@ -1,7 +1,7 @@
 # Fiche personnage : Camille Roux
 
 > La personne que tu incarnes pendant la pièce. Tout est fictif : la régie, les communes, les usagers.
-> Le prénom est épicène, garde-le quel que soit ton genre ; si tu changes de nom, change-le aussi dans
+> Camille, joué au masculin par Nielsen. Si tu changes de nom, change-le aussi dans
 > [demo-script.md](demo-script.md).
 
 ## En une phrase

@@ -61,7 +61,7 @@ _Tape `github.com/Nexlein/Sensai` dans le navigateur. Lis le début du README à
 
 _Clique sur « Guide d'installation en français ». Ouvre un terminal._
 
-> Je ne suis pas développeuse… _(ou « développeur »)_ mais je sais copier-coller. Étape 1 : vérifier
+> Je ne suis pas développeur… mais je sais copier-coller. Étape 1 : vérifier
 > si Ollama est déjà installé.
 
 ```bash
