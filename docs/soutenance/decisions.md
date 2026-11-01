@@ -55,7 +55,7 @@ Chaque ligne pointe vers le commit qui le prouve (`git show <hash>`).
 les vecteurs, calcule le produit scalaire en C et ne charge le texte que des meilleurs résultats :
 30 ms pour 1 000 chunks sur le PC mesuré ([benchmarks](../benchmarks.md#sensais-own-code)).
 
-### 2. Taille des chunks : 500 caractères, chevauchement 50, top 5
+### 2. Taille des chunks : 500 caractères, chevauchement 50, top 5 (3 dans la démo)
 
 **Contraintes contradictoires** : granularité vs coût de contexte.
 
@@ -66,6 +66,10 @@ les vecteurs, calcule le produit scalaire en C et ne charge le texte que des mei
   au milieu d'une phrase (découpe par caractères, pas par paragraphe).
 
 À mesurer avec le bench (exactitude pour 300 / 500 / 1000) pour transformer ce choix en donnée.
+
+Depuis le 1er novembre, `sensai.example.toml` passe à `top_k = 3` avec `bge-m3` : les bons extraits
+arrivent dans les 3 premiers, et le prompt raccourcit d'environ 250 tokens, deux extraits de 500 caractères (décision 8). Le défaut
+du code et du bench reste 5.
 
 ### 3. Comptage de tokens : estimation à 4 caractères par token
 

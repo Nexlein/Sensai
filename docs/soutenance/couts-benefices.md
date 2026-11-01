@@ -8,13 +8,13 @@ Les chiffres marqués _hyp._ sont des hypothèses à annoncer comme telles devan
 
 ### Coûts
 
-| Poste          | Estimation                                        | Commentaire                                                      |
-| -------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
-| Matériel       | 0 €                                               | Le PC portable de l'école ; 16 Go de RAM conseillés, GPU inutile |
-| Téléchargement | ~4,6 Go, une fois                                 | `qwen3.5:4b` (3,4 Go) et `bge-m3` (1,2 Go)                       |
-| Électricité    | ~0,03 € par heure de génération _hyp._            | ~100 W sous charge × 0,25 €/kWh                                  |
-| Licences       | 0 €                                               | Ollama (MIT), Qwen 3.5 (Apache 2.0), Sensai                      |
-| Mise en place  | 2 min prévues à la démo, modèles déjà téléchargés | Copier la config, changer 4 lignes                               |
+| Poste          | Estimation                                        | Commentaire                                                                                  |
+| -------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Matériel       | 0 €                                               | Son PC portable personnel, déjà acheté pour les cours ; 16 Go de RAM conseillés, GPU inutile |
+| Téléchargement | ~4,6 Go, une fois                                 | `qwen3.5:4b` (3,4 Go) et `bge-m3` (1,2 Go)                                                   |
+| Électricité    | ~0,03 € par heure de génération _hyp._            | ~100 W sous charge × 0,25 €/kWh                                                              |
+| Licences       | 0 €                                               | Ollama (MIT), Qwen 3.5 (Apache 2.0), Sensai                                                  |
+| Mise en place  | 2 min prévues à la démo, modèles déjà téléchargés | Copier la config, changer 4 lignes                                                           |
 
 ### Bénéfices
 
