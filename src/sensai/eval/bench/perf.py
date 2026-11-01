@@ -262,7 +262,7 @@ def run_perf(repeat: int = 5, quick: bool = False) -> list[PerfResult]:
             measure(lambda: facts.search_facts("value 9"), repeat, 10),
         )
 
-        corpus = Path(__file__).resolve().parents[4] / "data" / "collecte"
+        corpus = Path(__file__).resolve().parents[4] / "demo" / "collecte" / "docs"
         text = (
             "\n".join(p.read_text() for p in sorted(corpus.glob("*.md")))
             if corpus.is_dir()

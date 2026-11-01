@@ -1,4 +1,4 @@
-"""RAG on the shipped corpus (data/collecte): answers must follow the documents.
+"""RAG on the shipped corpus (demo/collecte/docs): answers must follow the documents.
 
 Needs the embedding model of `[rag] model` (nomic-embed-text) pulled in Ollama.
 """
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-CORPUS = Path(__file__).resolve().parents[2] / "data" / "collecte"
+CORPUS = Path(__file__).resolve().parents[2] / "demo" / "collecte" / "docs"
 
 pytestmark = pytest.mark.live
 

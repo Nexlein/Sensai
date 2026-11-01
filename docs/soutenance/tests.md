@@ -128,7 +128,7 @@ réponse), visible même quand il passe.
 | `test_live_compute.py`     | Résultat exact de grands calculs (`4817 × 2309 = 11122453`), petits calculs, script corrigé et relancé après une erreur                                                           |
 | `test_live_files.py`       | Réponse tirée du fichier lu, comptage d'un listing, fichier absent signalé, écriture conforme ou refusée                                                                          |
 | `test_live_memory.py`      | Fait mémorisé puis réutilisé après `/new`, `recall_memory` quand l'injection automatique est coupée                                                                               |
-| `test_live_rag.py`         | Réponses du corpus `data/collecte` (bac jaune secteur B = mercredi), fausse prémisse corrigée (25 km/h)                                                                           |
+| `test_live_rag.py`         | Réponses du corpus `demo/collecte/docs` (bac jaune secteur B = mercredi), fausse prémisse corrigée (25 km/h)                                                                      |
 | `test_live_answers.py`     | Langue de la réponse, pas de code interne inventé, réponses ouvertes notées ≥ 4 par le juge (EV1)                                                                                 |
 
 Options : `SENSAI_OLLAMA_BASE_URL` (défaut `http://localhost:11434`), `SENSAI_LIVE_SANDBOX=1` pour

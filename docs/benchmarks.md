@@ -173,7 +173,7 @@ of all twelve dialogue models.
 The existing `data/bench/rag-questions.jsonl` corpus is replayed through `ChatEngine`, with
 guardrails, context budget, retrieval and persona as selected by each condition. One fresh
 conversation per question; `temperature = 0`, `seed = 42`, `num_ctx = 8192`, thinking off.
-`nomic-embed-text` indexes the same `data/collecte/` corpus (26 chunks, default top 5).
+`nomic-embed-text` indexes the same `demo/collecte/docs/` corpus (26 chunks, default top 5).
 There are 18 answerable and 4 unanswerable questions: 66 replies per model, 132 saved replies.
 
 The score below is the existing automatic heuristic: all expected keyword groups must occur,
@@ -348,7 +348,7 @@ so it never noticed. `options.num_ctx` now defaults to 8 192.
 
 ## RAG and persona A/B
 
-`python -m sensai.eval.bench rag`: 22 questions about the demo corpus (`data/collecte/`),
+`python -m sensai.eval.bench rag`: 22 questions about the demo corpus (`demo/collecte/docs/`),
 18 answerable (keywords a right answer must contain) and 4 not in the documents (the right
 answer is "I can't find it"). Run through Sensai's real engine, qwen3.5:4b, thinking off,
 temperature 0, on the GPU (the whole suite takes 3 minutes, against about 35 on CPU).
@@ -620,7 +620,7 @@ produces the requested effect, with no additional unexpected tool and no engine 
 A completed tool operation is **not** proof that the final model response is faithful.
 Every one of the 50 completed replies was separately inspected; those reviews are saved.
 
-The file tools operate on a temporary copy of `data/collecte/`; writes are verified by
+The file tools operate on a temporary copy of `demo/collecte/docs/`; writes are verified by
 reopening `notes/test.md`. Memory uses a temporary SQLite database, reopened through a
 second connection to check persistence. Entity/key names are not prescribed: the stored
 fact must associate collection sector with B, regardless of which field describes the sector.

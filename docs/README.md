@@ -35,5 +35,5 @@
 | [USER_STORIES.md](USER_STORIES.md)  | Two or more user stories per feature                             |
 | [soutenance/](soutenance/README.md) | Defense preparation, in French: scenario, demo, models, measures |
 
-Data: [`../data/collecte/`](../data/collecte/) is the fictional corpus of the demo scenario,
+Data: [`../demo/collecte/docs/`](../demo/collecte/docs/) is the fictional corpus of the demo scenario,
 [`../data/bench/`](../data/bench/) the benchmark question set.

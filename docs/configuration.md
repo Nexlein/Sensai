@@ -186,12 +186,12 @@ seed = 42
 
 [rag]
 enabled = true
-dir = "data/collecte"
+dir = "demo/collecte/docs"
 
 [persona]
 enabled = true
 name = "Sensai Collecte"
-file = "personas/collecte.md"
+file = "demo/collecte/persona.md"
 ```
 
 ## Where the code is

@@ -456,7 +456,7 @@ As a waste-collection crew leader, I want Sensai to answer as the Régie's assis
 
 Acceptance criteria:
 
-- With `[persona] enabled = true` and `file = "personas/collecte.md"`, the persona text is the first system message of every call to the model.
+- With `[persona] enabled = true` and `file = "demo/collecte/persona.md"`, the persona text is the first system message of every call to the model.
 - Corpus questions are answered in French and cite the source file, for example `[securite-collecte.md]`.
 - A question the documents do not cover gets "Je ne trouve pas cette information dans les documents de la régie" instead of an invented fact.
 - A missing or empty persona file stops startup with a one-line error.
@@ -476,7 +476,7 @@ As a user setting up document retrieval, I want to enable RAG and tune it in `se
 
 Acceptance criteria:
 
-- `[rag] enabled = true` with `dir = "data/collecte"` indexes and retrieves exactly like `--rag-dir data/collecte`.
+- `[rag] enabled = true` with `dir = "demo/collecte/docs"` indexes and retrieves exactly like `--rag-dir demo/collecte/docs`.
 - `top_k`, `chunk_size` and `chunk_overlap` from the file change how many chunks are retrieved and how documents are split.
 - `--rag-dir`, `--rag-db` and `--rag-model` on the CLI override the file.
 - An invalid value (`top_k = 0`, an overlap not smaller than the chunk size, `enabled = true` without `dir`) stops startup with a config error.
@@ -497,13 +497,14 @@ Acceptance criteria:
 - The live token count and the real counts after each reply are still shown.
 - Without the key, compression stays on, as before; `/config save` keeps the setting.
 
-As a new user installing Sensai for the Régie, I want a ready-made config file in the repository, so that I start with exactly the features the team supports, without reading every section.
+As a new user installing Sensai, I want a ready-made general config file in the repository, so that I start with the features the team supports and point it at my own documents by changing a few lines.
 
 Acceptance criteria:
 
-- `cp sensai.example.toml sensai.toml` then `uv run sensai chat` opens the web interface with the persona, RAG on `data/collecte`, guardrails, structured memory and file tools.
+- `cp sensai.example.toml sensai.toml` then `uv run sensai chat` opens the web interface with guardrails, structured memory and file tools; the persona and RAG are off.
+- Setting `enabled = true` and uncommenting `file` and `dir` in `[persona]` and `[rag]` turns on the `demo/tek1` persona and documents.
 - MCP, web search, the sandbox, the reasoning loop, compression and reply logging are off in that file.
-- A test loads the shipped file, so a config change that breaks it fails CI.
+- Tests load the shipped file as is and with those four lines changed, so a config change that breaks either fails CI.
 
 ## Feature: Loaded Model Memory
 

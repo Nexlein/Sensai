@@ -160,7 +160,7 @@ async def test_retrieve_context_rejects_a_missing_query_vector(tmp_path):
         (
             {
                 "filename": "calendrier.md",
-                "path": "/home/alban/Sensai/data/collecte/calendrier.md",
+                "path": "/home/alban/Sensai/demo/collecte/docs/calendrier.md",
                 "source": "collecte/calendrier.md",
             },
             "collecte/calendrier.md",

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 GOLDEN = Path(__file__).with_name("golden")
-PERSONA = Path(__file__).resolve().parents[2] / "personas" / "collecte.md"
+PERSONA = Path(__file__).resolve().parents[2] / "demo" / "collecte" / "persona.md"
 # The prompt carries today's date: freeze it so the files stay stable.
 pytestmark = pytest.mark.usefixtures("today")
 
