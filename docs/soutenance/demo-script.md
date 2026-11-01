@@ -240,9 +240,10 @@ Il a neigé cette nuit. Que prévoit le plan hivernal pour la côte de La Combe 
 > Les jours de neige, on applique le plan hivernal. Chez nous, il a un nom de code : l'Opération
 > Hérisson. Personne ne le connaît par cœur, et aucun modèle sur internet ne peut le connaître.
 
-_La réponse arrive : les bacs se déposent en bas de la rue, source `[plan-hivernal-herisson.md]`._
+_La réponse arrive : « plan hivernal (Opération Hérisson) », les bacs se déposent en bas de la rue,
+source `[plan-hivernal-herisson.md]`._
 
-> Regardez la source : `plan-hivernal-herisson.md`. C'est bien notre document interne.
+> Il a trouvé l'Opération Hérisson, et il cite notre document interne : `plan-hivernal-herisson.md`.
 
 _Au téléphone :_
 
@@ -283,6 +284,9 @@ _Change de ton, face au jury._
 
    > Sans lui, le modèle répond encore grâce aux documents, mais plus long, sans citer ses sources
    > et sans nos règles. _(Si le temps le permet : poser une question entre les deux commandes.)_
+
+   _La notice affiche « not saved » : c'est voulu, la config de démo garde ce changement dans la
+   session au lieu de réécrire `sensai.toml`._
 
 2. Le prompt complet du dernier appel : la fiche persona en tête, la date, la mémoire avec ma
    signature, les extraits des documents, l'historique.
