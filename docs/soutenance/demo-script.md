@@ -302,52 +302,10 @@ PC d'Alban (RTX 4060 Laptop, modèles déjà chargés), session neuve, le 1er no
 
 Environ 1 minute 30 d'attente sur toute la démo.
 
-## La veille
+## La veille et le jour J
 
-À faire une seule fois sur le PC d'Alban :
-
-```bash
-# ollama-cuda doit avoir la même version que ollama, sinon les modèles plantent au chargement.
-sudo pacman -S ollama ollama-cuda uv git
-sudo systemctl enable --now ollama
-ollama pull qwen3.5:4b
-ollama pull bge-m3
-
-# La colonne PROCESSOR doit afficher du GPU, pas « 100% CPU ».
-ollama run qwen3.5:4b "Bonjour" --think=false
-ollama ps
-
-# Python et les dépendances en cache : un clone jetable suffit
-git clone https://github.com/Nexlein/Sensai.git /tmp/sensai-warmup
-cd /tmp/sensai-warmup && uv sync && cd -
-```
-
-- [ ] **Chargeur branché pour toutes les répétitions.**
-- [ ] Démo répétée au moins deux fois, chronomètre en main.
-- [ ] `gcc` installé (`gcc --version`) pour le moment optionnel du 5C.
-- [ ] Vidéo de secours de chaque moment (OBS), en local et sur une clé.
-- [ ] Captures d'écran des réponses attendues dans les slides.
-
-## Juste avant d'entrer en salle
-
-```bash
-# Repartir d'un dossier vierge : l'ancien clone contient la mémoire, la session,
-# l'index des documents et le CPool_Day04 des répétitions.
-rm -rf ~/demo && mkdir ~/demo && cd ~/demo
-
-# Modèles chargés pour 1 h (évite 10 à 20 s de chargement devant le jury)
-systemctl is-active ollama
-curl -s localhost:11434/api/generate -d '{"model":"qwen3.5:4b","prompt":"ok","think":false,"keep_alive":"1h"}' > /dev/null
-curl -s localhost:11434/api/embed -d '{"model":"bge-m3","input":"ok","keep_alive":"1h"}' > /dev/null
-ollama ps
-```
-
-- [ ] **Chargeur branché**, sur une prise testée.
-- [ ] `ollama ps` montre `qwen3.5:4b` et `bge-m3`.
-- [ ] Rien d'autre de lourd ouvert (IDE, Docker) : les deux modèles prennent 4,6 Go.
-- [ ] Terminal ouvert dans `~/demo`, police agrandie ; navigateur avec un seul onglet vide.
-- [ ] Antisèche ouverte dans une autre fenêtre.
-- [ ] Wi-Fi testé pour `git clone` (sinon voir le plan de repli).
+Installation, répétition, mise en place et préchargement des modèles, avec les commandes :
+[jour-j.md](jour-j.md).
 
 ## Plan de repli
 
