@@ -1,7 +1,50 @@
 # Analyse coûts-bénéfices
 
-Deux points de vue : la régie de collecte (le client du scénario) et nous (l'équipe projet).
+Trois points de vue : l'étudiant de la démo, la régie de collecte (le scénario des benchmarks) et
+nous (l'équipe projet).
 Les chiffres marqués _hyp._ sont des hypothèses à annoncer comme telles devant le jury.
+
+## Pour l'étudiant en Tek 1 (scénario de la démo)
+
+### Coûts
+
+| Poste          | Estimation                                        | Commentaire                                                      |
+| -------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
+| Matériel       | 0 €                                               | Le PC portable de l'école ; 16 Go de RAM conseillés, GPU inutile |
+| Téléchargement | ~4,6 Go, une fois                                 | `qwen3.5:4b` (3,4 Go) et `bge-m3` (1,2 Go)                       |
+| Électricité    | ~0,03 € par heure de génération _hyp._            | ~100 W sous charge × 0,25 €/kWh                                  |
+| Licences       | 0 €                                               | Ollama (MIT), Qwen 3.5 (Apache 2.0), Sensai                      |
+| Mise en place  | 2 min prévues à la démo, modèles déjà téléchargés | Copier la config, changer 4 lignes                               |
+
+### Bénéfices
+
+| Bénéfice                   | Ce qui le montre                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| Réponse tirée de son sujet | Fonctions autorisées et date limite en ~6 s sur GPU (mesuré), fichier source cité |
+| Code qu'il sait expliquer  | Une fonction à la fois, à la norme, chaque ligne expliquée : pas de -42           |
+| Rien n'est écrit sans lui  | Aperçu complet et `Yes` / `No` avant chaque fichier                               |
+| Rien ne sort du PC         | Le message du binôme et son code restent en local, numéro et mail masqués         |
+| Marche sans réseau         | Une fois les modèles téléchargés                                                  |
+
+### Comparaison avec les assistants en ligne
+
+| Critère                         | Sensai local                        | GitHub Copilot Student                              | ChatGPT Plus, Claude Pro           |
+| ------------------------------- | ----------------------------------- | --------------------------------------------------- | ---------------------------------- |
+| Prix                            | 0 €                                 | 0 € pour un étudiant vérifié, avec un quota mensuel | 20 $ par mois chacun               |
+| Où vont le code et les messages | Restent sur le PC                   | Envoyés au service                                  | Envoyés au service                 |
+| Connaît le sujet du jour        | Oui : RAG, source citée             | Non, sauf à le coller                               | Non, sauf à le coller              |
+| Fait à sa place                 | Non : la fiche impose d'expliquer   | Complète le code dans l'éditeur                     | Écrit ce qu'on lui demande         |
+| Qualité                         | Modèle 4B : erreurs plus fréquentes | Gros modèles : nettement meilleure                  | Gros modèles : nettement meilleure |
+| Hors réseau                     | Oui                                 | Non                                                 | Non                                |
+
+**À dire honnêtement** : Copilot est gratuit pour un étudiant vérifié (plan Copilot Student, avec
+200 crédits IA par mois depuis le 1er juin 2026). L'argument n'est donc pas seulement le prix :
+c'est le contrôle. Rien ne sort du PC, les réponses viennent du sujet de la piscine, et la fiche
+explique au lieu de faire. En échange, un 4B se trompe plus souvent qu'un gros modèle en ligne.
+
+Sources : [plans Copilot](https://docs.github.com/en/copilot/get-started/plans),
+[Copilot Student](https://github.com/orgs/community/discussions/189268),
+[Claude Pro](https://claude.com/pricing), [ChatGPT Plus](https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus).
 
 ## Pour la régie de collecte
 
