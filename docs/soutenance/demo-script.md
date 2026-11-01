@@ -6,8 +6,9 @@ README pour seule aide, puis s'en sert pour son vrai travail de la journée. Un 
 l'acte 0 et gardé jusqu'au bout ; seul l'acte 4 le redémarre, parce que c'est ce qu'il démontre.
 
 La pièce se joue sur le PC d'Alban (Arch Linux, avec carte graphique) : les réponses y arrivent en
-quelques secondes. Les temps d'attente notés plus bas ont été mesurés sur un PC sans carte graphique ;
-remplis la colonne « PC d'Alban » à la répétition.
+quelques secondes. Les attentes notées dans les actes sont celles du PC d'Alban (mesurées le
+1er novembre, modèles déjà chargés) ; le tableau « Temps mesurés » donne aussi celles d'un PC sans
+carte graphique.
 
 Conventions : **Camille** parle au public, _en italique ce que tu fais_, les blocs de code sont ce que
 tu tapes ou colles. « (Attente) » marque le temps où Sensai réfléchit : dis la réplique prévue pour
@@ -120,7 +121,7 @@ _Tape :_
 Quel jour passe le bac jaune à La Combe ?
 ```
 
-(Attente, environ 30 s) **Camille**, au public :
+(Attente, environ 10 s) **Camille**, au public :
 
 > D'habitude, là, j'ouvre le calendrier des secteurs, je cherche la commune, puis la bonne colonne…
 > Lui, il cherche dans les mêmes documents que moi. Et tout se passe sur cet ordinateur : rien ne
@@ -147,7 +148,7 @@ _Au téléphone :_
 Retiens que je signe mes courriers : Camille Roux, service usagers, poste 210.
 ```
 
-(Attente, environ 45 s : il range le fait, puis répond)
+(Attente, environ 10 s : il range le fait, puis répond)
 
 > Je vérifie ce qu'il a retenu.
 
@@ -170,7 +171,7 @@ _L'avertissement apparaît : « Personal data in your message was masked (pii: p
 > les a jamais vus, et ils ne sont pas enregistrés dans l'historique. C'est pour ça que j'ai le droit
 > de m'en servir.
 
-(Attente, environ 40 s)
+(Attente, environ 15 s)
 
 > Et il suit le modèle officiel : vouvoiement, le motif, le prochain passage… et ma signature, qu'il
 > a retrouvée dans sa mémoire.
@@ -179,7 +180,7 @@ _L'avertissement apparaît : « Personal data in your message was masked (pii: p
 Enregistre ce courrier dans courriers/lilas-bac-jaune.md
 ```
 
-(Attente, environ 60 s : il réécrit tout le courrier dans le fichier)
+(Attente, environ 15 s : il réécrit tout le courrier dans le fichier)
 
 > Il prépare le fichier. Pendant ce temps, je vous dis ce qu'il ne fera pas : écrire ailleurs que
 > dans le dossier où je l'ai lancé, ou écrire sans me demander.
@@ -235,7 +236,7 @@ _Le téléphone sonne._
 Il a neigé cette nuit. Que prévoit le plan hivernal pour la côte de La Combe ? Donne-moi une réponse courte à lire à l'usager au téléphone.
 ```
 
-(Attente, environ 45 s) **Camille**, au public :
+(Attente, environ 8 s) **Camille**, au public :
 
 > Les jours de neige, on applique le plan hivernal. Chez nous, il a un nom de code : l'Opération
 > Hérisson. Personne ne le connaît par cœur, et aucun modèle sur internet ne peut le connaître.
@@ -258,7 +259,7 @@ _Le téléphone sonne encore._
 Quels sont les horaires d'ouverture de la déchetterie ?
 ```
 
-(Attente, environ 30 s)
+(Attente, environ 4 s)
 
 _La réponse : « Je ne trouve pas cette information dans les documents de la régie »._
 
@@ -356,21 +357,22 @@ cat sensai.toml
 
 Mesurés sur une session neuve avec `sensai.example.toml`. « Attente » = avant le premier mot. Les deux
 premières colonnes : portable de Nielsen sans carte graphique, sur secteur, le 1er novembre. La
-dernière est à remplir à la répétition sur le PC d'Alban.
+dernière : PC d'Alban (RTX 4060 Laptop, modèles déjà chargés), le 1er novembre.
 
-| Étape                         | Nielsen, CPU seul    | Nielsen, GPU intégré | PC d'Alban (GPU) |
-| ----------------------------- | -------------------- | -------------------- | ---------------- |
-| Démarrage de Sensai           | 8 s                  | 9 s                  |                  |
-| Bac jaune à La Combe          | 25 s d'attente, 29 s | 24 s d'attente, 29 s |                  |
-| Retiens ma signature          | 46 s (deux appels)   | 56 s (deux appels)   |                  |
-| Mail de l'usager → courrier   | 27 s d'attente, 53 s | 25 s d'attente, 39 s |                  |
-| Enregistre le courrier        | 60 s, puis 7 s       | 64 s, puis 7 s       |                  |
-| Formulaire piégé              | instantané           | instantané           | instantané       |
-| Plan hivernal (après reprise) | 39 s d'attente, 47 s | 39 s d'attente, 48 s |                  |
-| Déchetterie                   | 30 s d'attente, 35 s | —                    |                  |
+| Étape                         | Nielsen, CPU seul    | Nielsen, GPU intégré | PC d'Alban (GPU)      |
+| ----------------------------- | -------------------- | -------------------- | --------------------- |
+| Démarrage de Sensai           | 8 s                  | 9 s                  | 2 s (relance : 1,4 s) |
+| Bac jaune à La Combe          | 25 s d'attente, 29 s | 24 s d'attente, 29 s | 11 s d'attente, 13 s  |
+| Retiens ma signature          | 46 s (deux appels)   | 56 s (deux appels)   | 11 s (deux appels)    |
+| Mail de l'usager → courrier   | 27 s d'attente, 53 s | 25 s d'attente, 39 s | 3 s d'attente, 14 s   |
+| Enregistre le courrier        | 60 s, puis 7 s       | 64 s, puis 7 s       | 14 s, puis 1 s        |
+| Formulaire piégé              | instantané           | instantané           | instantané            |
+| Plan hivernal (après reprise) | 39 s d'attente, 47 s | 39 s d'attente, 48 s | 3 s d'attente, 8 s    |
+| Déchetterie                   | 30 s d'attente, 35 s | —                    | 3 s d'attente, 4 s    |
 
-Sans carte graphique, environ 5 minutes d'attente sur toute la pièce ; chaque attente a sa réplique.
-Sur le PC d'Alban, garde ces répliques courtes ou saute-les.
+Sur le PC d'Alban, environ 1 minute d'attente sur toute la pièce : la première question est la plus
+longue (11 s), les autres prennent 3 à 15 s. Garde les répliques d'attente courtes, et finis ta phrase
+avant de lire la réponse. Sans carte graphique, comptez environ 5 minutes.
 
 ## La veille
 
