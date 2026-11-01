@@ -76,6 +76,8 @@ Prompt log: `PromptComposer.compose_parts` returns `PromptPart`s (message + sour
 
 Real usage: providers end a call with a `UsageEvent` (Ollama: `done` object, ns → s; Groq: `usage` or `x_groq.usage`), which carries computed `reply_rate`, `prompt_rate` and `first_token_seconds`. `RoundStream` keeps it on `Round.usage` and passes it on; the UIs show `interfaces/usage.format_metrics` of the last one under the budget line (nothing when no counters), and the prompt log adds `usage` and `estimate_error`. The 4-chars/token estimate still drives the budget.
 
+Defense config: `sensai.example.toml` (root, versioned) turns on only the presented features (X1, A5, R1, EV2, M3, T4, A3, M1) and off the rest; `test_shipped_example_config_turns_on_only_the_presented_features` guards it. `[budget] compress = false` stops M2 summarization (`ContextBudget.fit`) but keeps the token count. User install guide: README "Install and run" + `docs/INSTALL.fr.md`.
+
 Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`).
 
 Persona: `[persona]` (`enabled`, `name`, `instruction` or `file`, not both) is loaded by `bootstrap.load_persona` into `ChatEngine.persona`, even when disabled, so `/persona on|off` can flip `engine.persona_enabled` (and `config.persona.enabled`) live. `PromptComposer.compose_parts` inserts it last at index 0 (source `persona`), so it leads every system message; off gives exactly the persona-less prompt. Shipped prompt: `personas/collecte.md`.
