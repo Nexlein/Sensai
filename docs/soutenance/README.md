@@ -7,24 +7,25 @@ Légende : ✅ fait · ⚠️ partiel · ❌ à faire
 
 ## Documents
 
-| Document                                 | Répond à                                                                            |
-| ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| [index-jury.md](index-jury.md)           | Pendant la défense : question du jury → doc à lire et code à montrer                |
-| [demo-script.md](demo-script.md)         | Démo « Moi, en Tek 1 » mot pour mot (5 moments + 12 ⭐), plan de repli              |
-| [retours-midterm.md](retours-midterm.md) | Chaque point perdu à la mi-parcours : ce qui a changé, la preuve, la phrase à dire  |
-| [scenario-tek1.md](scenario-tek1.md)     | Scénario de la démo (Tek 1) : besoins, latence, traçabilité moment → feature → US   |
-| [scenario.md](scenario.md)               | Scénario de la régie de collecte, corpus du benchmark RAG                           |
-| [persona.md](persona.md)                 | Fiche personnage de Camille Roux (ancienne démo de la régie)                        |
-| [configuration.md](configuration.md)     | Fichier de config, activation des features, température, contexte                   |
-| [observabilite.md](observabilite.md)     | Logs du prompt complet, compteur de tokens, tokens/s, RAM/VRAM                      |
-| [modeles.md](modeles.md)                 | Culture IA (critère 7), choix du modèle, tableau des modèles                        |
-| [benchmarks.md](benchmarks.md)           | Évaluation A/B (critère 9), métriques, rejouabilité                                 |
-| [prompts-de-test.md](prompts-de-test.md) | Prompts de test, limites du modèle, hallucinations                                  |
-| [limites.md](limites.md)                 | Limites du système, chacune avec sa mesure, sa cause et sa parade                   |
-| [tests.md](tests.md)                     | Tests unitaires lisibles, tests « en vrai » contre Ollama                           |
-| [securite-rgpd.md](securite-rgpd.md)     | RGPD (étudiant et régie), scénario de fuite, où le code bloque injections et fuites |
-| [couts-benefices.md](couts-benefices.md) | Analyse coûts-bénéfices (étudiant, régie de collecte, équipe)                       |
-| [decisions.md](decisions.md)             | Critère 16 : choix, exclusions, alternatives, « si c'était à refaire »              |
+| Document                                 | Répond à                                                                                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [jour-j.md](jour-j.md)                   | Le 2 novembre heure par heure : répétition, mise en place, préchargement, avec les commandes |
+| [index-jury.md](index-jury.md)           | Pendant la défense : question du jury → doc à lire et code à montrer                         |
+| [demo-script.md](demo-script.md)         | Démo « Moi, en Tek 1 » mot pour mot (5 moments + 12 ⭐), plan de repli                       |
+| [retours-midterm.md](retours-midterm.md) | Chaque point perdu à la mi-parcours : ce qui a changé, la preuve, la phrase à dire           |
+| [scenario-tek1.md](scenario-tek1.md)     | Scénario de la démo (Tek 1) : besoins, latence, traçabilité moment → feature → US            |
+| [scenario.md](scenario.md)               | Scénario de la régie de collecte, corpus du benchmark RAG                                    |
+| [persona.md](persona.md)                 | Fiche personnage de Camille Roux (ancienne démo de la régie)                                 |
+| [configuration.md](configuration.md)     | Fichier de config, activation des features, température, contexte                            |
+| [observabilite.md](observabilite.md)     | Logs du prompt complet, compteur de tokens, tokens/s, RAM/VRAM                               |
+| [modeles.md](modeles.md)                 | Culture IA (critère 7), choix du modèle, tableau des modèles                                 |
+| [benchmarks.md](benchmarks.md)           | Évaluation A/B (critère 9), métriques, rejouabilité                                          |
+| [prompts-de-test.md](prompts-de-test.md) | Prompts de test, limites du modèle, hallucinations                                           |
+| [limites.md](limites.md)                 | Limites du système, chacune avec sa mesure, sa cause et sa parade                            |
+| [tests.md](tests.md)                     | Tests unitaires lisibles, tests « en vrai » contre Ollama                                    |
+| [securite-rgpd.md](securite-rgpd.md)     | RGPD (étudiant et régie), scénario de fuite, où le code bloque injections et fuites          |
+| [couts-benefices.md](couts-benefices.md) | Analyse coûts-bénéfices (étudiant, régie de collecte, équipe)                                |
+| [decisions.md](decisions.md)             | Critère 16 : choix, exclusions, alternatives, « si c'était à refaire »                       |
 
 Les deux exemples, documents fictifs et fiche d'assistant, sont dans [`demo/`](../../demo/) :
 [`demo/tek1/`](../../demo/tek1/) pour la démo, [`demo/collecte/`](../../demo/collecte/) pour les
