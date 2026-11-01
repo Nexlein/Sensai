@@ -497,13 +497,14 @@ Acceptance criteria:
 - The live token count and the real counts after each reply are still shown.
 - Without the key, compression stays on, as before; `/config save` keeps the setting.
 
-As a new user installing Sensai for the Régie, I want a ready-made config file in the repository, so that I start with exactly the features the team supports, without reading every section.
+As a new user installing Sensai, I want a ready-made general config file in the repository, so that I start with the features the team supports and point it at my own documents by changing a few lines.
 
 Acceptance criteria:
 
-- `cp sensai.example.toml sensai.toml` then `uv run sensai chat` opens the web interface with the persona, RAG on `demo/collecte/docs`, guardrails, structured memory and file tools.
+- `cp sensai.example.toml sensai.toml` then `uv run sensai chat` opens the web interface with guardrails, structured memory and file tools; the persona and RAG are off.
+- Setting `enabled = true` and uncommenting `file` and `dir` in `[persona]` and `[rag]` turns on the `demo/tek1` persona and documents.
 - MCP, web search, the sandbox, the reasoning loop, compression and reply logging are off in that file.
-- A test loads the shipped file, so a config change that breaks it fails CI.
+- Tests load the shipped file as is and with those four lines changed, so a config change that breaks either fails CI.
 
 ## Feature: Loaded Model Memory
 
