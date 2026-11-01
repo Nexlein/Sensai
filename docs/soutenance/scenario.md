@@ -1,5 +1,9 @@
 # Scénario : Sensai Collecte
 
+> **Plus joué en démo** depuis le 1er novembre : la démo suit un étudiant de Tek 1
+> ([demo-script.md](demo-script.md)). Ce scénario reste celui du corpus des benchmarks RAG et
+> persona ([`demo/collecte/`](../../demo/collecte/)).
+
 > Fixé depuis le bootstrap du keynote : chaque feature montrée doit servir ce scénario.
 > Les noms de personnes et de la régie sont fictifs.
 
@@ -37,12 +41,12 @@ Fiche personnage complète, à connaître avant de jouer : [persona.md](persona.
 
 ## Pourquoi un assistant local
 
-| Contrainte               | Conséquence                                                            |
-| ------------------------ | ---------------------------------------------------------------------- |
-| Données d'usagers (RGPD) | Rien ne sort du dépôt : Ollama local, pas d'API cloud (Groq désactivé) |
-| Budget public            | Pas d'abonnement par token, matériel déjà présent ou un mini-PC        |
-| Réseau parfois coupé     | Fonctionne hors ligne (sauf recherche web, optionnelle)                |
-| Documents internes       | Règlement, fiches sécurité, plan hivernal → RAG sur `data/collecte/`   |
+| Contrainte               | Conséquence                                                               |
+| ------------------------ | ------------------------------------------------------------------------- |
+| Données d'usagers (RGPD) | Rien ne sort du dépôt : Ollama local, pas d'API cloud (Groq désactivé)    |
+| Budget public            | Pas d'abonnement par token, matériel déjà présent ou un mini-PC           |
+| Réseau parfois coupé     | Fonctionne hors ligne (sauf recherche web, optionnelle)                   |
+| Documents internes       | Règlement, fiches sécurité, plan hivernal → RAG sur `demo/collecte/docs/` |
 
 ## Cohérence avec la latence locale
 
@@ -59,7 +63,7 @@ du prompt et, si nécessaire, le chargement du modèle.
 
 ## Features au service du scénario
 
-Présentées (12 étoiles), activées par [`sensai.example.toml`](../../sensai.example.toml) :
+Présentées (12 étoiles) dans l'ancienne démo de la régie :
 
 | Feature                 | ⭐  | Usage dans le scénario                                                         |
 | ----------------------- | --- | ------------------------------------------------------------------------------ |
@@ -79,7 +83,7 @@ raisonnement, EV1 juge, EV4 suite adversariale, T2 sandbox, T3 recherche web, T1
 
 ## Jeu de données
 
-Dossier [`data/collecte/`](../../data/collecte/), au format Markdown (ingéré tel quel par le RAG) :
+Dossier [`demo/collecte/docs/`](../../demo/collecte/docs/), au format Markdown (ingéré tel quel par le RAG) :
 
 | Fichier                     | Contenu                                                       | Sert à tester                    |
 | --------------------------- | ------------------------------------------------------------- | -------------------------------- |
@@ -95,13 +99,13 @@ internes) : un modèle sans RAG ne peut pas les connaître, ce qui rend la mesur
 
 ## Pré-prompt proposé
 
-Livré dans `personas/collecte.md`. Pour l'activer :
+Livré dans `demo/collecte/persona.md`. Pour l'activer :
 
 ```toml
 [persona]
 enabled = true
 name = "Sensai Collecte"
-file = "personas/collecte.md"   # ou instruction = "..." en ligne
+file = "demo/collecte/persona.md"   # ou instruction = "..." en ligne
 ```
 
 Le texte est envoyé comme premier message système de chaque appel, avant le guide d'usage des

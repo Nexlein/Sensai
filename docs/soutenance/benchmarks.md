@@ -19,7 +19,7 @@ uv run python -m sensai.eval.adversarial
 
 ## A/B 1 : RAG activé vs désactivé (mesure principale)
 
-**Hypothèse** : sur des questions dont la réponse n'existe que dans `data/collecte/`, le RAG fait
+**Hypothèse** : sur des questions dont la réponse n'existe que dans `demo/collecte/docs/`, le RAG fait
 passer l'exactitude de ~0 % (le modèle ne sait pas) à plus de 70 %, pour un surcoût de latence
 mesurable.
 
