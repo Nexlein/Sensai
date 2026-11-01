@@ -102,7 +102,7 @@ async def test_reasoning_off_drops_native_thoughts_and_keeps_old_behaviour():
     assistant = conversation.messages[1]
     assert assistant.content == "looking"
     assert assistant.thought is None
-    assert provider.options_seen == [{}, {}]
+    assert provider.options_seen == [{"think": False}, {"think": False}]
 
 
 async def test_native_thought_is_emitted_and_stored_on_the_final_answer():
@@ -304,7 +304,7 @@ async def test_think_option_is_passed_to_the_provider_when_set():
     assert provider.options_seen == [{"think": "high"}]
 
 
-async def test_think_option_is_omitted_when_unset_or_reasoning_is_off():
+async def test_think_option_is_omitted_when_unset_and_off_without_reasoning():
     provider = ScriptedProvider(chunks("hi"))
     engine, _ = build(provider, reasoning=True)
     await run(engine)
@@ -314,7 +314,7 @@ async def test_think_option_is_omitted_when_unset_or_reasoning_is_off():
     await run(engine)
 
     assert provider.options_seen == [{}]
-    assert other.options_seen == [{}]
+    assert other.options_seen == [{"think": False}]
 
 
 async def test_guardrail_redacts_a_native_thought():

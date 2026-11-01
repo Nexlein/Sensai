@@ -91,7 +91,11 @@ class RoundStream:
 
     def _options(self) -> dict[str, Any]:
         config = self.config
-        if config.reasoning and config.think is not None:
+        if not config.reasoning:
+            # Omitting `think` lets a thinking model use its default, which is on for
+            # qwen3.5: minutes of hidden thinking per reply on a CPU.
+            return {"think": False}
+        if config.think is not None:
             return {"think": config.think}
         return {}
 
