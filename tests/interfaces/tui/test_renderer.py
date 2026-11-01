@@ -235,6 +235,21 @@ async def test_provider_error_mounts_error_message():
         assert "Connection failed" in str(error_messages.first().content)
 
 
+async def test_unexpected_error_mounts_one_error_message():
+    async def process(text: str, render: RenderFn, confirm_tool) -> CommandResult:
+        raise KeyError("boom")
+
+    app = ChatApp(process)
+    async with app.run_test() as pilot:
+        await pilot.click("Input")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        error_messages = app.query(ErrorMessage)
+        assert len(error_messages) == 1
+        assert "Unexpected error" in str(error_messages.first().content)
+
+
 @pytest.mark.asyncio
 async def test_command_result_is_shown_without_empty_streamed_reply():
     async def process(text: str, render: RenderFn, confirm_tool) -> CommandResult:

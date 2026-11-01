@@ -11,7 +11,6 @@ from textual.worker import Worker
 
 from sensai.core.commands import CommandResult, RenderFn
 from sensai.core.tool_runner import ConfirmTool
-from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import (
     BudgetEvent,
     Event,
@@ -337,7 +336,7 @@ class ChatApp(App[None]):
 
         try:
             result = await self._process(text, render, confirm_tool)
-        except (EmptyInputError, ProviderError) as exc:
+        except Exception as exc:  # noqa: BLE001 - one line, never a traceback
             await history.mount(ErrorMessage(error_text(exc)))
             history.scroll_end(animate=False)
             return

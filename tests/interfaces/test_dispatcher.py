@@ -117,3 +117,15 @@ def test_console_entry_point_invokes_dispatcher(monkeypatch):
         dispatcher.main()
 
     assert exc.value.code == 0
+
+
+async def test_startup_error_with_brackets_is_printed_as_is(monkeypatch, capsys):
+    async def failing_build_session(**kwargs):
+        raise dispatcher.BootstrapError("Could not read persona file: [/tmp/x]")
+
+    monkeypatch.setattr(dispatcher, "build_session", failing_build_session)
+
+    code = await dispatcher.dispatch(["chat"])
+
+    assert code == 1
+    assert "[/tmp/x]" in capsys.readouterr().out
