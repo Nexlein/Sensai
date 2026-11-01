@@ -1,19 +1,18 @@
 import json
-import sqlite3
 from pathlib import Path
 
 from sensai.domain.models import Conversation, Message, ToolCall
-from sensai.memory.db import DEFAULT_DB_PATH, connect
+from sensai.memory.db import DEFAULT_DB_PATH, connect, transaction
 
 
 class SqliteMemoryStore:
     def __init__(self, db_path: Path | str = DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
-        self._conn: sqlite3.Connection = connect(db_path)
+        connect(db_path).close()
 
     async def save(self, conversation: Conversation) -> None:
-        with self._conn:
-            self._conn.execute(
+        with transaction(self.db_path) as conn:
+            conn.execute(
                 """
                 INSERT INTO conversations (id, created_at, updated_at)
                 VALUES (?, ?, ?)
@@ -25,10 +24,10 @@ class SqliteMemoryStore:
                     conversation.updated_at.isoformat(),
                 ),
             )
-            self._conn.execute(
+            conn.execute(
                 "DELETE FROM messages WHERE conversation_id = ?", (conversation.id,)
             )
-            self._conn.executemany(
+            conn.executemany(
                 """
                 INSERT INTO messages (id, conversation_id, role, content, tool_calls, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -49,21 +48,22 @@ class SqliteMemoryStore:
             )
 
     async def load(self, conversation_id: str) -> Conversation | None:
-        row = self._conn.execute(
-            "SELECT id, created_at, updated_at FROM conversations WHERE id = ?",
-            (conversation_id,),
-        ).fetchone()
-        if row is None:
-            return None
+        with transaction(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT id, created_at, updated_at FROM conversations WHERE id = ?",
+                (conversation_id,),
+            ).fetchone()
+            if row is None:
+                return None
 
-        message_rows = self._conn.execute(
-            """
-            SELECT id, role, content, tool_calls, timestamp
-            FROM messages WHERE conversation_id = ?
-            ORDER BY timestamp ASC
-            """,
-            (conversation_id,),
-        ).fetchall()
+            message_rows = conn.execute(
+                """
+                SELECT id, role, content, tool_calls, timestamp
+                FROM messages WHERE conversation_id = ?
+                ORDER BY timestamp ASC
+                """,
+                (conversation_id,),
+            ).fetchall()
 
         messages = [
             Message(

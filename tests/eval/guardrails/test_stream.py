@@ -1,4 +1,10 @@
+"""Streaming PII filter: values split across chunks."""
+
+import re
+
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from sensai.eval.guardrails import (
     MAX_SPACED_PII,
@@ -156,3 +162,100 @@ def test_card_followed_by_cvv_is_redacted_when_streamed_in_small_chunks():
         streamed, _ = _stream(text, size)
         assert streamed == redact_pii(text)[0]
         assert "4111" not in streamed
+
+
+# Property: the chunk boundaries a model happens to produce never change the output.
+
+SAMPLE_PII = [
+    "john.doe@example.com",
+    "06 12 34 56 78",
+    "+33 6 12 34 56 78",
+    VALID_CARD,
+    VALID_IBAN,
+    VALID_NIR,
+]
+PROSE_CHARS = st.text(
+    st.sampled_from("abcdefghij éèàç.,;:!?'-()0123456789@+\n"), max_size=80
+)
+
+
+@settings(max_examples=300)
+@given(
+    before=PROSE_CHARS,
+    pii=st.sampled_from(SAMPLE_PII),
+    after=PROSE_CHARS,
+    cuts=st.lists(st.integers(1, 40), max_size=40),
+)
+def test_stream_matches_one_shot_redaction_for_random_chunk_boundaries(
+    before, pii, after, cuts
+):
+    # The colon keeps digits at the end of `before` from joining the PII: "0000 " +
+    # a card reads as one 20-digit number, which is not a card (like 2⁶⁴ below).
+    text = f"{before} : {pii} {after}"
+    chunks, start = [], 0
+    for size in cuts:
+        chunks.append(text[start : start + size])
+        start += size
+    chunks.append(text[start:])
+
+    stream = PiiOutputStream()
+    streamed = "".join(stream.feed(c) for c in chunks) + stream.flush()
+
+    assert streamed == redact_pii(text)[0]
+    assert pii not in streamed
+
+
+# A number written in groups must reach the reader whole: released in two parts,
+# its tail can pass for a card on its own ("744 073 709 551 616" is Luhn-valid).
+TWO_TO_THE_64 = "2⁶⁴ = **18 446 744 073 709 551 616**\n\nC'est un très grand nombre."
+
+
+def test_grouped_number_streamed_word_by_word_is_not_taken_for_a_card():
+    words = re.findall(r"\S+|\s+", TWO_TO_THE_64)
+    stream = PiiOutputStream()
+
+    streamed = "".join(stream.feed(w) for w in words) + stream.flush()
+
+    assert streamed == redact_pii(TWO_TO_THE_64)[0] == TWO_TO_THE_64
+    assert stream.findings == []
+
+
+GROUPED_NUMBER = st.lists(st.integers(0, 999), min_size=4, max_size=7).map(
+    lambda groups: " ".join(f"{g:03d}" for g in groups)
+)
+
+
+@settings(max_examples=300)
+@given(
+    before=PROSE_CHARS,
+    lead=st.integers(1, 99),
+    number=GROUPED_NUMBER,
+    after=PROSE_CHARS,
+    cuts=st.lists(st.integers(1, 12), max_size=60),
+)
+def test_grouped_numbers_stream_like_one_shot_redaction(
+    before, lead, number, after, cuts
+):
+    # Enough text after the number that the stream must release part of it.
+    text = f"{before} = {lead} {number} {after}" + " suite" * 12
+    chunks, start = [], 0
+    for size in cuts:
+        chunks.append(text[start : start + size])
+        start += size
+    chunks.append(text[start:])
+
+    stream = PiiOutputStream()
+    streamed = "".join(stream.feed(c) for c in chunks) + stream.flush()
+
+    assert streamed == redact_pii(text)[0]
+
+
+def test_endless_number_is_still_released_as_it_streams():
+    # Holding a number back whole must not let a run of digits fill the buffer.
+    text = "1 " * 1000
+    stream = PiiOutputStream()
+
+    released = "".join(stream.feed(text[i : i + 8]) for i in range(0, len(text), 8))
+
+    assert len(text) - len(released) <= 4 * MAX_SPACED_PII
+    assert released + stream.flush() == redact_pii(text)[0]

@@ -1,27 +1,41 @@
-from collections.abc import AsyncGenerator
-from typing import Any, Protocol
+from collections.abc import AsyncIterator
+from typing import Any, Protocol, runtime_checkable
 
 from sensai.domain.events import Event
 from sensai.domain.models import (
     Chunk,
     Conversation,
+    Fact,
     GuardrailFinding,
     GuardrailVerdict,
+    LoadedModel,
     Message,
     ScoredChunk,
 )
 
 
 class LLMProvider(Protocol):
-    async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
-    ) -> AsyncGenerator[Event]: ...
+    def chat_stream(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        *,
+        think: bool | str | None = None,
+    ) -> AsyncIterator[Event]: ...
+
+
+@runtime_checkable
+class ModelInspector(Protocol):
+    """A provider that can report the models its server holds in memory."""
+
+    async def loaded_models(self) -> list[LoadedModel]: ...
 
 
 class BaseTool(Protocol):
     name: str
     description: str
     parameters_schema: dict[str, Any]
+    requires_confirmation: bool
 
     async def execute(self, **kwargs: Any) -> str: ...
 
@@ -88,3 +102,39 @@ class ReplyRecorder(Protocol):
     """Keeps each final reply with its question and RAG context, for later grading."""
 
     def record(self, question: str, answer: str, context: str) -> None: ...
+
+
+class PromptRecorder(Protocol):
+    """Keeps each prompt exactly as sent to the model, one entry per model call."""
+
+    def record_prompt(self, entry: dict[str, Any]) -> None: ...
+
+
+class StructuredMemory(Protocol):
+    """External structured memory (M3): CRUD over entities and facts across sessions."""
+
+    def store_fact(
+        self,
+        entity: str,
+        key: str,
+        value: str,
+        confidence: float = 1.0,
+        tags: list[str] | None = None,
+        entity_type: str = "generic",
+    ) -> Fact: ...
+
+    def get_fact(self, entity: str, key: str) -> Fact | None: ...
+
+    def list_facts(
+        self, entity: str | None = None, tag: str | None = None
+    ) -> list[Fact]: ...
+
+    def search_facts(self, query: str) -> list[Fact]: ...
+
+    def delete_fact(self, entity: str, key: str) -> bool: ...
+
+    def delete_entity(self, entity: str) -> bool: ...
+
+    def clear(self) -> None: ...
+
+    def format_context(self, entity: str | None = None, max_facts: int = 20) -> str: ...

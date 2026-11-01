@@ -1,3 +1,8 @@
+"""CLI app: REPL, Ctrl+C, errors."""
+
+import asyncio
+import os
+import signal
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -5,7 +10,7 @@ from rich.console import Console
 
 from sensai.core.commands import CommandContext
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event
+from sensai.domain.events import Event, TextChunkEvent
 from sensai.interfaces.cli.app import run_repl
 from sensai.interfaces.dispatcher import dispatch as _run
 from sensai.interfaces.dispatcher import resolve_config_path, resolve_session
@@ -134,7 +139,10 @@ async def test_chat_session_unknown_name_creates_new(monkeypatch, capsys, tmp_pa
 
 def test_build_tool_registry_keeps_web_search_when_root_is_unset():
     schemas = build_default_registry(None).get_tools_schema()
-    assert [schema["function"]["name"] for schema in schemas] == ["web_search"]
+    assert [schema["function"]["name"] for schema in schemas] == [
+        "web_search",
+        "run_python",
+    ]
 
 
 def test_build_tool_registry_registers_file_tools(tmp_path):
@@ -143,7 +151,9 @@ def test_build_tool_registry_registers_file_tools(tmp_path):
     assert {schema["function"]["name"] for schema in schemas} == {
         "read_file",
         "list_dir",
+        "write_file",
         "web_search",
+        "run_python",
     }
 
 
@@ -186,9 +196,9 @@ def _context() -> CommandContext:
             conversation=Conversation(),
             registry=None,
         ),
-        provider_factory=lambda *args, **kwargs: None,
-        tool_registry=None,
-        tool_registry_factory=lambda _: None,
+        provider_factory=get_provider,
+        tool_registry=ToolRegistry(),
+        tool_registry_factory=lambda _: ToolRegistry(),
         memory_store=FakeMemoryStore(),
     )
 
@@ -204,7 +214,11 @@ async def test_run_repl_sends_each_line_until_eof():
             raise EOFError from exc
 
     async def render(events: AsyncIterator[Event]) -> None:
-        sent.append("".join(e.content for e in await _drain(events)))
+        sent.append(
+            "".join(
+                e.content for e in await _drain(events) if isinstance(e, TextChunkEvent)
+            )
+        )
 
     errors: list[Exception] = []
 
@@ -216,6 +230,59 @@ async def test_run_repl_sends_each_line_until_eof():
     assert errors == []
 
 
+async def test_run_repl_ctrl_c_stops_the_turn_and_keeps_the_session():
+    inputs = iter(["slow", "next"])
+    rendered: list[str] = []
+    stops: list[bool] = []
+    turn = 0
+
+    def read_input() -> str:
+        try:
+            return next(inputs)
+        except StopIteration as exc:
+            raise EOFError from exc
+
+    async def render(events: AsyncIterator[Event]) -> None:
+        nonlocal turn
+        turn += 1
+        if turn == 1:
+            asyncio.get_running_loop().call_later(
+                0.05, os.kill, os.getpid(), signal.SIGINT
+            )
+            await asyncio.sleep(30)
+        rendered.append("done")
+
+    await run_repl(
+        _context(),
+        read_input=read_input,
+        render=render,
+        on_error=lambda exc: None,
+        on_stop=lambda: stops.append(True),
+    )
+
+    assert stops == [True]
+    assert rendered == ["done"]  # the second message was still processed
+
+
+async def test_run_repl_restores_the_default_ctrl_c_between_turns():
+    inputs = iter(["hi"])
+
+    def read_input() -> str:
+        try:
+            return next(inputs)
+        except StopIteration as exc:
+            raise EOFError from exc
+
+    async def render(events: AsyncIterator[Event]) -> None:
+        await _drain(events)
+
+    await run_repl(
+        _context(), read_input=read_input, render=render, on_error=lambda exc: None
+    )
+
+    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+
+
 async def test_run_repl_treats_bare_exit_as_chat_message():
     inputs = iter(["exit", "/exit"])
     rendered: list[str] = []
@@ -224,7 +291,11 @@ async def test_run_repl_treats_bare_exit_as_chat_message():
         return next(inputs)
 
     async def render(events: AsyncIterator[Event]) -> None:
-        rendered.append("".join(e.content for e in await _drain(events)))
+        rendered.append(
+            "".join(
+                e.content for e in await _drain(events) if isinstance(e, TextChunkEvent)
+            )
+        )
 
     await run_repl(
         _context(),
@@ -287,7 +358,7 @@ async def test_run_repl_reports_empty_input_and_continues():
 
 async def test_run_repl_reports_provider_error_and_continues():
     class FailingProvider:
-        async def chat_stream(self, messages, tools=None):
+        async def chat_stream(self, messages, tools=None, think=None):
             raise RuntimeError("boom")
             yield  # pragma: no cover
 
@@ -316,6 +387,34 @@ async def test_run_repl_reports_provider_error_and_continues():
 
     assert len(errors) == 1
     assert isinstance(errors[0], ProviderError)
+
+
+async def test_run_repl_reports_an_unexpected_error_and_continues():
+    class BuggyProvider:
+        async def chat_stream(self, messages, tools=None, think=None):
+            raise KeyError("boom")
+            yield  # pragma: no cover
+
+    context = CommandContext(
+        config=AppConfig(),
+        engine=ChatEngine(BuggyProvider(), Conversation()),
+        provider_factory=get_provider,
+        tool_registry=ToolRegistry(),
+        tool_registry_factory=lambda _: ToolRegistry(),
+        memory_store=FakeMemoryStore(),
+    )
+    inputs = iter(["hi", "again", "/exit"])
+    errors: list[Exception] = []
+
+    async def render(events: AsyncIterator[Event]) -> None:
+        async for _ in events:
+            pass
+
+    await run_repl(
+        context, read_input=lambda: next(inputs), render=render, on_error=errors.append
+    )
+
+    assert [type(error) for error in errors] == [KeyError, KeyError]
 
 
 async def test_chat_rag_option_indexes_local_documents(monkeypatch, tmp_path):
@@ -373,10 +472,54 @@ async def test_ui_flag_overrides_config_file(monkeypatch, tmp_path):
     assert code == 0
 
 
-async def test_web_ui_reports_not_implemented(monkeypatch, tmp_path, capsys):
-    monkeypatch.chdir(tmp_path)
+async def test_cli_confirmation_then_followup_keeps_chat_working(monkeypatch):
+    from io import StringIO
 
-    code = await _run(["chat", "--provider", "mock", "--ui", "web"])
+    from sensai.domain.events import TextChunkEvent, ToolCallEvent
+    from sensai.interfaces.cli.app import run_cli
+    from sensai.tools.base import Tool
 
-    assert code == 1
-    assert "not implemented" in capsys.readouterr().out
+    executed = []
+
+    class SearchTool(Tool):
+        name = "web_search"
+        description = "Search"
+        requires_confirmation = True
+
+        def __init__(self) -> None:
+            self.parameters_schema = {}
+
+        async def execute(self, **kwargs):
+            executed.append(kwargs)
+            return "Result"
+
+    class Provider:
+        async def chat_stream(self, messages, tools=None, think=None):
+            if messages[-1].role == "user" and messages[-1].content == "cherche":
+                yield TextChunkEvent(content="Je vais chercher.")
+                yield ToolCallEvent(
+                    tool_name="web_search", arguments={"query": "Sensai"}
+                )
+            else:
+                yield TextChunkEvent(content="Réponse terminée.")
+
+    for answer, expected_executions in [("y", 1), ("", 1), ("n", 0)]:
+        executed.clear()
+        context = _context()
+        context.engine.provider = Provider()
+        registry = ToolRegistry()
+        registry.register(SearchTool())
+        context.engine.registry = registry
+        inputs = iter(["cherche", answer, "bonjour", "/exit"])
+        monkeypatch.setattr("builtins.input", lambda values=inputs: next(values))
+        output = StringIO()
+        await run_cli(context, Console(file=output, force_terminal=False))
+        assert len(executed) == expected_executions
+        rendered = output.getvalue()
+        assert rendered.count("  Allow web_search?\n") == 1
+        assert rendered.count("Réponse terminée.") == (2 if expected_executions else 1)
+        assert "you: \nsensai:" in rendered
+        assert "Réponse terminée.\n\nyou:" in rendered
+        assert isinstance(context.memory_store, FakeMemoryStore)
+        assert len(context.memory_store.saved) == 2
+        assert context.engine.conversation.messages[-2].content == "bonjour"

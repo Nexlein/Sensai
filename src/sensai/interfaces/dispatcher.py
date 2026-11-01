@@ -6,12 +6,28 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
+from rich.markup import escape
 
 from sensai.core.bootstrap import BootstrapError, build_session
+from sensai.core.commands import CommandContext
 from sensai.core.config import DEFAULT_CONFIG_PATH, ConfigError
 from sensai.domain.errors import ProviderError
 from sensai.interfaces.cli.app import run_cli
-from sensai.interfaces.tui.app import run_tui
+from sensai.interfaces.cli.config import add_config_parser, run_config_command
+
+
+async def run_tui(context: CommandContext) -> None:
+    """Start the Textual interface; imported on use, so the CLI starts faster."""
+    from sensai.interfaces.tui.app import run_tui as start
+
+    await start(context)
+
+
+async def run_web(context: CommandContext) -> None:
+    """Start the web interface; imported on use, so the CLI starts faster."""
+    from sensai.interfaces.web.app import run_web as start
+
+    await start(context)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -31,13 +47,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     chat.add_argument(
         "--rag-dir", default=None, help="Directory of .txt and .md files to index"
     )
-    chat.add_argument("--rag-db", default="rag.db", help="Path to the local RAG index")
-    chat.add_argument(
-        "--rag-model", default="nomic-embed-text", help="Ollama embedding model"
-    )
+    # Unset flags fall back to [rag] in sensai.toml, then to its defaults.
+    chat.add_argument("--rag-db", default=None, help="Path to the local RAG index")
+    chat.add_argument("--rag-model", default=None, help="Ollama embedding model")
     chat.add_argument(
         "--session", default=None, help="Name of the session to resume or create"
     )
+    add_config_parser(subparsers, str(DEFAULT_CONFIG_PATH))
     return parser
 
 
@@ -45,6 +61,8 @@ async def dispatch(argv: list[str]) -> int:
     """Build one session, then run the selected interface."""
     console = Console()
     args = build_arg_parser().parse_args(argv)
+    if args.command == "config":
+        return run_config_command(args, console)
 
     try:
         context = await build_session(
@@ -55,22 +73,27 @@ async def dispatch(argv: list[str]) -> int:
             base_url=getattr(args, "base_url", None),
             session_name=getattr(args, "session", None),
             rag_dir=getattr(args, "rag_dir", None),
-            rag_db=getattr(args, "rag_db", "rag.db"),
-            rag_model=getattr(args, "rag_model", "nomic-embed-text"),
+            rag_db=getattr(args, "rag_db", None),
+            rag_model=getattr(args, "rag_model", None),
         )
     except (BootstrapError, ConfigError, ProviderError) as exc:
-        console.print(f"[bold red]✗ {exc}[/]")
+        console.print(f"[bold red]✗ {escape(str(exc))}[/]")
         return 1
 
-    if context.config.interface == "cli":
-        await run_cli(context, console)
-        return 0
-    if context.config.interface == "tui":
-        await run_tui(context)
-        return 0
+    try:
+        for warning in context.startup_warnings:
+            console.print(f"[yellow]⚠ {escape(warning)}[/]")
+        if context.config.interface == "cli":
+            await run_cli(context, console)
+            return 0
+        if context.config.interface == "tui":
+            await run_tui(context)
+            return 0
 
-    console.print("[bold red]✗ Web interface is not implemented yet.[/]")
-    return 1
+        await run_web(context)
+        return 0
+    finally:
+        await context.aclose()
 
 
 def main() -> None:

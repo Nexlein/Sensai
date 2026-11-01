@@ -1,9 +1,11 @@
+"""File tools confined to the allowed root (T4)."""
+
 import os
 from pathlib import Path
 
 import pytest
 
-from sensai.tools.fs import ListDirTool, ReadFileTool
+from sensai.tools.fs import ListDirTool, ReadFileTool, WriteFileTool
 
 
 @pytest.fixture
@@ -97,3 +99,219 @@ async def test_list_dir_rejects_symlink_escape(fs_sandbox):
     content = await tool.execute("link")
 
     assert "Path traversal rejected" in content
+
+
+async def test_read_file_resolves_unique_filename_case(fs_sandbox):
+    (fs_sandbox / "AGENTS.md").write_text("real instructions", encoding="utf-8")
+    tool = ReadFileTool(fs_sandbox)
+    assert await tool.execute("agents.md") == "real instructions"
+
+
+async def test_read_file_refuses_ambiguous_case_match(fs_sandbox):
+    (fs_sandbox / "NOTE.md").write_text("first", encoding="utf-8")
+    (fs_sandbox / "Note.md").write_text("second", encoding="utf-8")
+    tool = ReadFileTool(fs_sandbox)
+    assert await tool.execute("note.md") == "Error: Ambiguous file name: note.md"
+
+
+async def test_case_corrected_symlink_still_cannot_escape_root(fs_sandbox):
+    outside_file = fs_sandbox.parent / "outside" / "secret.txt"
+    (fs_sandbox / "SECRET.TXT").symlink_to(outside_file)
+    tool = ReadFileTool(fs_sandbox)
+    assert "Path traversal rejected" in await tool.execute("secret.txt")
+
+
+def test_write_file_requires_confirmation(fs_sandbox):
+    assert WriteFileTool(fs_sandbox).requires_confirmation is True
+
+
+async def test_write_file_creates_new_file(fs_sandbox):
+    tool = WriteFileTool(fs_sandbox)
+    assert await tool.execute("new.txt", "fresh") == "Wrote 5 characters to new.txt"
+    assert (fs_sandbox / "new.txt").read_text(encoding="utf-8") == "fresh"
+
+
+async def test_write_file_overwrites_existing_file(fs_sandbox):
+    tool = WriteFileTool(fs_sandbox)
+    await tool.execute("test.txt", "replaced")
+    assert (fs_sandbox / "test.txt").read_text(encoding="utf-8") == "replaced"
+
+
+def test_write_file_preview_diffs_against_current_content(fs_sandbox):
+    preview = WriteFileTool(fs_sandbox).preview("test.txt", "hello there")
+
+    assert preview is not None
+    assert "-hello world" in preview
+    assert "+hello there" in preview
+    assert (fs_sandbox / "test.txt").read_text(encoding="utf-8") == "hello world"
+
+
+def test_write_file_preview_new_file_is_all_additions(fs_sandbox):
+    preview = WriteFileTool(fs_sandbox).preview("new.txt", "a\nb")
+
+    assert preview is not None
+    assert preview.splitlines()[-2:] == ["+a", "+b"]
+    assert not (fs_sandbox / "new.txt").exists()
+
+
+def test_write_file_preview_none_when_write_would_be_refused(fs_sandbox):
+    tool = WriteFileTool(fs_sandbox)
+
+    assert tool.preview("../outside/secret.txt", "x") is None
+    assert tool.preview("subdir", "x") is None
+
+
+async def test_write_file_creates_missing_parents(fs_sandbox):
+    tool = WriteFileTool(fs_sandbox)
+    await tool.execute("a/b/c.txt", "deep")
+    assert (fs_sandbox / "a" / "b" / "c.txt").read_text(encoding="utf-8") == "deep"
+
+
+async def test_write_file_accepts_empty_content(fs_sandbox):
+    tool = WriteFileTool(fs_sandbox)
+    await tool.execute("empty.txt", "")
+    assert (fs_sandbox / "empty.txt").read_text(encoding="utf-8") == ""
+
+
+async def test_write_file_refuses_directory(fs_sandbox):
+    tool = WriteFileTool(fs_sandbox)
+    assert await tool.execute("subdir", "x") == "Error: Path is a directory: subdir"
+    assert await tool.execute(".", "x") == "Error: Path is a directory: ."
+
+
+async def test_write_file_rejects_relative_traversal(fs_sandbox):
+    tool = WriteFileTool(fs_sandbox)
+    assert "Path traversal rejected" in await tool.execute(
+        "../outside/secret.txt", "pwned"
+    )
+    assert (fs_sandbox.parent / "outside" / "secret.txt").read_text() == "secret"
+
+
+async def test_write_file_rejects_absolute_path(fs_sandbox):
+    tool = WriteFileTool(fs_sandbox)
+    target = fs_sandbox.parent / "outside" / "new.txt"
+    assert "Path traversal rejected" in await tool.execute(str(target), "pwned")
+    assert not target.exists()
+
+
+async def test_write_file_rejects_traversal_without_creating_dirs(fs_sandbox):
+    tool = WriteFileTool(fs_sandbox)
+    assert "Path traversal rejected" in await tool.execute("../escape/x.txt", "pwned")
+    assert not (fs_sandbox.parent / "escape").exists()
+
+
+async def test_write_file_rejects_symlink_dir_escape(fs_sandbox):
+    if not (fs_sandbox / "link").exists():
+        pytest.skip("Symlink creation not supported on this OS")
+    tool = WriteFileTool(fs_sandbox)
+    assert "Path traversal rejected" in await tool.execute("link/secret.txt", "pwned")
+    assert (fs_sandbox.parent / "outside" / "secret.txt").read_text() == "secret"
+
+
+async def test_write_file_rejects_symlinked_file_escape(fs_sandbox):
+    outside_file = fs_sandbox.parent / "outside" / "secret.txt"
+    (fs_sandbox / "alias.txt").symlink_to(outside_file)
+    tool = WriteFileTool(fs_sandbox)
+    assert "Path traversal rejected" in await tool.execute("alias.txt", "pwned")
+    assert outside_file.read_text() == "secret"
+
+
+needs_permissions = pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root ignores file permissions",
+)
+
+
+@pytest.mark.asyncio
+async def test_read_file_reports_non_utf8_content_as_error(fs_sandbox):
+    (fs_sandbox / "binary.txt").write_bytes(b"\xff\xfe\x00")
+
+    result = await ReadFileTool(fs_sandbox).execute("binary.txt")
+
+    assert result.startswith("Error:")
+
+
+@needs_permissions
+@pytest.mark.asyncio
+async def test_read_file_reports_unreadable_file_as_error(fs_sandbox):
+    locked = fs_sandbox / "locked.txt"
+    locked.write_text("x")
+    locked.chmod(0)
+    try:
+        result = await ReadFileTool(fs_sandbox).execute("locked.txt")
+    finally:
+        locked.chmod(0o600)
+
+    assert result.startswith("Error reading file:")
+
+
+@pytest.mark.asyncio
+async def test_list_dir_on_a_file_says_it_is_not_a_directory(fs_sandbox):
+    result = await ListDirTool(fs_sandbox).execute("test.txt")
+
+    assert result == "Error: Directory not found or is a file: test.txt"
+
+
+@needs_permissions
+@pytest.mark.asyncio
+async def test_list_dir_reports_unreadable_directory_as_error(fs_sandbox):
+    locked = fs_sandbox / "locked"
+    locked.mkdir()
+    locked.chmod(0)
+    try:
+        result = await ListDirTool(fs_sandbox).execute("locked")
+    finally:
+        locked.chmod(0o700)
+
+    assert result.startswith("Error listing directory:")
+
+
+@pytest.mark.asyncio
+async def test_write_file_under_a_file_reports_error_and_keeps_the_file(fs_sandbox):
+    result = await WriteFileTool(fs_sandbox).execute("test.txt/new.txt", "data")
+
+    assert result.startswith("Error writing file:")
+    assert (fs_sandbox / "test.txt").read_text() == "hello world"
+
+
+# Paths a model (or an injected document) might try: all must be refused.
+HOSTILE_PATHS = [
+    "../outside/secret.txt",
+    "subdir/../../outside/secret.txt",
+    "/etc/passwd",
+    "link/secret.txt",
+    "nul\x00byte.txt",
+    "a" * 5000,
+]
+
+
+@pytest.mark.parametrize("path", HOSTILE_PATHS)
+@pytest.mark.parametrize("tool_class", [ReadFileTool, ListDirTool])
+@pytest.mark.asyncio
+async def test_hostile_read_paths_return_an_error_never_raise(
+    fs_sandbox, tool_class, path
+):
+    result = await tool_class(fs_sandbox).execute(path)
+
+    assert result.startswith("Error")
+
+
+@pytest.mark.parametrize("path", HOSTILE_PATHS)
+@pytest.mark.asyncio
+async def test_hostile_write_paths_never_write_outside_the_root(fs_sandbox, path):
+    outside = fs_sandbox.parent / "outside"
+    before = sorted(p.name for p in outside.iterdir())
+
+    result = await WriteFileTool(fs_sandbox).execute(path, "pwned")
+
+    assert result.startswith("Error")
+    assert sorted(p.name for p in outside.iterdir()) == before
+    assert (outside / "secret.txt").read_text() == "secret"
+
+
+@pytest.mark.asyncio
+async def test_tilde_is_a_plain_folder_name_not_the_home_directory(fs_sandbox):
+    result = await WriteFileTool(fs_sandbox).execute("~/.ssh/id_rsa", "x")
+
+    assert result == "Wrote 1 characters to ~/.ssh/id_rsa"
+    assert (fs_sandbox / "~" / ".ssh" / "id_rsa").read_text() == "x"

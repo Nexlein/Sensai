@@ -1,3 +1,5 @@
+"""Regex guardrail: input and output verdicts."""
+
 import pytest
 
 from sensai.eval.guardrails import RegexGuardrail

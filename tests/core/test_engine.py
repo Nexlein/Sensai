@@ -1,14 +1,20 @@
+"""Chat engine: one turn, streaming, tools, guardrails, errors."""
+
+import asyncio
+import json
 from collections.abc import AsyncGenerator
+from datetime import date
 from typing import Any
 
 import httpx
 import pytest
 
-from sensai.core.engine import TOOL_RESULT_WITHHELD, ChatEngine
-from sensai.core.prompt import PRIVACY_NOTE
+from sensai.core.engine import ChatEngine
+from sensai.core.prompt import PRIVACY_NOTE, TOOL_USE_GUIDANCE, date_note
+from sensai.core.tool_runner import TOOL_RESULT_WITHHELD
 from sensai.domain.errors import EmptyInputError, ProviderError
-from sensai.domain.events import Event, GuardrailEvent
-from sensai.domain.models import Conversation, Message
+from sensai.domain.events import AssistantStartEvent, Event, GuardrailEvent
+from sensai.domain.models import Conversation, Message, Persona
 from sensai.eval.guardrails import REFUSAL_TEXT, RegexGuardrail
 from sensai.providers.mock import MockLLMProvider
 
@@ -18,7 +24,10 @@ class FailingLLMProvider:
         self.exc = exc
 
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         raise self.exc
         yield  # pragma: no cover
@@ -32,7 +41,7 @@ async def test_send_accumulates_chunks_into_single_assistant_message():
 
     events = [event async for event in engine.send("hi")]
 
-    assert len(events) > 0
+    assert isinstance(events[0], AssistantStartEvent)
     assert conversation.messages[-1].role == "assistant"
     assert conversation.messages[-1].content == "hello world"
     assert len([m for m in conversation.messages if m.role == "assistant"]) == 1
@@ -65,6 +74,72 @@ async def test_send_wraps_provider_runtime_error_and_leaves_conversation_unchang
 
 
 @pytest.mark.asyncio
+async def test_send_keeps_a_provider_error_message_and_leaves_conversation_unchanged():
+    conversation = Conversation()
+    original = ProviderError("Groq error [400]: bad tool message")
+    engine = ChatEngine(FailingLLMProvider(original), conversation)
+
+    with pytest.raises(ProviderError) as raised:
+        async for _ in engine.send("hi"):
+            pass
+
+    assert raised.value is original
+    assert conversation.messages == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc",
+    [
+        httpx.ReadTimeout("timed out"),
+        httpx.ConnectTimeout("timed out"),
+        httpx.RemoteProtocolError("server closed the connection"),
+        httpx.ReadError("connection reset"),
+    ],
+)
+async def test_send_wraps_any_http_failure_and_leaves_conversation_unchanged(exc):
+    conversation = Conversation()
+    engine = ChatEngine(FailingLLMProvider(exc), conversation)
+
+    with pytest.raises(ProviderError) as raised:
+        async for _ in engine.send("hi"):
+            pass
+
+    assert raised.value.__cause__ is exc
+    assert conversation.messages == []
+
+
+class StallingLLMProvider:
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
+    ) -> AsyncGenerator[Event]:
+        await asyncio.sleep(60)
+        yield TextChunkEvent(content="")  # pragma: no cover
+
+
+@pytest.mark.asyncio
+async def test_cancelling_a_turn_drops_the_unanswered_user_message():
+    conversation = Conversation()
+    engine = ChatEngine(StallingLLMProvider(), conversation)
+
+    async def consume() -> None:
+        async for _ in engine.send("hi"):
+            pass
+
+    task = asyncio.ensure_future(consume())
+    await asyncio.sleep(0.05)
+    assert [m.role for m in conversation.messages] == ["user"]
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert conversation.messages == []
+
+
+@pytest.mark.asyncio
 async def test_send_wraps_provider_connect_error_and_leaves_conversation_unchanged():
     conversation = Conversation()
     provider = FailingLLMProvider(httpx.ConnectError("connection refused"))
@@ -77,12 +152,13 @@ async def test_send_wraps_provider_connect_error_and_leaves_conversation_unchang
     assert conversation.messages == []
 
 
-from sensai.domain.events import TextChunkEvent, ToolCallEvent
+from sensai.domain.events import TextChunkEvent, ToolCallEvent, UsageEvent
 from sensai.providers.mock import MockToolCallingLLMProvider
 from sensai.tools.registry import ToolRegistry
 
 
 class DummyTool:
+    requires_confirmation = False
     name = "dummy"
     description = "a dummy tool"
     parameters_schema = {}  # noqa: RUF012
@@ -101,7 +177,7 @@ class MockRoundTripProvider:
     def __init__(self):
         self.calls = 0
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.calls += 1
         if self.calls == 1:
             yield ToolCallEvent(tool_name="dummy", arguments={"foo": "bar"})
@@ -123,6 +199,7 @@ async def test_normal_tool_round_trip():
     # User message + Assistant (tool call) + Tool message + Assistant (final)
     assert len(conversation.messages) == 4
     assert conversation.messages[1].role == "assistant"
+    assert conversation.messages[1].tool_calls is not None
     assert conversation.messages[1].tool_calls[0].name == "dummy"
     assert conversation.messages[2].role == "tool"
     assert conversation.messages[2].content == "dummy_result"
@@ -140,8 +217,9 @@ async def test_infinite_tool_call_loop_caps_at_5():
 
     _ = [e async for e in engine.send("go")]
 
-    # 1 user + 5 pairs of (assistant tool_call, tool result) = 11 messages
-    assert len(conversation.messages) == 11
+    # 1 user + 5 pairs of (assistant tool_call, tool result) + forced answer
+    assert len(conversation.messages) == 12
+    assert conversation.messages[-1].role == "assistant"
     tool_messages = [m for m in conversation.messages if m.role == "tool"]
     assert len(tool_messages) == 5
 
@@ -167,9 +245,28 @@ class RecordingLLMProvider:
     def __init__(self):
         self.prompts = []
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.prompts.append(messages)
         yield TextChunkEvent(content="answer")
+
+
+@pytest.mark.asyncio
+async def test_send_leads_with_the_persona_only_while_enabled():
+    persona = Persona(
+        id="c", name="Collecte", description="", system_instruction="Tu es Collecte."
+    )
+    provider = RecordingLLMProvider()
+    engine = ChatEngine(
+        provider, Conversation(), retriever=FakeContextRetriever(), persona=persona
+    )
+
+    _ = [event async for event in engine.send("first")]
+    engine.persona_enabled = False
+    _ = [event async for event in engine.send("second")]
+
+    assert provider.prompts[0][0].content == "Tu es Collecte."
+    assert "verified fact" in provider.prompts[0][2].content  # after the date
+    assert all(m.content != "Tu es Collecte." for m in provider.prompts[1])
 
 
 class FakeContextRetriever:
@@ -185,8 +282,8 @@ async def test_send_injects_retrieved_context_without_persisting_it():
 
     _ = [event async for event in engine.send("question")]
 
-    assert provider.prompts[0][0].role == "system"
-    assert "verified fact" in provider.prompts[0][0].content
+    assert provider.prompts[0][1].role == "system"
+    assert "verified fact" in provider.prompts[0][1].content  # after the date
     assert [message.role for message in conversation.messages] == ["user", "assistant"]
     assert all(
         "verified fact" not in message.content for message in conversation.messages
@@ -220,7 +317,7 @@ class ScriptedProvider:
         self.scripts = scripts
         self.prompts = []
 
-    async def chat_stream(self, messages, tools=None):
+    async def chat_stream(self, messages, tools=None, think=None):
         self.prompts.append(list(messages))
         for event in self.scripts[len(self.prompts) - 1]:
             yield event
@@ -482,7 +579,9 @@ async def test_engine_without_guardrail_never_emits_guardrail_events():
 
 
 def _system_notes(prompt) -> list[str]:
-    return [m.content for m in prompt if m.role == "system"]
+    """System messages other than the date, which every prompt carries."""
+    today = date_note(date.today())
+    return [m.content for m in prompt if m.role == "system" and m.content != today]
 
 
 @pytest.mark.asyncio
@@ -532,8 +631,8 @@ async def test_model_is_told_when_a_tool_result_was_masked():
 
     _ = [e async for e in engine.send("look it up")]
 
-    assert _system_notes(provider.prompts[0]) == []
-    assert _system_notes(provider.prompts[1]) == [PRIVACY_NOTE]
+    assert _system_notes(provider.prompts[0]) == [TOOL_USE_GUIDANCE]
+    assert _system_notes(provider.prompts[1]) == [TOOL_USE_GUIDANCE, PRIVACY_NOTE]
     assert all(m.role != "system" for m in conversation.messages)
 
 
@@ -545,7 +644,208 @@ async def test_withheld_tool_result_gets_no_privacy_note():
 
     _ = [e async for e in engine.send("look it up")]
 
-    assert _system_notes(provider.prompts[1]) == []
+    assert _system_notes(provider.prompts[1]) == [TOOL_USE_GUIDANCE]
+
+
+@pytest.mark.parametrize(
+    "requires_confirmation, answer, expected_executions",
+    [
+        (True, True, 1),
+        (True, False, 0),
+        (True, None, 0),
+        (True, "yes", 0),
+        (False, False, 1),
+    ],
+)
+async def test_tool_confirmation_controls_execution(
+    requires_confirmation, answer, expected_executions
+):
+    executed = []
+    confirmations = []
+
+    class RecordingTool(DummyTool):
+        async def execute(self, **kwargs):
+            executed.append(kwargs)
+            return "tool result"
+
+    tool = RecordingTool()
+    tool.requires_confirmation = requires_confirmation
+    registry = ToolRegistry()
+    registry.register(tool)
+    conversation = Conversation()
+    engine = ChatEngine(MockRoundTripProvider(), conversation, registry)
+
+    async def confirm(tc):
+        confirmations.append(tc)
+        assert not executed
+        return answer
+
+    events = [
+        event
+        async for event in engine.send(
+            "do it", confirm_tool=confirm if answer is not None else None
+        )
+    ]
+    assert events
+    assert len(executed) == expected_executions
+    assert len(confirmations) == int(requires_confirmation and answer is not None)
+    if requires_confirmation and answer is not True:
+        assert (
+            conversation.messages[-1].content
+            == "I didn't run the requested tool: dummy."
+        )
+        assert (
+            conversation.messages[-2].content == "Tool execution declined by the user."
+        )
+    else:
+        assert conversation.messages[-1].content == "final answer"
+
+
+@pytest.mark.parametrize(
+    ("preview", "expected"),
+    [
+        (lambda **kwargs: "a diff", "a diff"),
+        (lambda **kwargs: 1 / 0, None),
+    ],
+)
+async def test_confirmation_receives_tool_preview(preview, expected, monkeypatch):
+    seen = []
+    tool = DummyTool()
+    tool.requires_confirmation = True
+    monkeypatch.setattr(tool, "preview", preview, raising=False)
+    registry = ToolRegistry()
+    registry.register(tool)
+    engine = ChatEngine(MockRoundTripProvider(), Conversation(), registry)
+
+    async def confirm(tc):
+        seen.append(tc.preview)
+        return False
+
+    _ = [e async for e in engine.send("do it", confirm_tool=confirm)]
+
+    assert seen == [expected]
+
+
+async def test_multiple_tool_calls_confirm_each_sensitive_tool_before_execution():
+    executed = []
+    confirmations = []
+
+    class RecordingTool(DummyTool):
+        requires_confirmation = True
+
+        def __init__(self, name):
+            super().__init__()
+            self.name = name
+
+        async def execute(self, **kwargs):
+            executed.append((self.name, kwargs))
+            return f"result from {self.name}"
+
+    registry = ToolRegistry()
+    registry.register(RecordingTool("first"))
+    registry.register(RecordingTool("second"))
+    provider = ScriptedProvider(
+        [
+            ToolCallEvent(tool_name="first", arguments={"step": 1}),
+            ToolCallEvent(tool_name="second", arguments={"step": 2}),
+        ]
+    )
+    conversation = Conversation()
+    engine = ChatEngine(provider, conversation, registry)
+
+    async def confirm(tc):
+        confirmations.append((tc.name, tc.arguments, list(executed)))
+        return tc.name == "first"
+
+    events = [event async for event in engine.send("run both", confirm_tool=confirm)]
+
+    assert confirmations == [
+        ("first", {"step": 1}, []),
+        ("second", {"step": 2}, [("first", {"step": 1})]),
+    ]
+    assert executed == [("first", {"step": 1})]
+    assert [message.content for message in conversation.messages[2:4]] == [
+        "result from first",
+        "Tool execution declined by the user.",
+    ]
+    assert len(provider.prompts) == 1
+    assert shown_text(events) == "I didn't run the requested tool: second."
+
+
+async def test_multiple_tool_calls_prompt_only_for_sensitive_tool():
+    executed = []
+    confirmed = []
+
+    class RecordingTool(DummyTool):
+        def __init__(self, name, requires_confirmation):
+            super().__init__()
+            self.name = name
+            self.requires_confirmation = requires_confirmation
+
+        async def execute(self, **kwargs):
+            executed.append(self.name)
+            return f"result from {self.name}"
+
+    registry = ToolRegistry()
+    registry.register(RecordingTool("safe", False))
+    registry.register(RecordingTool("sensitive", True))
+    provider = ScriptedProvider(
+        [
+            ToolCallEvent(tool_name="safe", arguments={}),
+            ToolCallEvent(tool_name="sensitive", arguments={}),
+        ],
+        chunks("finished"),
+    )
+    conversation = Conversation()
+    engine = ChatEngine(provider, conversation, registry)
+
+    async def confirm(tc):
+        confirmed.append(tc.name)
+        return True
+
+    events = [event async for event in engine.send("run both", confirm_tool=confirm)]
+
+    assert confirmed == ["sensitive"]
+    assert executed == ["safe", "sensitive"]
+    assert [message.content for message in conversation.messages[2:4]] == [
+        "result from safe",
+        "result from sensitive",
+    ]
+    assert len(provider.prompts) == 2
+    assert shown_text(events) == "finished"
+
+
+async def test_confirmation_callback_error_cancels_tool_without_retrying_model():
+    executed = []
+
+    class RecordingTool(DummyTool):
+        requires_confirmation = True
+
+        async def execute(self, **kwargs):
+            executed.append(kwargs)
+            return "should not run"
+
+    registry = ToolRegistry()
+    registry.register(RecordingTool())
+    provider = ScriptedProvider(
+        [ToolCallEvent(tool_name="dummy", arguments={"step": 1})]
+    )
+    conversation = Conversation()
+    engine = ChatEngine(provider, conversation, registry)
+
+    async def broken_confirmation(tc):
+        raise RuntimeError("confirmation UI failed")
+
+    events = [
+        event async for event in engine.send("run it", confirm_tool=broken_confirmation)
+    ]
+
+    assert executed == []
+    assert len(provider.prompts) == 1
+    assert conversation.messages[2].content == (
+        "Tool confirmation failed; execution cancelled."
+    )
+    assert shown_text(events) == "I didn't run the requested tool: dummy."
 
 
 class ListRecorder:
@@ -643,3 +943,195 @@ async def test_empty_reply_is_not_recorded():
     _ = [e async for e in engine.send("hi")]
 
     assert recorder.replies == []
+
+
+@pytest.mark.asyncio
+async def test_engine_injects_structured_memory_into_prompt(tmp_path):
+    from sensai.memory.manager import SqliteMemoryManager
+
+    mem = SqliteMemoryManager(tmp_path / "eng_mem.db")
+    mem.store_fact("user", "preferred_language", "Rust")
+
+    provider = RecordingLLMProvider()
+    engine = ChatEngine(provider, Conversation(), memory=mem)
+
+    _ = [e async for e in engine.send("hello")]
+
+    (prompt,) = provider.prompts
+    system_contents = [m.content for m in prompt if m.role == "system"]
+    assert any(
+        "- user.preferred_language: Rust" in content for content in system_contents
+    )
+
+
+@pytest.mark.asyncio
+async def test_engine_respects_memory_auto_inject_false(tmp_path):
+    from sensai.memory.manager import SqliteMemoryManager
+
+    mem = SqliteMemoryManager(tmp_path / "eng_mem.db")
+    mem.store_fact("user", "preferred_language", "Rust")
+
+    provider = RecordingLLMProvider()
+    engine = ChatEngine(provider, Conversation(), memory=mem, memory_auto_inject=False)
+
+    _ = [e async for e in engine.send("hello")]
+
+    (prompt,) = provider.prompts
+    system_contents = [m.content for m in prompt if m.role == "system"]
+    assert not any(
+        "- user.preferred_language: Rust" in content for content in system_contents
+    )
+
+
+class FailsAfterToolProvider:
+    """Calls the tool once, then fails on the follow-up request."""
+
+    def __init__(self, exc: BaseException | None = None) -> None:
+        self.calls = 0
+        self.exc = exc
+
+    async def chat_stream(self, messages, tools=None, think=None):
+        self.calls += 1
+        if self.calls == 1:
+            yield ToolCallEvent(tool_name="dummy", arguments={})
+            return
+        if self.exc is None:
+            await asyncio.sleep(60)
+            return
+        raise self.exc
+
+
+def _engine_with_history(provider):
+    conversation = Conversation()
+    conversation.add_message(role="user", content="earlier")
+    conversation.add_message(role="assistant", content="reply")
+    registry = ToolRegistry()
+    registry.register(DummyTool())
+    return ChatEngine(provider, conversation, registry), conversation
+
+
+@pytest.mark.asyncio
+async def test_provider_error_after_a_tool_round_rolls_back_the_whole_turn():
+    provider = FailsAfterToolProvider(RuntimeError("boom"))
+    engine, conversation = _engine_with_history(provider)
+
+    with pytest.raises(ProviderError):
+        _ = [e async for e in engine.send("go")]
+
+    assert provider.calls == 2
+    assert [m.content for m in conversation.messages] == ["earlier", "reply"]
+
+
+@pytest.mark.asyncio
+async def test_cancelling_after_a_tool_round_rolls_back_the_whole_turn():
+    provider = FailsAfterToolProvider()
+    engine, conversation = _engine_with_history(provider)
+
+    async def consume() -> None:
+        async for _ in engine.send("go"):
+            pass
+
+    task = asyncio.ensure_future(consume())
+    while provider.calls < 2:
+        await asyncio.sleep(0.01)
+    assert [m.role for m in conversation.messages][-2:] == ["assistant", "tool"]
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert [m.content for m in conversation.messages] == ["earlier", "reply"]
+
+
+class PromptListRecorder:
+    def __init__(self):
+        self.entries = []
+
+    def record_prompt(self, entry):
+        self.entries.append(entry)
+
+
+@pytest.mark.asyncio
+async def test_every_model_round_is_logged_with_its_full_prompt():
+    provider = ScriptedProvider(
+        [ToolCallEvent(tool_name="dummy", arguments={})], chunks("done")
+    )
+    registry = ToolRegistry()
+    registry.register(DummyTool(return_val="tool output"))
+    recorder = PromptListRecorder()
+    engine = ChatEngine(
+        provider,
+        Conversation(),
+        registry,
+        retriever=FakeContextRetriever(),
+        prompt_recorder=recorder,
+    )
+
+    _ = [e async for e in engine.send("question")]
+
+    assert len(recorder.entries) == 2
+    first, second = recorder.entries
+    assert first["tools"] == ["dummy"]
+    assert [m["source"] for m in first["messages"]] == [
+        "tools",
+        "date",
+        "rag",
+        "history",
+    ]
+    assert [m["content"] for m in first["messages"]] == [
+        m.content for m in provider.prompts[0]
+    ]
+    assert "tool output" in [m["content"] for m in second["messages"]]
+    assert [p.message.content for p in engine.last_prompt] == [
+        m.content for m in provider.prompts[1]
+    ]
+
+
+@pytest.mark.asyncio
+async def test_prompt_log_holds_only_masked_personal_data():
+    recorder = PromptListRecorder()
+    engine = ChatEngine(
+        ScriptedProvider(chunks("ok")),
+        Conversation(),
+        guardrail=RegexGuardrail(),
+        prompt_recorder=recorder,
+    )
+
+    _ = [e async for e in engine.send("my mail is john@example.com")]
+
+    logged = json.dumps(recorder.entries)
+    assert "john@example.com" not in logged
+    assert "[EMAIL]" in logged
+
+
+@pytest.mark.asyncio
+async def test_prompt_log_holds_the_real_counts_and_the_estimate_error():
+    recorder = PromptListRecorder()
+    usage = UsageEvent(prompt_tokens=20, reply_tokens=2, reply_seconds=0.5)
+    engine = ChatEngine(
+        ScriptedProvider([*chunks("ok"), usage]),
+        Conversation(),
+        prompt_recorder=recorder,
+    )
+
+    _ = [e async for e in engine.send("hello")]
+
+    (entry,) = recorder.entries
+    assert entry["usage"]["prompt_tokens"] == 20
+    assert entry["usage"]["reply_rate"] == 4.0
+    assert entry["estimate_error"] == round((entry["estimated_tokens"] - 20) / 20, 3)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_model_call_is_still_logged():
+    recorder = PromptListRecorder()
+    engine = ChatEngine(
+        FailingLLMProvider(RuntimeError("down")),
+        Conversation(),
+        prompt_recorder=recorder,
+    )
+
+    with pytest.raises(ProviderError):
+        _ = [e async for e in engine.send("hello")]
+
+    assert len(recorder.entries) == 1
+    assert recorder.entries[0]["messages"][-1]["content"] == "hello"

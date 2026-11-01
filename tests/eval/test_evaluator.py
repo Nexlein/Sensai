@@ -1,6 +1,8 @@
+"""Evaluator: attacks replayed at guardrail and engine level."""
+
 import pytest
 
-from sensai.domain.models import GuardrailVerdict
+from sensai.domain.models import GuardrailFinding, GuardrailVerdict
 from sensai.eval.adversarial.corpus import CASES, AttackCase
 from sensai.eval.evaluator import (
     AttackResult,
@@ -22,8 +24,9 @@ class AllowAllGuardrail:
 
     def new_output_stream(self):
         class _Stream:
-            findings: list = []
-            refused = False
+            def __init__(self) -> None:
+                self.findings: list[GuardrailFinding] = []
+                self.refused = False
 
             def feed(self, chunk: str) -> str:
                 return chunk

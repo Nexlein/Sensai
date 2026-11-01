@@ -1,44 +1,47 @@
+import asyncio
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
 
 from sensai.core.budget import ContextBudget
-from sensai.core.prompt import build_prompt
+from sensai.core.guard import guardrail_event
+from sensai.core.prompt import PromptComposer, PromptPart, prompt_entry
+from sensai.core.streaming import RoundStream, RoundStreamer
+from sensai.core.tool_runner import ConfirmTool, ToolRunner
+from sensai.core.turn import Round, Turn
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import (
-    BudgetEvent,
+    AssistantStartEvent,
     Event,
     GuardrailEvent,
+    MaxStepsEvent,
+    StepEvent,
     TextChunkEvent,
-    ToolCallEvent,
 )
-from sensai.domain.models import Conversation, GuardrailFinding, ToolCall
+from sensai.domain.models import Conversation, Persona
 from sensai.domain.protocols import (
     ContextRetriever,
     Guardrail,
     LLMProvider,
+    PromptRecorder,
     ReplyRecorder,
+    StructuredMemory,
     ToolRegistry,
 )
 
-TOOL_RESULT_WITHHELD = "[tool result withheld: it contained personal data]"
+MAX_TOOL_ROUNDS = 5
 
 
-def _reason(findings: list[GuardrailFinding]) -> str:
-    """Which rules fired, e.g. "injection: ignore_instructions; pii: email".
-
-    Rule names only: the matched text is never put in an event or a log.
-    """
-    rules_by_category: dict[str, list[str]] = {}
-    for finding in findings:
-        rules_by_category.setdefault(finding.category, []).append(finding.rule)
-    return "; ".join(
-        f"{category}: {', '.join(dict.fromkeys(rules))}"
-        for category, rules in rules_by_category.items()
-    )
+def _provider_options(provider: LLMProvider) -> dict[str, Any] | None:
+    """Sampling options a provider sends with each call, if it has any."""
+    options = getattr(provider, "options", None)
+    return options.model_dump(exclude_none=True) if options is not None else None
 
 
 class ChatEngine:
+    """Runs one user turn: guard, retrieve, then loop model call and tool calls."""
+
     def __init__(
         self,
         provider: LLMProvider,
@@ -48,7 +51,18 @@ class ChatEngine:
         budget: ContextBudget | None = None,
         guardrail: Guardrail | None = None,
         recorder: ReplyRecorder | None = None,
+        memory: StructuredMemory | None = None,
+        memory_auto_inject: bool = True,
+        reasoning: bool = False,
+        split_thoughts: bool = True,
+        max_steps: int = MAX_TOOL_ROUNDS,
+        think: bool | str | None = None,
+        prompt_recorder: PromptRecorder | None = None,
+        persona: Persona | None = None,
+        persona_enabled: bool = True,
     ) -> None:
+        if max_steps < 1:
+            raise ValueError("max_steps must be at least 1")
         self.provider = provider
         self.conversation = conversation
         self.registry = registry
@@ -56,137 +70,174 @@ class ChatEngine:
         self.budget = budget
         self.guardrail = guardrail
         self.recorder = recorder
+        self.memory = memory
+        self.memory_auto_inject = memory_auto_inject
+        self.reasoning = reasoning
+        self.split_thoughts = split_thoughts
+        self.max_steps = max_steps
+        self.think = think
+        self.prompt_recorder = prompt_recorder
+        # Prompt of the latest model call, for /prompt.
+        self.last_prompt: list[PromptPart] = []
+        # Kept when disabled so `/persona on` can bring it back.
+        self.persona = persona
+        self.persona_enabled = persona_enabled
 
-    async def send(self, user_text: str) -> AsyncGenerator[Event]:
+    @property
+    def _streamer(self) -> RoundStreamer:
+        return RoundStreamer(
+            self.provider,
+            guardrail=self.guardrail,
+            budget=self.budget,
+            reasoning=self.reasoning,
+            split_thoughts=self.split_thoughts,
+            think=self.think,
+        )
+
+    @property
+    def _tools(self) -> ToolRunner:
+        return ToolRunner(self.registry, self.guardrail, self.conversation)
+
+    @property
+    def _composer(self) -> PromptComposer:
+        return PromptComposer(
+            self.conversation,
+            self.budget,
+            self.memory,
+            self.memory_auto_inject,
+            persona=self.persona if self.persona_enabled else None,
+        )
+
+    async def send(
+        self, user_text: str, confirm_tool: ConfirmTool | None = None
+    ) -> AsyncGenerator[Event]:
+        """Stream the events of one turn; a failed or cancelled turn leaves history untouched."""
+        mark = len(self.conversation.messages)
+        try:
+            async for event in self._send(user_text, confirm_tool):
+                yield event
+        except (asyncio.CancelledError, ProviderError):
+            del self.conversation.messages[mark:]
+            raise
+
+    async def _send(
+        self, user_text: str, confirm_tool: ConfirmTool | None
+    ) -> AsyncGenerator[Event]:
         if not user_text.strip():
             raise EmptyInputError("user_text must not be empty")
 
-        # True once something the model will see was replaced by a placeholder this
-        # turn; the model is then told so, otherwise "[IBAN]" reads like a glitch.
-        masked = False
-
+        turn = Turn(user_text)
         if self.guardrail is not None:
             verdict = await self.guardrail.filter_input(user_text)
             if verdict.action != "allow":
-                yield GuardrailEvent(
-                    stage="input",
-                    action=verdict.action,
-                    reason=_reason(verdict.findings),
-                )
+                yield guardrail_event("input", verdict.action, verdict.findings)
             if verdict.action == "block":
                 return
-            # From here on only the filtered text exists: it is what the retriever
-            # embeds, what the provider sees and what gets stored in the history.
-            user_text = verdict.text
-            masked = verdict.action == "redact"
+            turn.user_text = verdict.text
+            turn.masked = verdict.action == "redact"
 
-        rag_context = ""
-        if self.retriever is not None:
-            try:
-                rag_context = await self.retriever.retrieve_context(user_text)
-            except (RuntimeError, ValueError, httpx.HTTPError) as exc:
-                raise ProviderError("retrieval failed") from exc
+        turn.rag_context = await self._retrieve(turn.user_text)
+        self.conversation.add_message(role="user", content=turn.user_text)
+        tools_schema = self.registry.get_tools_schema() if self.registry else None
+        composer, streamer = self._composer, self._streamer
 
-        self.conversation.add_message(role="user", content=user_text)
+        yield AssistantStartEvent()
+        for step in range(1, self.max_steps + 1):
+            if self.reasoning:
+                yield StepEvent(index=step, max_steps=self.max_steps)
+            parts = await composer.compose_parts(turn, bool(tools_schema))
+            stream = streamer.open([part.message for part in parts], tools_schema)
+            async for event in self._round(stream, parts):
+                yield event
+            reply = stream.reply
 
-        for _ in range(5):
-            if self.budget is not None:
-                await self.budget.fit(self.conversation)
-            prompt = build_prompt(
-                self.conversation, rag_context=rag_context, privacy_note=masked
-            )
-            tracker = self.budget.tracker(prompt) if self.budget else None
-            if tracker is not None:
-                yield BudgetEvent(
-                    used=tracker.usage.used, max_tokens=tracker.max_tokens
+            if not reply.tool_calls or reply.refused:
+                self._finish(turn, reply)
+                return
+
+            async for event in self._run_tools(turn, reply, confirm_tool):
+                yield event
+            if turn.declined:
+                return
+
+        async for event in self._conclude(turn):
+            yield event
+
+    async def _run_tools(
+        self, turn: Turn, reply: Round, confirm_tool: ConfirmTool | None
+    ) -> AsyncGenerator[Event]:
+        """Record the tool calls and run them, noting a redacted result in `turn`.
+
+        If the user declined any, `turn.declined` names them and the turn ends
+        with a short note instead of another model call.
+        """
+        self.conversation.add_message(
+            role="assistant",
+            content=reply.message_text,
+            tool_calls=reply.tool_calls,
+            thought=reply.thought,
+        )
+        tools = self._tools
+        turn.declined = []
+        for tc in reply.tool_calls:
+            outcome = await tools.run(tc, confirm_tool)
+            if outcome.declined:
+                turn.declined.append(tc.name)
+            async for event in tools.store(outcome.result):
+                if isinstance(event, GuardrailEvent) and event.action == "redact":
+                    turn.masked = True
+                yield event
+
+        if turn.declined:
+            names = ", ".join(dict.fromkeys(turn.declined))
+            text = f"I didn't run the requested tool: {names}."
+            self.conversation.add_message(role="assistant", content=text)
+            yield TextChunkEvent(content=text)
+
+    async def _conclude(self, turn: Turn) -> AsyncGenerator[Event]:
+        """Force a tool-free answer once the step cap is reached."""
+        if self.reasoning:
+            yield MaxStepsEvent(max_steps=self.max_steps)
+        parts = await self._composer.compose_parts(turn, False, step_limit=True)
+        stream = self._streamer.open([part.message for part in parts], None)
+        async for event in self._round(stream, parts):
+            yield event
+        self._finish(turn, stream.reply)
+
+    async def _round(
+        self, stream: RoundStream, parts: list[PromptPart]
+    ) -> AsyncGenerator[Event]:
+        """Stream one model call and keep its prompt, even if the call fails."""
+        self.last_prompt = parts
+        try:
+            async for event in stream.events():
+                yield event
+        finally:
+            if self.prompt_recorder is not None:
+                self.prompt_recorder.record_prompt(
+                    prompt_entry(
+                        parts,
+                        model=getattr(self.provider, "model", None),
+                        tools=stream.tools_schema,
+                        think=stream.config.think if self.reasoning else None,
+                        options=_provider_options(self.provider),
+                        usage=stream.reply.usage,
+                    )
                 )
 
-            chunks: list[str] = []
-            tool_calls: list[ToolCallEvent] = []
-            stream = self.guardrail.new_output_stream() if self.guardrail else None
+    async def _retrieve(self, user_text: str) -> str:
+        if self.retriever is None:
+            return ""
+        try:
+            return await self.retriever.retrieve_context(user_text)
+        except (RuntimeError, ValueError, httpx.HTTPError) as exc:
+            raise ProviderError("retrieval failed") from exc
 
-            try:
-                tools_schema = (
-                    self.registry.get_tools_schema() if self.registry else None
-                )
-                async for event in self.provider.chat_stream(
-                    prompt, tools=tools_schema
-                ):
-                    if isinstance(event, TextChunkEvent):
-                        if stream is not None:
-                            released = stream.feed(event.content)
-                            if not released:
-                                continue
-                            event = TextChunkEvent(content=released)
-                        chunks.append(event.content)
-                    elif isinstance(event, ToolCallEvent):
-                        tool_calls.append(event)
-                    yield event
-                    if tracker is not None and isinstance(event, TextChunkEvent):
-                        usage = tracker.add(event.content)
-                        yield BudgetEvent(used=usage.used, max_tokens=usage.max_tokens)
-            except (RuntimeError, httpx.ConnectError) as exc:
-                self.conversation.messages.pop()
-                raise ProviderError("provider request failed") from exc
-
-            refused = False
-            if stream is not None:
-                # Text the filter was still holding back (it could have been the
-                # start of a PII value) is settled now that the stream is over.
-                tail = stream.flush()
-                if tail:
-                    chunks.append(tail)
-                    yield TextChunkEvent(content=tail)
-                refused = stream.refused
-                if stream.findings:
-                    yield GuardrailEvent(
-                        stage="output",
-                        action="block" if refused else "redact",
-                        reason=_reason(stream.findings),
-                    )
-
-            # A refused reply is final: its tool calls are dropped, not executed.
-            if not tool_calls or refused:
-                answer = "".join(chunks)
-                self.conversation.add_message(role="assistant", content=answer)
-                # A guardrail refusal is not the model's answer: nothing to grade.
-                if self.recorder is not None and not refused and answer.strip():
-                    self.recorder.record(user_text, answer, rag_context)
-                break
-
-            tcs = [
-                ToolCall(name=tc.tool_name, arguments=tc.arguments) for tc in tool_calls
-            ]
-            self.conversation.add_message(
-                role="assistant",
-                content="".join(chunks),
-                tool_calls=tcs,
-            )
-
-            for tc in tcs:
-                tool = self.registry.get(tc.name) if self.registry else None
-                if not tool:
-                    result = f"Error: Tool '{tc.name}' not found in registry."
-                else:
-                    try:
-                        result = await tool.execute(**tc.arguments)
-                    except Exception as e:  # noqa: BLE001
-                        result = str(e)
-
-                content = str(result)
-                if self.guardrail is not None:
-                    verdict = await self.guardrail.filter_output(content)
-                    if verdict.action != "allow":
-                        yield GuardrailEvent(
-                            stage="tool",
-                            action=verdict.action,
-                            reason=_reason(verdict.findings),
-                        )
-                    content = (
-                        TOOL_RESULT_WITHHELD
-                        if verdict.action == "block"
-                        else verdict.text
-                    )
-                    masked = masked or verdict.action == "redact"
-
-                self.conversation.add_message(role="tool", content=content)
+    def _finish(self, turn: Turn, reply: Round) -> None:
+        """Store the final answer; a guardrail refusal is not the model's, so not graded."""
+        answer = reply.text
+        self.conversation.add_message(
+            role="assistant", content=answer, thought=reply.thought
+        )
+        if self.recorder is not None and not reply.refused and answer.strip():
+            self.recorder.record(turn.user_text, answer, turn.rag_context)

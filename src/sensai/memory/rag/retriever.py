@@ -1,3 +1,4 @@
+from sensai.domain.models import Chunk
 from sensai.domain.protocols import EmbeddingProvider, VectorStore
 from sensai.memory.rag.chunker import TextChunker
 
@@ -5,9 +6,10 @@ from sensai.memory.rag.chunker import TextChunker
 class RAGRetriever:
     """Index local documents and retrieve relevant context for a query."""
 
-    def __init__(self, provider: EmbeddingProvider, store: VectorStore):
+    def __init__(self, provider: EmbeddingProvider, store: VectorStore, top_k: int = 5):
         self.provider = provider
         self.store = store
+        self.top_k = top_k
 
     async def index_directory(
         self, path: str, chunker: TextChunker | None = None
@@ -36,13 +38,23 @@ class RAGRetriever:
         self.store.replace_chunks(chunks)
         return len(chunks)
 
-    async def retrieve_context(self, query: str, top_k: int = 5) -> str:
-        """Embed a query, search the index, and format matching chunks."""
+    async def retrieve_context(self, query: str, top_k: int | None = None) -> str:
+        """Embed a query, search the index, and format matching chunks.
+
+        `top_k` defaults to the one given at construction (`[rag] top_k`)."""
         embeddings = await self.provider.embed_texts([query])
         if len(embeddings) != 1:
             raise ValueError("Embedding provider returned the wrong number of vectors")
-        scored_chunks = self.store.search(embeddings[0], top_k=top_k)
+        scored_chunks = self.store.search(embeddings[0], top_k=top_k or self.top_k)
         return "\n\n".join(
-            f"--- Source: {chunk.metadata.get('path', chunk.metadata.get('filename', 'unknown'))} ---\n{chunk.text}"
+            f"--- Source: {_source_label(chunk)} ---\n{chunk.text}"
             for chunk in scored_chunks
         )
+
+
+def _source_label(chunk: Chunk) -> str:
+    """Where a chunk comes from, relative to the indexed directory.
+
+    Never the absolute path: the model took it for a file to open with read_file."""
+    metadata = chunk.metadata
+    return metadata.get("source") or metadata.get("filename") or "unknown"

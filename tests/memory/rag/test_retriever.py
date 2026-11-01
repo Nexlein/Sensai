@@ -1,3 +1,5 @@
+"""RAG retriever: indexing and retrieval."""
+
 import os
 
 import pytest
@@ -61,6 +63,11 @@ async def test_index_directory_embeds_and_replaces_stale_documents(tmp_path):
     assert await retriever.index_directory(str(docs), TextChunker(chunk_size=100)) == 2
     assert "apple facts" in await retriever.retrieve_context("apple question", top_k=1)
 
+    one = RAGRetriever(KeywordEmbeddingProvider(), store, top_k=1)
+    assert await one.retrieve_context("apple question") == (
+        await retriever.retrieve_context("apple question", top_k=1)
+    )
+
     apple.unlink()
     assert await retriever.index_directory(str(docs), TextChunker(chunk_size=100)) == 1
     assert "apple facts" not in await retriever.retrieve_context("apple question")
@@ -94,7 +101,7 @@ async def test_indexed_document_reaches_chat_prompt(tmp_path):
         def __init__(self):
             self.prompt = None
 
-        async def chat_stream(self, messages, tools=None):
+        async def chat_stream(self, messages, tools=None, think=None):
             self.prompt = messages
             yield TextChunkEvent(content="answer")
 
@@ -111,5 +118,79 @@ async def test_indexed_document_reaches_chat_prompt(tmp_path):
     _ = [event async for event in engine.send("apple question")]
 
     assert provider.prompt is not None
-    assert "apple facts" in provider.prompt[0].content
+    assert "apple facts" in provider.prompt[1].content  # after the date
     assert provider.prompt[-1].content == "apple question"
+
+
+class MixedDimensionProvider:
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0] * (i + 1) for i in range(len(texts))]
+
+
+class NoVectorProvider:
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        return []
+
+
+async def test_index_directory_rejects_vectors_of_different_sizes(tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "a.md").write_text("first", encoding="utf-8")
+    (docs / "b.md").write_text("second", encoding="utf-8")
+    retriever = RAGRetriever(
+        MixedDimensionProvider(), SQLiteVectorStore(str(tmp_path / "rag.db"))
+    )
+
+    with pytest.raises(ValueError, match="incompatible vectors"):
+        await retriever.index_directory(str(docs))
+
+
+async def test_retrieve_context_rejects_a_missing_query_vector(tmp_path):
+    retriever = RAGRetriever(
+        NoVectorProvider(), SQLiteVectorStore(str(tmp_path / "rag.db"))
+    )
+
+    with pytest.raises(ValueError, match="wrong number of vectors"):
+        await retriever.retrieve_context("query")
+
+
+@pytest.mark.parametrize(
+    ("metadata", "label"),
+    [
+        (
+            {
+                "filename": "calendrier.md",
+                "path": "/home/alban/Sensai/data/collecte/calendrier.md",
+                "source": "collecte/calendrier.md",
+            },
+            "collecte/calendrier.md",
+        ),
+        # Indexed before `source` existed: the filename, still not the full path.
+        (
+            {"filename": "calendrier.md", "path": "/home/alban/data/calendrier.md"},
+            "calendrier.md",
+        ),
+        ({}, "unknown"),
+    ],
+)
+async def test_source_label_never_shows_the_absolute_path(tmp_path, metadata, label):
+    # An absolute path sent the model to read_file outside its root instead of
+    # answering from the excerpt.
+    store = SQLiteVectorStore(db_path=str(tmp_path / "rag.db"))
+    store.save_chunks(
+        [
+            Chunk(
+                id=generate_uuid(),
+                doc_id="d1",
+                text="Secteur B : mercredi.",
+                embedding=[1.0, 0.0],
+                metadata=metadata,
+            )
+        ]
+    )
+    retriever = RAGRetriever(provider=MockProvider(), store=store)  # type: ignore
+
+    context = await retriever.retrieve_context("bac jaune")
+
+    assert context.startswith(f"--- Source: {label} ---\n")
+    assert "/home/" not in context

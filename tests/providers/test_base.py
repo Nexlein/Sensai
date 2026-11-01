@@ -1,3 +1,5 @@
+"""HTTP provider base."""
+
 import httpx
 import pytest
 
@@ -15,6 +17,22 @@ def test_get_client_uses_base_url_and_timeout():
     client = provider._get_client()
     assert str(client.base_url) == "http://localhost:11434"
     assert client.timeout.connect == 5.0
+
+
+def test_get_client_bounds_the_read_by_default():
+    client = BaseHTTPProvider(base_url="http://x", timeout=5.0)._get_client()
+
+    assert client.timeout.read == 5.0
+
+
+def test_wait_forever_removes_only_the_read_timeout():
+    provider = BaseHTTPProvider(base_url="http://x", timeout=5.0, wait_forever=True)
+
+    client = provider._get_client()
+
+    assert client.timeout.read is None
+    assert client.timeout.connect == 5.0
+    assert client.timeout.write == 5.0
 
 
 async def test_check_response_status_ok_does_not_raise():

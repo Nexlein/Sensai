@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "detachhead.basedpyright",
+    "ms-python.python",
+    "ms-python.debugpy",
+    "esbenp.prettier-vscode"
+  ]
+}

@@ -1,3 +1,5 @@
+"""Domain models."""
+
 import pytest
 from pydantic import ValidationError
 
@@ -16,11 +18,25 @@ def test_message_defaults_id_and_timestamp():
     assert msg.id
     assert msg.timestamp is not None
     assert msg.tool_calls is None
+    assert msg.thought is None
+
+
+def test_add_message_stores_thought():
+    convo = Conversation()
+    msg = convo.add_message(role="assistant", content="done", thought="check first")
+    assert convo.messages == [msg]
+    assert msg.thought == "check first"
+
+
+def test_message_without_thought_field_still_loads():
+    msg = Message.model_validate({"role": "assistant", "content": "old session"})
+    assert msg.thought is None
 
 
 def test_message_with_tool_calls():
     tc = ToolCall(name="search", arguments={"q": "x"})
     msg = Message(role="assistant", content="", tool_calls=[tc])
+    assert msg.tool_calls is not None
     assert msg.tool_calls == [tc]
     assert msg.tool_calls[0].name == "search"
 
@@ -85,7 +101,7 @@ def test_guardrail_verdict_findings_are_not_shared_between_instances():
 
 def test_guardrail_verdict_rejects_unknown_action():
     with pytest.raises(ValidationError):
-        GuardrailVerdict(action="explode", text="x")
+        GuardrailVerdict(action="explode", text="x")  # pyright: ignore[reportArgumentType]
 
 
 def test_guardrail_finding_holds_rule_and_category_only():

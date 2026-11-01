@@ -3,11 +3,13 @@ from typing import Any
 
 from sensai.domain.errors import ProviderError
 from sensai.domain.protocols import LLMProvider
+from sensai.providers.groq import GroqLLMProvider
 from sensai.providers.mock import MockLLMProvider
 from sensai.providers.ollama import OllamaLLMProvider
 
 _REGISTRY: dict[str, type[LLMProvider]] = {
     "ollama": OllamaLLMProvider,
+    "groq": GroqLLMProvider,
     "mock": MockLLMProvider,
 }
 

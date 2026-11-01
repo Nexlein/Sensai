@@ -1,18 +1,28 @@
+"""CLI renderer: streamed replies, notices, confirmations."""
+
+import asyncio
 from collections.abc import AsyncIterator
 
 import httpx
+import pytest
 from rich.console import Console
 
 from sensai.domain.errors import EmptyInputError, ProviderError
 from sensai.domain.events import (
+    AssistantStartEvent,
     BudgetEvent,
     Event,
     GuardrailEvent,
+    MaxStepsEvent,
+    StepEvent,
     TextChunkEvent,
+    ThoughtEvent,
     ToolCallEvent,
+    UsageEvent,
 )
-from sensai.domain.models import Conversation
-from sensai.interfaces.cli.renderer import error_text, render_history, render_stream
+from sensai.domain.models import Conversation, ToolCall
+from sensai.interfaces.cli.renderer import CliRenderer, render_history, render_stream
+from sensai.interfaces.notices import error_text
 
 
 def test_render_history_prints_prior_messages(capsys):
@@ -51,6 +61,21 @@ async def test_render_stream_prints_text_chunks(capsys):
     out = capsys.readouterr().out
     assert "sensai:" in out
     assert "hello" in out
+
+
+async def test_render_stream_shows_speaker_before_first_chunk():
+    from io import StringIO
+
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+
+    async def events():
+        yield AssistantStartEvent()
+        assert output.getvalue() == "sensai: "
+        yield TextChunkEvent(content="Bonjour")
+
+    await render_stream(console, events())
+    assert output.getvalue() == "sensai: Bonjour\n"
 
 
 async def test_render_stream_ignores_non_text_events(capsys):
@@ -115,6 +140,27 @@ async def test_render_stream_shows_usage_footer(capsys):
     assert "101 / 1.0k tokens (10%)" in out
 
 
+async def test_render_stream_shows_the_last_calls_real_counters(capsys):
+    await render_stream(
+        Console(),
+        _events(
+            UsageEvent(prompt_tokens=10, reply_tokens=1),
+            TextChunkEvent(content="hi"),
+            UsageEvent(prompt_tokens=90, reply_tokens=12),
+        ),
+    )
+
+    out = capsys.readouterr().out
+    assert "prompt 90 tok · reply 12 tok" in out
+    assert "prompt 10 tok" not in out
+
+
+async def test_render_stream_shows_no_counters_line_without_usage(capsys):
+    await render_stream(Console(), _events(TextChunkEvent(content="hi")))
+
+    assert " tok" not in capsys.readouterr().out
+
+
 async def test_render_stream_footer_shows_before_first_chunk(capsys):
     console = Console()
     await render_stream(console, _events(BudgetEvent(used=100, max_tokens=1000)))
@@ -149,3 +195,225 @@ def test_error_text_handles_unknown_exception():
     text = error_text(ValueError("boom"))
     assert "Unexpected error" in text
     assert "boom" in text
+
+
+@pytest.mark.parametrize(
+    "answer, approved",
+    [
+        ("y", True),
+        ("yes", True),
+        ("1", True),
+        ("no", False),
+        ("2", False),
+        ("maybe", False),
+        ("", True),
+        (EOFError(), False),
+        (KeyboardInterrupt(), False),
+    ],
+)
+async def test_confirmation_keeps_streamed_text_and_resumes_reply(
+    monkeypatch, answer, approved
+):
+    from io import StringIO
+
+    from sensai.domain.models import ToolCall
+    from sensai.interfaces.cli.renderer import CliRenderer
+
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    renderer = CliRenderer(console)
+
+    def read_answer():
+        assert output.getvalue().startswith("sensai: Avant la recherche.\n")
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+    monkeypatch.setattr("builtins.input", read_answer)
+
+    async def events():
+        yield TextChunkEvent(content="Avant la recherche.")
+        assert (
+            await renderer.confirm_tool(
+                ToolCall(name="web_search", arguments={"query": "[test]"})
+            )
+            is approved
+        )
+        yield TextChunkEvent(content="Après la décision.")
+
+    await renderer.render(events())
+    rendered = output.getvalue()
+    assert "  Allow web_search?\n    query  [test]\n  [Yes/No] " in rendered
+    decision = "✓ allowed web_search" if approved else "✗ declined web_search"
+    assert f"  {decision}\n" in rendered
+    assert rendered.count("Avant la recherche.") == 1
+    assert rendered.count("Après la décision.") == 1
+
+
+async def test_interactive_confirmation_uses_selector(monkeypatch):
+    from io import StringIO
+
+    from sensai.domain.models import ToolCall
+    from sensai.interfaces.cli import renderer as renderer_module
+    from sensai.interfaces.cli.renderer import CliRenderer
+    from sensai.interfaces.prompts import tool_confirmation
+
+    asked = []
+
+    async def fake_select(question):
+        asked.append(question)
+        return True
+
+    monkeypatch.setattr(renderer_module, "select", fake_select)
+    monkeypatch.setattr(CliRenderer, "_interactive", lambda self: True)
+    output = StringIO()
+    renderer = CliRenderer(Console(file=output, force_terminal=False))
+    tc = ToolCall(name="web_search", arguments={"query": "Sensai"})
+
+    assert await renderer.confirm_tool(tc) is True
+    assert asked == [tool_confirmation(tc)]
+    assert output.getvalue() == "  ✓ allowed web_search\n"
+
+
+async def test_confirmation_prints_diff_before_asking(monkeypatch):
+    from io import StringIO
+
+    from sensai.domain.models import ToolCall
+    from sensai.interfaces.cli import renderer as renderer_module
+    from sensai.interfaces.cli.renderer import CliRenderer
+
+    output = StringIO()
+
+    async def fake_select(question):
+        assert "+ hello" in output.getvalue()
+        return False
+
+    monkeypatch.setattr(renderer_module, "select", fake_select)
+    monkeypatch.setattr(CliRenderer, "_interactive", lambda self: True)
+    renderer = CliRenderer(Console(file=output, force_terminal=False))
+    tc = ToolCall(
+        name="write_file",
+        arguments={"path": "a.txt", "content": "hello"},
+        preview="@@ -0,0 +1 @@\n+hello",
+    )
+
+    assert await renderer.confirm_tool(tc) is False
+    assert output.getvalue().startswith("● write_file(a.txt)\n  ⎿  +1 -0\n")
+
+
+async def test_render_stream_shows_thinking_time_on_the_speaker_line(monkeypatch):
+    from io import StringIO
+
+    from sensai.interfaces import thinking
+
+    monkeypatch.setattr(thinking, "GRACE_SECONDS", 0.05)
+    monkeypatch.setattr(thinking, "TICK_SECONDS", 0.05)
+    output = StringIO()
+    console = Console(file=output, force_terminal=True, width=80)
+
+    async def events():
+        yield AssistantStartEvent()
+        await asyncio.sleep(0.3)
+        yield TextChunkEvent(content="Bonjour")
+
+    await render_stream(console, events())
+
+    out = output.getvalue()
+    assert "thinking… 0s · Ctrl+C to stop" in out
+    assert out.count("\r\x1b[2K") >= 2  # drawn, then rewritten in place
+    # Once text streams, the line holds the reply and no timer follows it.
+    assert out.rsplit("\x1b[2K", 1)[1].count("thinking") == 0
+    assert "Bonjour" in out
+
+
+async def test_render_stream_shows_no_timer_when_not_a_terminal():
+    from io import StringIO
+
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+
+    async def events():
+        yield AssistantStartEvent()
+        await asyncio.sleep(1.3)
+        yield TextChunkEvent(content="Bonjour")
+
+    await render_stream(console, events())
+
+    assert output.getvalue() == "sensai: Bonjour\n"
+
+
+async def test_render_stream_shows_steps_thoughts_and_answer_in_order(capsys):
+    await CliRenderer(Console(), show_thoughts=True).render(
+        _events(
+            AssistantStartEvent(),
+            StepEvent(index=1, max_steps=5),
+            ThoughtEvent(content="I should read the file"),
+            StepEvent(index=2, max_steps=5),
+            TextChunkEvent(content="done"),
+        ),
+    )
+
+    out = capsys.readouterr().out
+    assert out.index("step 1/5") < out.index("I should read the file")
+    assert out.index("I should read the file") < out.index("step 2/5")
+    assert out.index("step 2/5") < out.index("done")
+
+
+async def test_render_stream_shows_step_limit_notice(capsys):
+    await render_stream(Console(), _events(MaxStepsEvent(max_steps=5)))
+
+    assert "Step limit (5) reached" in capsys.readouterr().out
+
+
+def test_render_history_shows_thought_and_skips_empty_tool_call_message(capsys):
+    conversation = Conversation()
+    conversation.add_message(
+        role="assistant",
+        content="",
+        tool_calls=[ToolCall(name="fs", arguments={})],
+        thought="reading the file",
+    )
+
+    render_history(Console(), conversation, show_thoughts=True)
+
+    out = capsys.readouterr().out
+    assert "reading the file" in out
+    assert "sensai:" not in out
+
+
+async def test_thought_chunks_share_one_line(capsys):
+    await CliRenderer(Console(), show_thoughts=True).render(
+        _events(
+            ThoughtEvent(content="I should ", source="native"),
+            ThoughtEvent(content="read it", source="native"),
+            TextChunkEvent(content="done"),
+        )
+    )
+
+    out = capsys.readouterr().out
+    assert "I should read it\n" in out
+
+
+async def test_thoughts_and_steps_hidden_by_default(capsys):
+    await render_stream(
+        Console(),
+        _events(
+            StepEvent(index=1, max_steps=5),
+            ThoughtEvent(content="secret reasoning"),
+            TextChunkEvent(content="done"),
+        ),
+    )
+
+    out = capsys.readouterr().out
+    assert "secret reasoning" not in out
+    assert "step 1/5" not in out
+    assert "done" in out
+
+
+def test_render_history_hides_thought_by_default(capsys):
+    conversation = Conversation()
+    conversation.add_message(role="assistant", content="hi", thought="secret")
+
+    render_history(Console(), conversation)
+
+    assert "secret" not in capsys.readouterr().out

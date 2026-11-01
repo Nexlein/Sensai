@@ -1,3 +1,5 @@
+"""LLM summarizer used to condense old turns."""
+
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -14,7 +16,10 @@ class RecordingProvider:
         self.tools: list[Any] = []
 
     async def chat_stream(
-        self, messages: list[Message], tools: list[dict[str, Any]] | None = None
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
+        think: bool | str | None = None,
     ) -> AsyncGenerator[Event]:
         self.prompts.append(messages)
         self.tools.append(tools)

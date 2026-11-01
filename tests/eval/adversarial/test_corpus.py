@@ -1,3 +1,5 @@
+"""Adversarial corpus (EV4) against the guardrails."""
+
 import pytest
 
 from sensai.eval.adversarial import CASES, CATEGORIES
@@ -26,6 +28,7 @@ def test_benign_cases_expect_allow():
 
 @pytest.mark.parametrize("case", [c for c in CASES if c.secret], ids=lambda c: c.id)
 def test_secret_is_really_in_the_payload(case: AttackCase):
+    assert case.secret is not None
     assert case.secret in case.payload
 
 

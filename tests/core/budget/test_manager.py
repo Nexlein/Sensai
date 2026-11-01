@@ -1,3 +1,5 @@
+"""Context budget (M2): when and how old turns are summarized."""
+
 import httpx
 
 from sensai.core.budget import BudgetConfig
@@ -144,3 +146,15 @@ async def test_lone_summary_is_not_resummarized():
 
     assert await budget.fit(conversation) is False
     assert len(summarizer.calls) == 1
+
+
+async def test_disabled_budget_never_summarizes_a_full_history():
+    conversation = _conversation(6)
+    summarizer = FakeSummarizer()
+    budget = _budget(summarizer, conversation)
+    budget.config.enabled = False
+    before = list(conversation.messages)
+
+    assert await budget.fit(conversation) is False
+    assert summarizer.calls == []
+    assert conversation.messages == before

@@ -1,7 +1,10 @@
+from collections.abc import Iterable
 from typing import Any
 
-from sensai.domain.protocols import BaseTool
-from sensai.tools.fs import ListDirTool, ReadFileTool
+from sensai.domain.protocols import BaseTool, StructuredMemory
+from sensai.tools.fs import ListDirTool, ReadFileTool, WriteFileTool
+from sensai.tools.memory import ForgetFactTool, RecallMemoryTool, RememberFactTool
+from sensai.tools.sandbox import RunCodeTool
 from sensai.tools.web import WebSearch
 
 SEARXNG_URL = "http://127.0.0.1:8888"
@@ -34,10 +37,27 @@ class ToolRegistry:
         ]
 
 
-def build_default_registry(allowed_root: str | None) -> ToolRegistry:
+def build_default_registry(
+    allowed_root: str | None,
+    extra_tools: Iterable[BaseTool] = (),
+    memory: StructuredMemory | None = None,
+    web_search: bool = True,
+    sandbox: bool = True,
+) -> ToolRegistry:
+    """Built-in tools plus `extra_tools` (the MCP ones, which live outside this list)."""
     registry = ToolRegistry()
+    for tool in extra_tools:
+        registry.register(tool)
     if allowed_root is not None:
         registry.register(ReadFileTool(allowed_root))
         registry.register(ListDirTool(allowed_root))
-    registry.register(WebSearch(SEARXNG_URL))
+        registry.register(WriteFileTool(allowed_root))
+    if web_search:
+        registry.register(WebSearch(SEARXNG_URL))
+    if memory is not None:
+        registry.register(RememberFactTool(memory))
+        registry.register(RecallMemoryTool(memory))
+        registry.register(ForgetFactTool(memory))
+    if sandbox:
+        registry.register(RunCodeTool())
     return registry

@@ -221,7 +221,7 @@ class SpyProvider:
         self.reply = reply
         self.prompts: list[list[Message]] = []
 
-    async def chat_stream(self, messages: list[Message], tools=None):
+    async def chat_stream(self, messages: list[Message], tools=None, think=None):
         self.prompts.append(list(messages))
         yield TextChunkEvent(content=self.reply)
 
