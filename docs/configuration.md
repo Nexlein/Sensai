@@ -103,8 +103,10 @@ kept). Settings read once at start-up say `applies on the next start`: `interfac
 Ollama runs every model with its own default window (4096 tokens on a machine without a
 GPU) and **silently drops the start of a longer prompt**: the persona and system notes go
 first. Sensai's budget assumes 8192 tokens, so `options.num_ctx` defaults to 8192 and is sent
-with every request. `[options]` tables that do not mention `num_ctx` keep that default. To
-use a smaller window, lower `budget.max_tokens` with it. Measured effect:
+with every request. When the file does not set `num_ctx`, the window grows to hold
+`budget.max_tokens + num_predict` (so `num_predict = 1024` alone gives 9216); a `num_ctx` you set
+yourself is never changed and must fit the budget. To use a smaller window, lower
+`budget.max_tokens` with it. Measured effect:
 [benchmarks.md](benchmarks.md#context-window-limits).
 
 ## Every setting

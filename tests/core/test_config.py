@@ -454,6 +454,24 @@ def test_budget_larger_than_context_is_a_one_line_error(tmp_path, section):
     assert "\n" not in str(exc.value)
 
 
+@pytest.mark.parametrize(
+    "section, num_ctx",
+    [
+        ("[options]\nnum_predict = 1024\n", 9216),
+        ("[budget]\nmax_tokens = 4096\n[options]\nnum_predict = 512\n", 8192),
+        ("[budget]\nmax_tokens = 16000\n", 16000),
+        ("[options]\ntemperature = 0.0\n", 8192),
+    ],
+)
+def test_default_window_grows_to_hold_the_budget_and_the_reply(
+    tmp_path, section, num_ctx
+):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(section)
+
+    assert load_config(config_file).options.num_ctx == num_ctx
+
+
 def test_budget_within_context_is_accepted(tmp_path):
     config_file = tmp_path / "sensai.toml"
     config_file.write_text(
