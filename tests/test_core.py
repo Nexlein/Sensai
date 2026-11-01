@@ -1,3 +1,5 @@
+"""Package entry point."""
+
 import sensai
 
 

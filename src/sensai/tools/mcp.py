@@ -102,7 +102,7 @@ class McpClient:
             process.stdin.close()
         try:
             await asyncio.wait_for(process.wait(), timeout=2.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             process.kill()
             await process.wait()
 
@@ -126,7 +126,7 @@ class McpClient:
                 return await asyncio.wait_for(
                     self._read_response(request_id), timeout=self.timeout
                 )
-            except asyncio.TimeoutError as exc:
+            except TimeoutError as exc:
                 raise McpError(f"'{method}' timed out after {self.timeout}s") from exc
 
     async def _read_response(self, request_id: int) -> dict[str, Any]:

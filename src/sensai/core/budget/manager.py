@@ -30,10 +30,11 @@ class ContextBudget:
         return UsageTracker(used, self.config.max_tokens)
 
     async def fit(self, conversation: Conversation) -> bool:
-        """Condense the oldest turns once the threshold is reached."""
-        if not self.config.compress:
-            return False
-        if self.usage(conversation).ratio < self.config.threshold:
+        """Condense the oldest turns once the threshold is reached, if enabled."""
+        if (
+            not self.config.enabled
+            or self.usage(conversation).ratio < self.config.threshold
+        ):
             return False
 
         old, recent = split_window(conversation.messages, self.config.keep_recent_turns)

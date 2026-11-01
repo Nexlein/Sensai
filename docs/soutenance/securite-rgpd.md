@@ -5,14 +5,14 @@ Deux questions du jury : « que se passe-t-il en cas de fuite, quelles contraint
 
 ## Données traitées (scénario Sensai Collecte)
 
-| Donnée                         | Où elle est stockée               | Contient des données perso ?                          | Chiffrée ? |
-| ------------------------------ | --------------------------------- | ----------------------------------------------------- | ---------- |
-| Historique des conversations   | `sensai.db` (SQLite, `--session`) | Oui, mais PII structurées **masquées avant stockage** | Non        |
-| Mémoire structurée (M3)        | `sensai.db`                       | Possible (faits sur l'agent : secteur, équipage)      | Non        |
-| Index RAG                      | `rag.db`                          | Selon les documents indexés (**non filtrés**)         | Non        |
-| Log des réponses (EV1, opt-in) | `logs/replies.jsonl`              | Texte déjà filtré, mais contexte RAG brut             | Non        |
-| Config                         | `sensai.toml`                     | Clés d'API en clair (Groq, MCP)                       | Non        |
-| Prompt envoyé au modèle        | Mémoire d'Ollama, local           | Texte déjà filtré                                     | n/a        |
+| Donnée                         | Où elle est stockée               | Contient des données perso ?                                                                                                  | Chiffrée ? |
+| ------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| Historique des conversations   | `sensai.db` (SQLite, `--session`) | Oui, mais PII structurées **masquées avant stockage**                                                                         | Non        |
+| Mémoire structurée (M3)        | `sensai.db`                       | Possible (faits sur l'agent : secteur, équipage)                                                                              | Non        |
+| Index RAG                      | `rag.db`                          | Selon les documents indexés (**non filtrés**)                                                                                 | Non        |
+| Log des réponses (EV1, opt-in) | `logs/replies.jsonl`              | Texte déjà filtré, mais contexte RAG brut                                                                                     | Non        |
+| Config                         | `sensai.toml`                     | Clés d'API en clair (Groq, MCP)                                                                                               | Non        |
+| Prompt envoyé au modèle        | Mémoire d’Ollama, local           | Entrée, réponses et résultats d’outils filtrés si les guardrails sont actifs ; contexte RAG et arguments d’outils non filtrés | n/a        |
 
 Tous ces fichiers sont ignorés par Git (`*.db`, `logs/`, `sensai.toml`, `.env`).
 

@@ -5,24 +5,30 @@ Remarque du jury : « les tests doivent afficher plus que OK », et au moins un 
 
 ## Afficher ce qui est testé
 
-```bash
-# nom de chaque test et son résultat
-uv run pytest -v
+`make test` affiche **chaque test par son titre**, sous le fichier qui le contient, avec son
+résultat ; puis un bilan par domaine. Le titre vient de la docstring du test ou de son nom rendu
+lisible ; le titre d'un fichier vient de sa docstring de module.
 
-# résumé de tous les tests, y compris ceux qui passent et ceux sautés (avec la raison)
-uv run pytest -rA
+```text
+core/config_file — Config file editing: comments and unknown keys survive every write
+  ✓ Missing file reads as an empty document
+  ✓ Update keeps comments and unknown keys
 
-# couverture par fichier, lignes non couvertes
-uv run pytest --cov=sensai --cov-report=term-missing
+tools/sandbox — Python sandbox (T2), with optional live Docker tests
+  ✓ Timeout kills the container  (0.52 s)
+  – Live › Runs code in a container  — set SENSAI_LIVE_SANDBOX=1 (needs Docker …)
 
-# un seul domaine, par exemple les guardrails
-uv run pytest tests/eval/guardrails -v
+=============================== results by area ================================
+  core          442 passed    0 failed    0 skipped
+  eval          382 passed    0 failed    1 skipped
 ```
 
-Les noms de tests sont des phrases (`test_send_rejects_empty_input_before_provider_call`,
-`test_cancelling_a_turn_drops_the_unanswered_user_message`) : avec `-v`, la
-sortie se lit comme une liste de comportements garantis. Pour la soutenance, montrer la sortie `-v`
-d'un dossier, puis la couverture globale.
+| Commande            | Sortie                                                                       |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `make test`         | Un test par ligne (✓ réussi, ✗ échoué + raison, – sauté + comment l'activer) |
+| `make test-report`  | Pareil, et écrit `reports/tests.md` (un tableau par fichier) : à projeter    |
+| `make coverage`     | Couverture par fichier, lignes non couvertes                                 |
+| `make test-classic` | Sortie pytest standard (points)                                              |
 
 Raccourcis du `Makefile` :
 
@@ -95,6 +101,9 @@ La CI (job Lint) échoue à la première erreur de type, et l'éditeur affiche l
 
 **Sécurité** : corpus de chemins hostiles pour les outils fichiers (traversée, chemin absolu, lien
 symbolique sortant, octet nul, nom de 5000 caractères), en plus de l'évaluation adversariale (EV4).
+
+Implémentation : un petit plugin pytest dans `tests/conftest.py`, qui ne change que l'affichage.
+Détails en anglais : [../testing.md](../testing.md).
 
 ## Tests « en vrai »
 

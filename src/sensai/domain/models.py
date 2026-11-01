@@ -70,11 +70,21 @@ class LoadedModel(BaseModel):
 class ModelOptions(BaseModel):
     """Sampling and context options sent to the model; unset keys are not sent."""
 
-    temperature: float | None = Field(default=None, ge=0)
-    num_ctx: int | None = Field(default=None, gt=0)
-    top_p: float | None = Field(default=None, gt=0, le=1)
-    seed: int | None = None
-    num_predict: int | None = Field(default=None, gt=0)
+    temperature: float | None = Field(
+        default=None, ge=0, description="Sampling temperature: 0 is repeatable"
+    )
+    num_ctx: int | None = Field(
+        default=None,
+        gt=0,
+        description="Context window in tokens (Ollama's own default is 4096 here)",
+    )
+    top_p: float | None = Field(
+        default=None, gt=0, le=1, description="Nucleus sampling cut-off"
+    )
+    seed: int | None = Field(default=None, description="Fixed seed for repeatable runs")
+    num_predict: int | None = Field(
+        default=None, gt=0, description="Maximum tokens in one reply"
+    )
 
     def to_payload(self) -> dict[str, Any]:
         return self.model_dump(exclude_none=True)

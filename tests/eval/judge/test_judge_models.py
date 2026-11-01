@@ -1,3 +1,5 @@
+"""LLM judge verdict models."""
+
 import pytest
 from pydantic import ValidationError
 

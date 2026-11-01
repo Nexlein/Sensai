@@ -1,3 +1,5 @@
+"""Confirmation diff."""
+
 from sensai.domain.models import ToolCall
 from sensai.interfaces.diff import DiffLine, diff_text, parse_diff
 

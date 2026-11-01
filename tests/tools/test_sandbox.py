@@ -1,3 +1,5 @@
+"""Python sandbox (T2), with optional live Docker tests."""
+
 import os
 import stat
 import sys

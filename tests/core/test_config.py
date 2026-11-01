@@ -1,3 +1,5 @@
+"""Config schema: precedence, validation and saving."""
+
 from pathlib import Path
 
 import pytest
@@ -420,7 +422,7 @@ def test_save_config_round_trips_reasoning(tmp_path):
 
 
 def test_options_are_unset_by_default():
-    assert AppConfig().options.to_payload() == {}
+    assert AppConfig().options.to_payload() == {"num_ctx": 8192}
 
 
 def test_options_from_file(tmp_path):
@@ -624,5 +626,5 @@ def test_shipped_example_config_turns_on_only_the_presented_features():
     assert config.guardrails.enabled and config.memory.enabled
     assert config.tools.fs_allowed_root == "."
     assert not (config.tools.web_search or config.tools.sandbox or config.mcp.servers)
-    assert not (config.reasoning.enabled or config.budget.compress)
+    assert not (config.reasoning.enabled or config.budget.enabled)
     assert not config.eval.log_replies

@@ -1,3 +1,5 @@
+"""Web app."""
+
 import signal
 from types import SimpleNamespace
 from typing import cast

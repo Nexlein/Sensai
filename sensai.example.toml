@@ -24,7 +24,7 @@ num_predict = 1024                   # longest reply, in tokens
 
 [budget]
 max_tokens = 7168                    # must stay <= num_ctx - num_predict
-compress = false                     # M2 off: tokens are counted, old turns are kept as is
+enabled = false                      # M2 off: tokens are counted, old turns are kept as is
 
 [persona]                            # A5: the Régie assistant, first in every prompt
 enabled = true                       # /persona off and /persona on switch it live

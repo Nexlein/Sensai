@@ -1,3 +1,5 @@
+"""User-facing notices and error lines."""
+
 import httpx
 import pytest
 

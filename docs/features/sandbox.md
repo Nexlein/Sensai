@@ -1,6 +1,6 @@
 # The code sandbox in Sensai
 
-How the assistant runs Python without putting your machine at risk, explained from scratch. For the short "what do I need" version, see the Code execution section of the [README](../README.md). The tool-calling loop itself is explained in [docs/mcp.md](mcp.md), section 1.
+How the assistant runs Python without putting your machine at risk, explained from scratch. For the short "what do I need" version, see the Code execution section of the [README](../../README.md). The tool-calling loop itself is explained in [docs/mcp.md](mcp.md), section 1.
 
 ## Contents
 

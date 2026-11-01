@@ -1,3 +1,5 @@
+"""Questions shown to the user (confirmations, pickers)."""
+
 import pytest
 
 from sensai.domain.models import ToolCall

@@ -1,3 +1,5 @@
+"""Tool runner: confirmation, execution, filtered results."""
+
 import pytest
 
 from sensai.core.tool_runner import (

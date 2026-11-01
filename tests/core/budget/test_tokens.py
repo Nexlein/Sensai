@@ -1,3 +1,5 @@
+"""Token estimate (4 characters per token)."""
+
 from sensai.core.budget.tokens import MESSAGE_OVERHEAD, count_message, count_text
 from sensai.domain.models import Message, ToolCall
 

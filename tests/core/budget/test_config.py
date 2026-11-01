@@ -1,3 +1,5 @@
+"""Budget settings: limits and defaults."""
+
 import pytest
 from pydantic import ValidationError
 
@@ -11,7 +13,7 @@ def test_defaults():
     assert config.max_tokens == 8192
     assert config.threshold == 0.8
     assert config.keep_recent_turns == 4
-    assert config.compress is True
+    assert config.enabled is True
 
 
 @pytest.mark.parametrize(
@@ -54,7 +56,7 @@ def test_invalid_budget_in_file_raises_config_error(tmp_path):
 def test_save_config_round_trips_budget(tmp_path):
     config_file = tmp_path / "sensai.toml"
     config = AppConfig(
-        budget=BudgetConfig(max_tokens=2048, keep_recent_turns=2, compress=False)
+        budget=BudgetConfig(max_tokens=2048, keep_recent_turns=2, enabled=False)
     )
 
     save_config(config, config_file)

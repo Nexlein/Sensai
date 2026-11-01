@@ -1,3 +1,5 @@
+"""Turn and round state."""
+
 from sensai.core.turn import Round, Turn
 
 
