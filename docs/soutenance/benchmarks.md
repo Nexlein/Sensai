@@ -91,7 +91,7 @@ uv run python -m sensai.eval.bench temperature --repeat 5
 **Impact observé** :
 
 - La moyenne baisse peu (86 → 82 %), mais **le pire passage baisse de 9 points** : à 1.2, un
-  matin sur cinq Karim tombe sur la version à 77 %.
+  matin sur cinq Camille tombe sur la version à 77 %.
 - Exemple réel à 0.7, « Quel jour est collecté le bac jaune dans le secteur B ? » (réponse :
   mercredi) : juste au 1er passage, puis « mardis et vendredis », « tous les jours ouvrables »,
   « le lundi », « à 13 h » sur les quatre suivants. **Le document est dans le contexte et le
@@ -102,7 +102,7 @@ uv run python -m sensai.eval.bench temperature --repeat 5
   n'est pas parfaitement déterministe. D'où `seed = 42` dans les benchmarks.
 
 **Adéquation métier** : Sensai Collecte répond à des questions factuelles (jours, consignes,
-numéros de poste) dont la bonne réponse est unique, et Karim doit recevoir la même réponse
+numéros de poste) dont la bonne réponse est unique, et Camille doit recevoir la même réponse
 chaque matin. La créativité n'apporte rien ici et coûte des inventions. **`temperature = 0.0`
 est donc la valeur de `sensai.toml`** (elle était à 0.2 sans mesure : à 0.2 les mots changent
 déjà sur 21 questions sur 22). Une température haute ne servirait qu'à de la rédaction libre

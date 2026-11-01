@@ -1,5 +1,7 @@
 """Config schema: precedence, validation and saving."""
 
+from pathlib import Path
+
 import pytest
 
 from sensai.core.config import (
@@ -452,6 +454,24 @@ def test_budget_larger_than_context_is_a_one_line_error(tmp_path, section):
     assert "\n" not in str(exc.value)
 
 
+@pytest.mark.parametrize(
+    "section, num_ctx",
+    [
+        ("[options]\nnum_predict = 1024\n", 9216),
+        ("[budget]\nmax_tokens = 4096\n[options]\nnum_predict = 512\n", 8192),
+        ("[budget]\nmax_tokens = 16000\n", 16000),
+        ("[options]\ntemperature = 0.0\n", 8192),
+    ],
+)
+def test_default_window_grows_to_hold_the_budget_and_the_reply(
+    tmp_path, section, num_ctx
+):
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(section)
+
+    assert load_config(config_file).options.num_ctx == num_ctx
+
+
 def test_budget_within_context_is_accepted(tmp_path):
     config_file = tmp_path / "sensai.toml"
     config_file.write_text(
@@ -610,3 +630,19 @@ def test_save_config_omits_default_persona_section(tmp_path):
     save_config(AppConfig(), config_file)
 
     assert "[persona]" not in config_file.read_text()
+
+
+def test_shipped_example_config_turns_on_only_the_presented_features():
+    root = Path(__file__).parents[2]
+
+    config = load_config(root / "sensai.example.toml")
+
+    assert config.interface == "web"
+    persona_file, rag_dir = config.persona.file, config.rag.dir
+    assert config.persona.enabled and persona_file and (root / persona_file).is_file()
+    assert config.rag.enabled and rag_dir and (root / rag_dir).is_dir()
+    assert config.guardrails.enabled and config.memory.enabled
+    assert config.tools.fs_allowed_root == "."
+    assert not (config.tools.web_search or config.tools.sandbox or config.mcp.servers)
+    assert not (config.reasoning.enabled or config.budget.enabled)
+    assert not config.eval.log_replies

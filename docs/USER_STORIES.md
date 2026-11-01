@@ -404,6 +404,7 @@ Acceptance criteria:
 - A thought streamed in several pieces appears as one block, not one line per piece.
 - With thoughts hidden, the final answer streams as it arrives.
 - When the step limit (`max_steps`, 5 by default) is reached, a notice says so and the model answers without tools.
+- With `[reasoning] enabled = false`, Sensai asks the model not to think (`think: false`), so a model that thinks by default, such as qwen3.5, does not spend minutes on hidden reasoning.
 
 As a user who wants faster or deeper answers, I want to change the thinking effort during a session, so that I do not have to edit `sensai.toml` and restart.
 
@@ -434,6 +435,8 @@ Acceptance criteria:
 - Replies appear progressively in the page while the model writes them.
 - Slash commands such as `/clear` work and their result is shown in the page.
 - Resuming a session with `--session` shows the earlier messages when the page loads.
+- The page header shows the current session name (`session usagers`).
+- `/clear` and `/new` empty the page as well as the conversation; other commands leave the page as it is.
 
 As a user who lets the model run tools, I want to approve or refuse each sensitive tool call in the page and to stop a reply that takes too long, so that I stay in control as in the terminal.
 
@@ -443,6 +446,9 @@ Acceptance criteria:
 - The Stop button cancels the current reply and leaves no unanswered message in the history.
 - A second message sent while a reply is in progress is refused with a message, not queued.
 - A failing model server shows a one-line error in the page and the page stays usable.
+- Any other error during a turn also shows one line in the page and releases it; the terminal gets one line, never a traceback.
+- Closing or reloading the page during a reply, or a frame that is not JSON, leaves no error in the terminal.
+- If port 8000 is taken, Sensai says so in one line and does not print the page address.
 
 ## Feature: Domain Persona
 
@@ -483,6 +489,22 @@ Acceptance criteria:
 - Without these keys both tools stay available, as before.
 - `/config save` keeps both settings.
 
+As a team member comparing runs with and without history compression, I want to switch off M2 summarization in `sensai.toml`, so that old turns stay as they are while the token count is still shown.
+
+Acceptance criteria:
+
+- `[budget] enabled = false` never replaces old turns with a summary, whatever the threshold.
+- The live token count and the real counts after each reply are still shown.
+- Without the key, compression stays on, as before; `/config save` keeps the setting.
+
+As a new user installing Sensai for the Régie, I want a ready-made config file in the repository, so that I start with exactly the features the team supports, without reading every section.
+
+Acceptance criteria:
+
+- `cp sensai.example.toml sensai.toml` then `uv run sensai chat` opens the web interface with the persona, RAG on `data/collecte`, guardrails, structured memory and file tools.
+- MCP, web search, the sandbox, the reasoning loop, compression and reply logging are off in that file.
+- A test loads the shipped file, so a config change that breaks it fails CI.
+
 ## Feature: Loaded Model Memory
 
 As a user running models locally, I want to see how much RAM and VRAM each loaded model uses without leaving Sensai, so that I can tell whether my machine holds the model and its context.
@@ -509,6 +531,7 @@ Acceptance criteria:
 - `[options]` accepts `temperature`, `num_ctx`, `top_p`, `seed` and `num_predict`; each one set is sent in the `options` field of `/api/chat`, and `num_ctx` shows in the `CONTEXT` column of `ollama ps`.
 - Without an `[options]` section the request is unchanged.
 - `budget.max_tokens` above `num_ctx - num_predict` is rejected at startup with a one-line config error.
+- Without `num_ctx` in the file, the window grows to hold `budget.max_tokens + num_predict`, so setting `num_predict` alone never stops startup.
 - `temperature = 0` with `seed = 42` gives the same reply twice for the same prompt.
 
 As a user demonstrating the effect of a setting, I want to change a model option during a session, so that I can replay the same question and compare the replies.

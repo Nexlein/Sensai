@@ -95,7 +95,7 @@ sa qualité et son débit aux autres candidats. La taille seule ne suffit pas à
 1. **Tool calling fiable à 4B** : nos features clés (fichiers, mémoire, rapport d'incident) reposent
    sur des appels d'outils. Llama 3.2 3B inventait le contenu après avoir lu un fichier ; il a fallu
    un Modelfile spécial (`ollama/Modelfile`) pour le cadrer.
-2. **Français** : utilisateurs francophones (Karim, Léa).
+2. **Français** : utilisateurs francophones (Camille, service usagers).
 3. **Taille** : 4B en Q4 tient sur un PC de dépôt sans GPU avec un débit compatible du scénario.
 4. **Raisonnement réglable** : `think` (`/effort`) permet de désactiver ou activer la réflexion.
    Sur ce Qwen, `low`, `medium` et `high` ne constituent pas trois intensités distinctes ;

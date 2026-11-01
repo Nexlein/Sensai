@@ -5,12 +5,24 @@
 Le territoire est découpé en quatre secteurs. Les bacs doivent être sortis la veille au soir
 après 19 h et rentrés le jour même avant 20 h.
 
-| Secteur | Communes principales             | Bac gris       | Bac jaune | Bac marron        | Début de collecte |
-| ------- | -------------------------------- | -------------- | --------- | ----------------- | ----------------- |
-| A       | Val-Brûlé centre, Les Aulnes     | lundi et jeudi | mardi     | lundi et vendredi | 5 h 30            |
-| B       | Saint-Ormes, La Combe, Bellerive | mardi          | mercredi  | mardi et vendredi | 6 h 00            |
-| C       | Haut-Marais, Fontcouverte        | mercredi       | jeudi     | mercredi          | 6 h 00            |
-| D       | Zone d'activités, Les Granges    | vendredi       | vendredi  | non desservi      | 13 h 00           |
+## Secteur A : Val-Brûlé centre, Les Aulnes
+
+Bac gris le lundi et le jeudi. Bac jaune le mardi. Bac marron le lundi et le vendredi. Début de
+collecte à 5 h 30.
+
+## Secteur B : Saint-Ormes, La Combe, Bellerive
+
+Bac gris le mardi. Bac jaune le mercredi. Bac marron le mardi et le vendredi. Début de collecte à
+6 h 00.
+
+## Secteur C : Haut-Marais, Fontcouverte
+
+Bac gris le mercredi. Bac jaune le jeudi. Bac marron le mercredi. Début de collecte à 6 h 00.
+
+## Secteur D : Zone d'activités, Les Granges
+
+Bac gris le vendredi. Bac jaune le vendredi. Bac marron : secteur non desservi. Début de collecte
+à 13 h 00.
 
 ## Jours fériés
 

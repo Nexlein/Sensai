@@ -389,6 +389,34 @@ async def test_run_repl_reports_provider_error_and_continues():
     assert isinstance(errors[0], ProviderError)
 
 
+async def test_run_repl_reports_an_unexpected_error_and_continues():
+    class BuggyProvider:
+        async def chat_stream(self, messages, tools=None, think=None):
+            raise KeyError("boom")
+            yield  # pragma: no cover
+
+    context = CommandContext(
+        config=AppConfig(),
+        engine=ChatEngine(BuggyProvider(), Conversation()),
+        provider_factory=get_provider,
+        tool_registry=ToolRegistry(),
+        tool_registry_factory=lambda _: ToolRegistry(),
+        memory_store=FakeMemoryStore(),
+    )
+    inputs = iter(["hi", "again", "/exit"])
+    errors: list[Exception] = []
+
+    async def render(events: AsyncIterator[Event]) -> None:
+        async for _ in events:
+            pass
+
+    await run_repl(
+        context, read_input=lambda: next(inputs), render=render, on_error=errors.append
+    )
+
+    assert [type(error) for error in errors] == [KeyError, KeyError]
+
+
 async def test_chat_rag_option_indexes_local_documents(monkeypatch, tmp_path):
     from sensai.memory.rag.store import SQLiteVectorStore
 

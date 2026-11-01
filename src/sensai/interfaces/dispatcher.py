@@ -77,7 +77,7 @@ async def dispatch(argv: list[str]) -> int:
             rag_model=getattr(args, "rag_model", None),
         )
     except (BootstrapError, ConfigError, ProviderError) as exc:
-        console.print(f"[bold red]✗ {exc}[/]")
+        console.print(f"[bold red]✗ {escape(str(exc))}[/]")
         return 1
 
     try:

@@ -6,15 +6,15 @@ jamais sur « on connaissait déjà ».
 
 ## Features volontairement non implémentées
 
-| Feature                       | Pourquoi on l'a exclue (architecture et scénario)                                                                                                                                                          |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A2 Multi-agents**           | Chaque agent = un appel modèle de plus. Sur CPU à ~15 tok/s, trois agents en série triplent une latence déjà de 10 à 30 s. Les besoins de Karim (chercher, rédiger) tiennent dans une boucle ReAct unique. |
-| **R2 RAG avancé (reranking)** | Un reranker est un second modèle à charger et à appeler sur chaque chunk : RAM et latence en plus pour un corpus de quelques dizaines de pages, où la recherche cosinus suffit.                            |
-| **Assistant vocal en cabine** | Hors scope pour la sécurité (conduite) et incompatible avec la latence CPU.                                                                                                                                |
-| **X5 Planification**          | Pas de besoin : les tournées sont planifiées dans l'outil métier existant, pas dans l'assistant.                                                                                                           |
+| Feature                       | Pourquoi on l'a exclue (architecture et scénario)                                                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A2 Multi-agents**           | Chaque agent = un appel modèle de plus. Sur CPU à ~15 tok/s, trois agents en série triplent une latence déjà de 10 à 30 s. Les besoins de Camille (chercher, rédiger) tiennent dans une boucle ReAct unique. |
+| **R2 RAG avancé (reranking)** | Un reranker est un second modèle à charger et à appeler sur chaque chunk : RAM et latence en plus pour un corpus de quelques dizaines de pages, où la recherche cosinus suffit.                              |
+| **Assistant vocal en cabine** | Hors scope pour la sécurité (conduite) et incompatible avec la latence CPU.                                                                                                                                  |
+| **X5 Planification**          | Pas de besoin : les tournées sont planifiées dans l'outil métier existant, pas dans l'assistant.                                                                                                             |
 
 Présent dans le code mais hors scénario (à assumer) : sandbox Python (T2), MCP (T1), Groq. Ils
-prouvent l'extensibilité de l'architecture, pas un besoin de Karim. La sandbox peut se justifier
+prouvent l'extensibilité de l'architecture, pas un besoin de Camille. La sandbox peut se justifier
 pour les calculs (les petits modèles se trompent en arithmétique), Groq est à désactiver pour
 raisons RGPD.
 
@@ -34,6 +34,10 @@ Chaque ligne pointe vers le commit qui le prouve (`git show <hash>`).
 | 21/10 | `num_ctx = 8192` par défaut                                                                                       | Prouvé par le bench `context` : sans lui, Ollama coupe le début du prompt à 4 096 tokens, donc la persona et les règles                        | Cache KV un peu plus gros (32k ne coûte que 1,1 Go de plus que 2k) ; le budget M2 est validé contre `num_ctx` | `886e662`            |
 | 21/10 | Vecteurs RAG en JSON → binaire compacté + produit scalaire en C                                                   | 232 ms par recherche sur 1 000 chunks                                                                                                          | 30 ms ; base à réindexer                                                                                      | `17cb37f`            |
 | 26/10 | Réflexion (`/effort`) : `low` reste le défaut, mais `off` recommandé pour la démo                                 | Bench `effort` : 50 s de réflexion pour une addition que le mode `off` résout juste en 3 s ; `low`, `medium` et `high` donnent la même chose   | Le mode réflexion n'est plus présenté comme un gain, seulement comme un réglage ; à passer à `off` par défaut | `6b833a0`            |
+| 01/11 | Persona : Karim (chef d'équipe collecte) → Camille Roux (service usagers)                                         | Un rôle au bureau, devant un PC, se joue naturellement en soutenance ; les données d'usagers justifient mieux le local et les guardrails PII   | Rapports d'incident remplacés par les courriers aux usagers ; mêmes 12 étoiles                                | `d2f380f`            |
+| 01/11 | Raisonnement coupé ⇒ `think: false` envoyé à Ollama                                                               | Mesuré : qwen3.5 réfléchit par défaut ; 540 s de réflexion cachée pour une question sur CPU, 3,9 s après                                       | Couper A1 coupe vraiment la réflexion                                                                         | `47dd2ce`            |
+| 01/11 | Embedding `nomic-embed-text` → `bge-m3`, `top_k` 5 → 3 dans `sensai.example.toml`                                 | Mesuré : nomic classe le calendrier 10e et le plan hivernal 15e sur nos documents français ; bge-m3 les classe 2e et 1er                       | +0,9 Go à télécharger ; prompt plus court                                                                     | `4c27b07`            |
+| 01/11 | Calendrier des secteurs : tableau → une phrase par secteur                                                        | Le modèle 4B lisait la colonne voisine (« mardi et vendredi » au lieu de « mercredi »)                                                         | Même contenu, réponse juste                                                                                   | `9b16802`            |
 
 ## Décisions majeures et arbitrages
 
@@ -110,6 +114,21 @@ d’outil correct, manquer une information présente dans le corpus ou mal respe
 Le score RAG repose sur des mots-clés, sans vérifier toutes les affirmations ni les citations.
 Les [résultats des 35 cas](prompts-de-test.md) documentent ces limites ; les écritures restent
 soumises à confirmation et les réponses sensibles doivent être vérifiées.
+
+### 8. Décisions mesurées en répétant la démo (1er novembre)
+
+Trois problèmes trouvés en jouant le script sur le PC de démo, chacun corrigé avec une mesure avant et
+après. Ce sont de bons exemples d'« amélioration mesurée » à raconter au jury.
+
+| Problème constaté                                                                | Mesure avant                                                    | Correction                                                                 | Mesure après                                                      |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Raisonnement coupé, mais qwen3.5 réfléchit quand même (`thinking.default: true`) | **540 s** pour une question, 4 073 tokens de réflexion cachée   | Sensai envoie `think: false` quand `[reasoning] enabled = false`           | **3,9 s**                                                         |
+| `nomic-embed-text` (anglais) ne retrouve pas nos documents français              | Calendrier au rang 10, plan hivernal au rang 15 (sur 26 chunks) | `bge-m3`, modèle d'embedding multilingue, et `top_k = 3`                   | Calendrier au rang 2, plan hivernal au rang 1 ; prompt plus court |
+| Le modèle 4B lit mal un tableau Markdown (colonne voisine)                       | « bac jaune le mardi et le vendredi » (colonne du bac marron)   | Calendrier réécrit en une phrase par secteur dans `calendrier-secteurs.md` | « le mercredi », correct                                          |
+
+Écarté : réordonner le prompt pour profiter du cache d'Ollama. Mesuré : avec qwen3.5 sur CPU, le cache
+ne sert que si la requête prolonge exactement la précédente (cas des appels d'outils dans un même tour),
+pas d'un tour à l'autre.
 
 ## Alternatives : si c'était à refaire
 

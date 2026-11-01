@@ -57,6 +57,8 @@ class ParsedCommand:
 class CommandResult:
     message: str | None = None
     should_exit: bool = False
+    # The conversation was emptied or replaced: a UI showing it must redraw.
+    reset_view: bool = False
 
 
 @dataclass
@@ -354,7 +356,9 @@ async def handle_new(
     conversation = Conversation()
     await context.memory_store.save(conversation)
     context.engine.conversation = conversation
-    return CommandResult(message=f"Started new conversation: {conversation.id}")
+    return CommandResult(
+        message=f"Started new conversation: {conversation.id}", reset_view=True
+    )
 
 
 async def handle_clear(
@@ -363,7 +367,7 @@ async def handle_clear(
 ) -> CommandResult:
     context.engine.conversation.messages.clear()
     await context.memory_store.save(context.engine.conversation)
-    return CommandResult(message="Conversation cleared.")
+    return CommandResult(message="Conversation cleared.", reset_view=True)
 
 
 def _human_bytes(size: int) -> str:

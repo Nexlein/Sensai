@@ -1,6 +1,8 @@
 """Web frontend for a shared Sensai session."""
 
 import contextlib
+import socket
+import sys
 from collections.abc import Iterator
 
 import uvicorn
@@ -36,9 +38,28 @@ def build_app(context: CommandContext) -> FastAPI:
     return app
 
 
+def _port_in_use(host: str, port: int) -> bool:
+    """True when something already listens there (same socket options as uvicorn)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind((host, port))
+        except OSError:
+            return True
+    return False
+
+
 async def run_web(
     context: CommandContext, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT
 ) -> None:
+    if _port_in_use(host, port):
+        # uvicorn would log its own error and still let us print the address.
+        print(
+            f"✗ Port {port} is already in use: another Sensai is probably still "
+            "running. Stop it (Ctrl+C in its terminal), then start again.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     config = uvicorn.Config(
         build_app(context), host=host, port=port, log_level="warning"
     )

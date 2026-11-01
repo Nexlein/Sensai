@@ -14,29 +14,30 @@ Les chiffres marqués _hyp._ sont des hypothèses à annoncer comme telles devan
 | Licences                    | 0 €                                                         | Ollama (MIT), Qwen (Apache 2.0), Sensai interne                |
 | Installation et maintenance | ~2 jours/an d'un technicien _hyp._                          | Mises à jour du modèle, des documents, sauvegardes             |
 | Mise à jour du corpus RAG   | ~1 h/mois _hyp._                                            | Nouveau calendrier, nouvelles consignes                        |
-| Formation des agents        | ~1 h par chef d'équipe                                      | Interface web, rien à installer côté agent                     |
+| Formation des agents        | ~1 h par agent du service usagers                           | Interface web, rien à installer côté agent                     |
 | Conformité RGPD             | Mise à jour du registre, AIPD éventuelle                    | Voir [securite-rgpd.md](securite-rgpd.md)                      |
 
 ### Bénéfices
 
-| Bénéfice                                      | Estimation                                                                  |
-| --------------------------------------------- | --------------------------------------------------------------------------- |
-| Rédaction des rapports d'incident             | 15 min → 5 min _hyp._ × 25 rapports/semaine = **~4 h/semaine** gagnées      |
-| Recherche dans le règlement / fiches sécurité | 5 min → 30 s × 20 recherches/semaine = ~1,5 h/semaine                       |
-| Réponses du service usagers                   | Brouillon de courrier prêt en 30 s, ton homogène                            |
-| Qualité des rapports                          | Structure toujours complète (champs demandés par la procédure)              |
-| Sécurité des agents                           | Règle de sécurité retrouvée et sourcée, au lieu d'une mémoire approximative |
-| Intégration des nouveaux ripeurs              | Questions posées à l'assistant plutôt qu'au chef d'équipe                   |
+| Bénéfice                              | Estimation                                                              |
+| ------------------------------------- | ----------------------------------------------------------------------- |
+| Courriers aux usagers                 | 15 min → 3 min _hyp._ × 15 courriers/semaine = **~3 h/semaine** gagnées |
+| Recherche pendant les appels          | 3 min → 1 min _hyp._ × 20 recherches/jour = **~3,3 h/semaine**          |
+| Moins de rappels d'usagers mécontents | Réponse sourcée ; « je ne trouve pas » plutôt qu'une date inventée      |
+| Conformité RGPD                       | Téléphones et emails masqués avant le modèle, rien ne sort du poste     |
+| Courriers homogènes                   | Toujours le modèle officiel, la bonne signature                         |
+| Intégration d'un nouvel agent         | Questions posées à l'assistant plutôt qu'aux collègues                  |
 
-Ordre de grandeur : ~5 h/semaine × 45 semaines ≈ 225 h/an. Au coût chargé d'un agent de maîtrise
-(~30 €/h _hyp._), **~6 700 €/an** pour moins de 1 000 € d'investissement la première année.
+Ordre de grandeur : ~6 h/semaine × 45 semaines ≈ 270 h/an pour un poste du service usagers. Au coût
+chargé d'un agent (~30 €/h _hyp._), **~8 000 €/an** pour moins de 1 000 € d'investissement la première
+année.
 
 ### Comparaison avec une API cloud
 
 | Critère                | Sensai local (Ollama)               | API cloud (type Groq, OpenAI)                  |
 | ---------------------- | ----------------------------------- | ---------------------------------------------- |
 | Coût variable          | ~0 €                                | Par token ; faible à ce volume, mais récurrent |
-| Données usagers        | Ne quittent pas le dépôt            | Transfert hors UE probable, sous-traitant RGPD |
+| Données usagers        | Ne quittent pas le poste            | Transfert hors UE probable, sous-traitant RGPD |
 | Qualité                | Modèle 4B : erreurs plus fréquentes | Modèles 70B+ : nettement meilleure             |
 | Latence                | 10 à 30 s par réponse sur CPU       | 1 à 3 s                                        |
 | Fonctionne hors réseau | Oui                                 | Non                                            |

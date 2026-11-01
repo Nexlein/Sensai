@@ -1,9 +1,11 @@
 """Web app."""
 
 import signal
+import socket
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
 import uvicorn
 
 from sensai.core.commands import CommandContext
@@ -64,3 +66,18 @@ def test_app_hides_the_generated_api_docs():
 
     assert app.docs_url is None
     assert app.openapi_url is None
+
+
+async def test_busy_port_is_one_clear_line_and_nothing_starts(capsys):
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        port = taken.getsockname()[1]
+
+        with pytest.raises(SystemExit) as exit_info:
+            await web_app.run_web(_context(), host="127.0.0.1", port=port)
+
+    out = capsys.readouterr()
+    assert exit_info.value.code == 1
+    assert f"Port {port} is already in use" in out.err
+    assert "Sensai web UI" not in out.out

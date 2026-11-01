@@ -375,6 +375,18 @@ Index: 26 chunks in 0.8 s, one retrieval 24 ms.
   gets a plausible "the operations manager" instead of a refusal. Retrieved text about a topic
   makes the model answer questions next to it that the text does not settle.
 
+**Since this run** (1 November): `calendrier-secteurs.md` is written as one sentence per sector,
+which removes the table those 3 misses came from, and `sensai.example.toml` retrieves with the
+multilingual `bge-m3` and `top_k = 3` (on these French documents `nomic-embed-text` ranks the
+calendar 10th and the winter plan 15th of 26 chunks, `bge-m3` 2nd and 1st). The table above is
+the published run with the defaults; measure the demo setup with
+`python -m sensai.eval.bench rag --embed-model bge-m3 --top-k 3`.
+
+**Limits of the grading.** A fact counts as right when every expected keyword appears in the
+answer, so a refusal or a hedge that names the right day ("je ne sais pas si c'est mercredi ou
+jeudi") passes, and "source cited" only checks that the answer contains `.md`. Both make the
+scores an upper bound; the saved answers in `reports/bench/rag.json` are the evidence to read.
+
 ## Temperature
 
 `python -m sensai.eval.bench temperature --repeat 5`: the 22 RAG questions, RAG and persona,

@@ -10,7 +10,8 @@ Légende : ✅ fait · ⚠️ partiel · ❌ à faire
 | Document                                 | Répond à                                                               |
 | ---------------------------------------- | ---------------------------------------------------------------------- |
 | [scenario.md](scenario.md)               | Utilisateur cible, besoin métier, cohérence latence, pré-prompt        |
-| [demo-script.md](demo-script.md)         | Scène de théâtre, script minuté, plan de repli                         |
+| [demo-script.md](demo-script.md)         | Pièce mot pour mot (install + 12 ⭐), checklists, plan de repli        |
+| [persona.md](persona.md)                 | Fiche personnage de Camille Roux, à connaître avant de jouer           |
 | [configuration.md](configuration.md)     | Fichier de config, activation des features, température, contexte      |
 | [observabilite.md](observabilite.md)     | Logs du prompt complet, compteur de tokens, tokens/s, RAM/VRAM         |
 | [modeles.md](modeles.md)                 | Culture IA (critère 7), choix du modèle, tableau des modèles           |
@@ -36,7 +37,9 @@ Les user stories restent dans [`../USER_STORIES.md`](../USER_STORIES.md).
 | Afficher le prompt complet reconstitué (logs)      | ✅   | `/prompt` et `[eval] log_prompts` (`logs/prompts.jsonl`). Voir [observabilite.md](observabilite.md#logs-du-prompt-complet)                                                                                              |
 | Compteur de tokens                                 | ✅   | Estimation en direct + vrais comptes Ollama (`prompt_eval_count`, `eval_count`) après chaque réponse, écart loggé                                                                                                       |
 | Meilleur pré-prompt / IA spécialisée               | ✅   | `[persona]` + `personas/collecte.md`, placé en tête du prompt, `/persona on/off`. Voir [scenario.md](scenario.md#pré-prompt-proposé)                                                                                    |
-| Exemples dans le README partout                    | ⚠️   | Exemples présents par feature ; ajouter ceux de cette doc une fois les features faites                                                                                                                                  |
+| Exemples dans le README partout                    | ✅   | README « What you can try » : un message à taper par feature présentée                                                                                                                                                  |
+| Installer depuis la doc seule                      | ✅   | README « Install and run » et [`../INSTALL.fr.md`](../INSTALL.fr.md), joués à l'acte 0                                                                                                                                  |
+| Config limitée aux features présentées             | ✅   | [`sensai.example.toml`](../../sensai.example.toml), voir [configuration.md](configuration.md#config-de-la-soutenance)                                                                                                   |
 | Débit (tokens/s) : le voir, le savoir, l'expliquer | ✅   | Affiché après chaque réponse ; mesuré pour 10 modèles ([modeles.md](modeles.md#tableau-des-modèles-testés)), machines dans [observabilite.md](observabilite.md#débit-tokenss)                                           |
 | Consommation RAM / VRAM                            | ✅   | `/ps` (taille, CPU/GPU, contexte). Voir [observabilite.md](observabilite.md#ram-et-vram)                                                                                                                                |
 | Prompts de test                                    | ✅   | [prompts-de-test.md](prompts-de-test.md) : 35 résultats consignés (19 conformes, 12 partiels, 4 échecs) ; MCP non configuré, Stop vérifié avant premier texte.                                                          |
@@ -60,7 +63,7 @@ des observations de cette version, pas une validation de la version rebasée.
 | Scénario, persona, latence                  | ⚠️   | [scenario.md](scenario.md) : scénario fixé, à valider par l'équipe                                                   |
 | Jeu de données cohérent                     | ⚠️   | [`data/collecte/`](../../data/collecte/) : base à enrichir                                                           |
 | 2 user stories par feature                  | ✅   | [`../USER_STORIES.md`](../USER_STORIES.md) ; s'entraîner au quiz « story → feature »                                 |
-| Démo théâtralisée                           | ⚠️   | [demo-script.md](demo-script.md), à répéter                                                                          |
+| Démo théâtralisée                           | ⚠️   | [demo-script.md](demo-script.md) testé en direct ; à répéter sur le PC d'Alban                                       |
 | RGPD + fuite + contraintes techniques       | ⚠️   | [securite-rgpd.md](securite-rgpd.md)                                                                                 |
 | Coûts-bénéfices                             | ⚠️   | [couts-benefices.md](couts-benefices.md) : hypothèses à confirmer                                                    |
 | Sécurité montrée dans le code               | ✅   | [securite-rgpd.md](securite-rgpd.md#où-le-code-se-protège)                                                           |

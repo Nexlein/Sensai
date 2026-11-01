@@ -5,6 +5,7 @@ import signal
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 
 from rich.console import Console
+from rich.markup import escape
 
 from sensai.core.commands import CommandContext, CommandResult
 from sensai.core.input import process_input
@@ -42,7 +43,7 @@ async def run_cli(context: CommandContext, console: Console) -> None:
         console.print()
 
     def on_error(exc: Exception) -> None:
-        console.print(f"[bold red]✗ {error_text(exc)}[/]")
+        console.print(f"[bold red]✗ {escape(error_text(exc))}[/]")
 
     await run_repl(
         context,
@@ -101,6 +102,9 @@ async def run_repl(
                 process_input(context, text, render, confirm_tool=confirm_tool)
             )
         except (EmptyInputError, ProviderError) as exc:
+            on_error(exc)
+            continue
+        except Exception as exc:  # noqa: BLE001 - one line, never a traceback
             on_error(exc)
             continue
         if result is None:

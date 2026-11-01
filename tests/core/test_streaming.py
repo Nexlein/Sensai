@@ -107,14 +107,18 @@ async def test_held_text_is_released_as_the_answer_without_tool_calls():
 
 
 @pytest.mark.asyncio
-async def test_think_option_is_passed_only_with_reasoning():
+async def test_think_option_follows_reasoning():
     provider = Scripted()
     await _run(RoundStreamer(provider, reasoning=True, think="high"))
     assert provider.options == {"think": "high"}
 
     provider = Scripted()
-    await _run(RoundStreamer(provider, reasoning=False, think="high"))
+    await _run(RoundStreamer(provider, reasoning=True))
     assert provider.options == {}
+
+    provider = Scripted()
+    await _run(RoundStreamer(provider, reasoning=False, think="high"))
+    assert provider.options == {"think": False}
 
 
 @pytest.mark.asyncio

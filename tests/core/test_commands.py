@@ -112,6 +112,7 @@ async def test_dispatch_clear_empties_current_conversation():
     assert isinstance(context.memory_store, FakeMemoryStore)
     assert context.memory_store.saved == [context.engine.conversation]
     assert result.message == "Conversation cleared."
+    assert result.reset_view
 
 
 async def test_dispatch_help_lists_commands():
@@ -539,6 +540,7 @@ async def test_dispatch_new_persists_and_activates_fresh_conversation():
     assert (
         result.message == f"Started new conversation: {context.engine.conversation.id}"
     )
+    assert result.reset_view
 
 
 async def test_dispatch_new_rejects_arguments():
@@ -556,6 +558,7 @@ async def test_dispatch_new_rejects_arguments():
     assert context.engine.conversation is previous
     assert store.saved == []
     assert result.message == "Usage: /new"
+    assert not result.reset_view
 
 
 async def test_dispatch_memory_unavailable():

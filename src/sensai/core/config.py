@@ -293,13 +293,26 @@ class AppConfig(BaseModel):
         "never cuts the prompt silently",
     )
 
-    @field_validator("options", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def _default_window(cls, value: Any) -> Any:
-        """An `[options]` table without num_ctx still gets the default window."""
-        if isinstance(value, dict) and "num_ctx" not in value:
-            return {**value, "num_ctx": DEFAULT_NUM_CTX}
-        return value
+    def _default_window(cls, data: Any) -> Any:
+        """Without num_ctx, the window is the default one, grown to hold the budget
+        and the reply. Only a num_ctx the user set can conflict with the budget."""
+        if not isinstance(data, dict):
+            return data
+        options = data.get("options", {})
+        if not isinstance(options, dict) or "num_ctx" in options:
+            return data
+        budget = data.get("budget", {})
+        max_tokens = (
+            budget.get("max_tokens", BudgetConfig().max_tokens)
+            if isinstance(budget, dict)
+            else budget.max_tokens
+        )
+        needed = max_tokens + (options.get("num_predict") or 0)
+        if "options" not in data and needed <= DEFAULT_NUM_CTX:
+            return data  # the field default already holds the default window
+        return {**data, "options": {**options, "num_ctx": max(DEFAULT_NUM_CTX, needed)}}
 
     @model_validator(mode="after")
     def _budget_fits_context(self) -> "AppConfig":

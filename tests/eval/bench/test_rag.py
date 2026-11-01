@@ -204,3 +204,42 @@ async def test_temperature_runs_each_value_unseeded_and_grades_stability(
     cold, hot = results
     assert (cold.mean_accuracy, cold.stable, cold.identical) == (1.0, 1, 1)
     assert hot.stable == 0 and hot.identical == 0
+
+
+class RecordingEmbedder:
+    """Stands in for OllamaEmbeddingProvider and records the model it was given."""
+
+    models: ClassVar[list[str]] = []
+
+    def __init__(self, base_url: str, model: str) -> None:
+        RecordingEmbedder.models.append(model)
+
+    async def embed_texts(self, texts):
+        return [[1.0, float(len(text))] for text in texts]
+
+
+async def test_retriever_uses_the_embedding_model_and_top_k_it_is_given(
+    monkeypatch, tmp_path
+):
+    RecordingEmbedder.models = []
+    monkeypatch.setattr(rag, "OllamaEmbeddingProvider", RecordingEmbedder)
+    corpus = tmp_path / "docs"
+    corpus.mkdir()
+    for name in "abcd":
+        (corpus / f"{name}.md").write_text(f"document {name} " * 20)
+
+    retriever, index = await rag.build_retriever(
+        corpus, tmp_path / "db", "http://x", embed_model="bge-m3", top_k=2
+    )
+
+    assert RecordingEmbedder.models == ["bge-m3"]
+    assert retriever.top_k == 2
+    assert index.chunks >= 4
+
+
+def test_bench_cli_defaults_keep_the_published_setup():
+    from sensai.eval.bench.__main__ import build_parser
+
+    args = build_parser().parse_args(["rag"])
+
+    assert (args.embed_model, args.top_k) == ("nomic-embed-text", 5)

@@ -88,18 +88,39 @@ Depuis le terminal : `sensai config init` (fichier documenté avec tous les rég
 
 ### Bascules de features
 
-| Feature              | Bascule actuelle                  | Manque |
-| -------------------- | --------------------------------- | ------ |
-| Guardrails (EV2)     | `[guardrails] enabled`            | —      |
-| Mémoire (M3)         | `[memory] enabled`                | —      |
-| Raisonnement (A1)    | `[reasoning] enabled`             | —      |
-| Outils fichiers (T4) | `[tools] fs_allowed_root = false` | —      |
-| MCP (T1)             | présence de `[mcp.servers.*]`     | —      |
-| Log des réponses     | `[eval] log_replies`              | —      |
-| RAG (R1)             | `[rag] enabled` ou `--rag-dir`    | —      |
-| Recherche web (T3)   | `[tools] web_search = false`      | —      |
-| Sandbox (T2)         | `[tools] sandbox = false`         | —      |
-| Budget (M2)          | `[budget] enabled = false`        | —      |
+| Feature              | Bascule                           | Dans `sensai.example.toml` |
+| -------------------- | --------------------------------- | -------------------------- |
+| Web UI (X1)          | `interface = "web"` ou `--ui web` | ✅                         |
+| Persona (A5)         | `[persona] enabled`               | ✅                         |
+| RAG (R1)             | `[rag] enabled` ou `--rag-dir`    | ✅                         |
+| Guardrails (EV2)     | `[guardrails] enabled`            | ✅                         |
+| Mémoire (M3)         | `[memory] enabled`                | ✅                         |
+| Outils fichiers (T4) | `[tools] fs_allowed_root = false` | ✅ (`"."`)                 |
+| Confirmation (A3)    | liée aux outils sensibles         | ✅ (écriture de fichier)   |
+| Sessions (M1)        | `--session <nom>`                 | ✅ (flag au lancement)     |
+| Compression (M2)     | `[budget] enabled = false`        | off (le comptage reste)    |
+| Raisonnement (A1)    | `[reasoning] enabled`             | off                        |
+| Recherche web (T3)   | `[tools] web_search = false`      | off                        |
+| Sandbox (T2)         | `[tools] sandbox = false`         | off                        |
+| MCP (T1)             | présence de `[mcp.servers.*]`     | off (aucun serveur)        |
+| Log des réponses     | `[eval] log_replies`              | off (EV1 non présenté)     |
+
+A3 n'a pas de bascule à part : une confirmation ne s'affiche que pour un outil sensible, donc ici
+seulement pour `write_file`. La couper laisserait le modèle écrire sans contrôle.
+
+### Config de la soutenance
+
+[`sensai.example.toml`](../../sensai.example.toml), versionné à la racine, active exactement les 12
+étoiles présentées (X1, A5, R1, EV2, M3, T4, A3, M1) et coupe le reste. Camille le copie pendant
+l'installation (`cp sensai.example.toml sensai.toml`). Le test
+`test_shipped_example_config_turns_on_only_the_presented_features` (`tests/core/test_config.py`)
+casse la CI si le fichier dérive.
+
+`autosave = false` dans ce fichier : un `/persona off` pendant la pièce reste dans la session et ne
+réécrit pas `sensai.toml`.
+
+Restent actifs quelle que soit la config, car ce sont des prérequis : compteur de tokens (estimation
+en direct et vrais comptes), débit, `/prompt`, `[eval] log_prompts`, `/ps`, erreurs en une ligne.
 
 ## Température et contexte
 
