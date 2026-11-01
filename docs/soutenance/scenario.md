@@ -1,7 +1,7 @@
 # Scénario : Sensai Collecte
 
 > **Plus joué en démo** depuis le 1er novembre : la démo suit un étudiant de Tek 1
-> ([demo-script.md](demo-script.md)). Ce scénario reste celui du corpus des benchmarks RAG et
+> ([scenario-tek1.md](scenario-tek1.md), [demo-script.md](demo-script.md)). Ce scénario reste celui du corpus des benchmarks RAG et
 > persona ([`demo/collecte/`](../../demo/collecte/)).
 
 > Fixé depuis le bootstrap du keynote : chaque feature montrée doit servir ce scénario.
@@ -56,7 +56,7 @@ désactivée ([mesures](../benchmarks.md#models-speed-and-memory)). À ce débit
 du prompt et, si nécessaire, le chargement du modèle.
 
 - **Acceptable** : au bureau, pour un courrier ou une question pendant un appel. 30 s à 1 min contre
-  5 minutes de recherche ou 15 minutes de rédaction. Mesures réelles dans [demo-script.md](demo-script.md#temps-mesurés-1er-novembre-pc-de-nielsen-sur-secteur).
+  5 minutes de recherche ou 15 minutes de rédaction. Mesures réelles dans [demo-script.md](demo-script.md#temps-mesurés).
 - **Non acceptable** : un assistant vocal temps réel au téléphone. **Exclu du scope**.
 - Le streaming rend l'attente supportable : le premier mot arrive après le temps de traitement du
   prompt, pas après la réponse complète. L'indicateur « thinking… N s » montre que rien n'est figé.

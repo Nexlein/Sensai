@@ -3,6 +3,23 @@
 Deux questions du jury : « que se passe-t-il en cas de fuite, quelles contraintes techniques ? » et
 « montrez où, dans le code, vous bloquez les injections de prompt et les fuites ».
 
+## Données traitées (scénario Tek 1, démo)
+
+| Donnée                  | Où elle est stockée     | Contient des données perso ?                                                            |
+| ----------------------- | ----------------------- | --------------------------------------------------------------------------------------- |
+| Message du binôme       | Historique, `sensai.db` | Numéro et mail **masqués avant le modèle et avant stockage** ; un prénom reste en clair |
+| Mémoire structurée (M3) | `sensai.db`             | Prénom et promo de l'étudiant ; `/memory delete` les efface                             |
+| Code de l'étudiant      | `CPool_Day04/`          | Non                                                                                     |
+| Index RAG               | `rag.db`                | Non : sujet, norme et fiches de la piscine                                              |
+
+**RGPD** : un étudiant qui utilise Sensai pour lui-même relève de l'activité « strictement
+personnelle ou domestique », hors du champ du RGPD (art. 2.2.c,
+[EUR-Lex](https://eur-lex.europa.eu/eli/reg/2016/679/oj), repris par
+[l'EDPB, lignes directrices 3/2019, §11](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines_201903_video_devices_en_0.pdf)).
+Le masquage reste utile : le numéro du binôme n'est ni lu par le modèle ni écrit sur le disque.
+_Notre lecture, pas un avis juridique_ : si l'école déployait Sensai pour tous ses étudiants, elle
+deviendrait responsable du traitement, et l'analyse de la régie ci-dessous s'appliquerait.
+
 ## Données traitées (scénario Sensai Collecte)
 
 | Donnée                         | Où elle est stockée               | Contient des données perso ?                                                                                                  | Chiffrée ? |

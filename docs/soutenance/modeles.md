@@ -90,13 +90,76 @@ sa qualité et son débit aux autres candidats. La taille seule ne suffit pas à
 | Gemma 3   | Google          | Multimodal, fenêtre 128k (4B et plus), bonne qualité de texte                                                | Pas de rôle `tool` natif, tool calling moins robuste                                   |
 | Phi       | Microsoft       | Raisonnement et maths très bons pour la taille                                                               | Multilingue et connaissances générales plus faibles                                    |
 
+### Ce qui distingue une famille d'une autre
+
+Une famille, c'est un éditeur et une recette d'entraînement, déclinés en plusieurs tailles et
+générations. Cinq critères les séparent pour nous.
+
+**1. Dense ou MoE (mélange d'experts).** Un modèle dense utilise tous ses paramètres pour chaque
+token. Un MoE a plusieurs « experts » par couche, et un routeur n'en active que quelques-uns par
+token : il calcule comme un petit modèle, mais il faut stocker tous ses paramètres.
+
+| Modèle                | Type  | Paramètres totaux | Actifs par token |
+| --------------------- | ----- | ----------------- | ---------------- |
+| Qwen3.5 4B (le nôtre) | Dense | 4B                | 4B               |
+| Qwen3.5 35B-A3B       | MoE   | 35B               | 3B               |
+| Mixtral 8x7B          | MoE   | 46,7B             | 12,9B            |
+| Llama 4 Scout         | MoE   | 109B              | 17B              |
+| DeepSeek-R1           | MoE   | 671B              | 37B              |
+
+Sur un PC, c'est la mémoire qui bloque, pas le calcul : un MoE de 35B en Q4 pèse environ 21 Go
+(35 × 0,6, voir le tableau plus haut). Il ne tient pas dans nos 16 Go, même s'il calcule comme un
+3B. D'où un modèle dense de 4B.
+
+**2. Base, instruct, raisonnement.** Un modèle _base_ sort du pré-entraînement : il continue un
+texte. Un modèle _instruct_ est ensuite entraîné à suivre une conversation, avec un format de chat
+et d'appels d'outils. Sensai a besoin d'un instruct : la boucle d'outils repose sur ce format. Les
+modèles « thinking » ajoutent une réflexion avant la réponse ; sur Qwen 3.5 elle est active par
+défaut, d'où `think: false` dans Sensai ([../benchmarks.md](../benchmarks.md#thinking-effort)).
+
+**3. Génération et distillation.** Les petits modèles récents apprennent des gros de leur famille.
+Qwen3 entraîne ses modèles de 0,6B à 14B par « strong-to-weak distillation » à partir de Qwen3-32B
+ou Qwen3-235B-A22B. DeepSeek publie des R1-Distill-Qwen de 1,5B à 32B. C'est pour ça qu'un 4B de
+2026 se compare à des 7B plus anciens : `qwen3.5:4b` (sorti le 2 mars 2026) contre `mistral:7b`
+(septembre 2023) dans notre [tableau](#tableau-des-modèles-testés).
+
+**4. Fenêtre et modalités.** Qwen 3.5 4B accepte 262 144 tokens et lit aussi des images (la version
+Ollama embarque un encodeur d'images). Sensai n'utilise que le texte, et envoie `num_ctx = 8192` :
+le cache KV d'une fenêtre pleine ne tiendrait pas en mémoire ([cache KV](#cache-kv-et-taille-du-contexte)).
+
+**5. Licence : poids ouverts ne veut pas dire open source.** La définition de l'OSI (Open Source AI
+Definition 1.0, 28 octobre 2024) exige les poids, le code d'entraînement et assez d'informations
+sur les données pour reconstruire un système équivalent. Les familles du tableau publient leurs
+poids, pas leurs données d'entraînement : ce sont des modèles à poids ouverts. Ce qui change pour
+nous, c'est la licence de ces poids :
+
+| Famille               | Licence des poids           | Ce qu'elle impose                                                                                                                                                                     |
+| --------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Qwen3, Qwen 3.5       | Apache 2.0                  | Garder la licence et les mentions ; usage commercial libre                                                                                                                            |
+| Mistral 7B, Small 3.1 | Apache 2.0                  | Idem ; mais Ministral 8B est sous Mistral Research License (pas d'usage commercial sans accord)                                                                                       |
+| Llama 3.2             | Llama 3.2 Community License | Afficher « Built with Llama » ; licence à demander au-delà de 700 millions d'utilisateurs par mois ; modèles multimodaux non accordés aux personnes et entreprises établies dans l'UE |
+| Gemma 3               | Gemma Terms of Use          | Politique d'usages interdits, à reporter sur les modèles dérivés ; Gemma 4 passe à Apache 2.0 (avril 2026)                                                                            |
+| Phi-4, Phi-4-mini     | MIT                         | Garder la mention de copyright                                                                                                                                                        |
+| DeepSeek-R1           | MIT                         | Idem ; les R1-Distill gardent la licence de leur modèle de base (Qwen ou Llama)                                                                                                       |
+
+Sources : [Qwen3.5](https://github.com/QwenLM/Qwen3.5), [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B),
+[Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B), [rapport Qwen3](https://arxiv.org/abs/2505.09388),
+[Mixtral](https://mistral.ai/news/mixtral-of-experts), [Mistral 7B](https://mistral.ai/news/announcing-mistral-7b),
+[Mistral Small 3.1](https://mistral.ai/news/mistral-small-3-1), [Ministral](https://mistral.ai/news/ministraux),
+[licence Llama 3.2](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/LICENSE),
+[politique d'usage Llama 3.2](https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/USE_POLICY.md),
+[Llama 4](https://github.com/meta-llama/llama-models/blob/main/models/llama4/MODEL_CARD.md),
+[conditions Gemma](https://ai.google.dev/gemma/terms), [Gemma 4 en Apache 2.0](https://opensource.googleblog.com/2026/03/gemma-4-expanding-the-gemmaverse-with-apache-20.html),
+[Phi-4](https://huggingface.co/microsoft/phi-4), [Phi-4-mini](https://huggingface.co/microsoft/Phi-4-mini-instruct),
+[DeepSeek-R1](https://huggingface.co/deepseek-ai/DeepSeek-R1), [OSI](https://opensource.org/ai/open-source-ai-definition).
+
 **Notre choix : `qwen3.5:4b`**, argumenté par nos contraintes et pas par habitude :
 
-1. **Tool calling fiable à 4B** : nos features clés (fichiers, mémoire, rapport d'incident) reposent
+1. **Tool calling fiable à 4B** : nos features clés (fichiers, mémoire) reposent
    sur des appels d'outils. Llama 3.2 3B inventait le contenu après avoir lu un fichier ; il a fallu
    un Modelfile spécial (`ollama/Modelfile`) pour le cadrer.
-2. **Français** : utilisateurs francophones (Camille, service usagers).
-3. **Taille** : 4B en Q4 tient sur un PC de dépôt sans GPU avec un débit compatible du scénario.
+2. **Français** : l'étudiant et ses documents de piscine sont en français.
+3. **Taille** : 4B en Q4 tient sur un PC d'étudiant, même sans GPU, avec un débit compatible du scénario.
 4. **Raisonnement réglable** : `think` (`/effort`) permet de désactiver ou activer la réflexion.
    Sur ce Qwen, `low`, `medium` et `high` ne constituent pas trois intensités distinctes ;
    le coût de la réflexion est mesuré dans [../benchmarks.md](../benchmarks.md#thinking-effort).
@@ -125,6 +188,10 @@ renvoie les 5 meilleurs chunks, qui sont injectés dans le prompt du modèle gé
 Dans Sensai, les rôles sont séparés : le modèle génératif répond, le modèle d’embedding produit
 les vecteurs pour la similarité. Certains modèles génératifs peuvent aussi fournir des embeddings,
 mais ce n’est pas le rôle de notre `OllamaLLMProvider` ; `nomic-embed-text` ne génère pas de texte.
+
+Dans la démo, l'embedding est [`bge-m3`](https://huggingface.co/BAAI/bge-m3) : même principe, 1 024
+dimensions, multilingue, avec `top_k = 3`. Sur nos documents en français, `nomic-embed-text` classait
+le calendrier 10e et le plan hivernal 15e ; `bge-m3` les classe 2e et 1er ([decisions.md](decisions.md#8-décisions-mesurées-en-répétant-la-démo-1er-novembre)).
 
 ## Tableau des modèles testés
 

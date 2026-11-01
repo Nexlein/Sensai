@@ -33,6 +33,10 @@ Trois règles décident de la place de chaque bloc :
    à l'autre dans une journée : en tête, ils ne sont calculés qu'une fois. Le RAG change à chaque
    question : placé en tête, il invaliderait tout le cache à chaque tour (sur CPU, ~1 s de prefill
    par tranche de 100 tokens, voir [../benchmarks.md](../benchmarks.md)).
+   **Limite mesurée** : avec `qwen3.5:4b` sur CPU, le cache ne sert que si la requête prolonge
+   exactement la précédente, c'est-à-dire entre les appels d'outils d'un même tour, pas d'un tour
+   à l'autre ([decisions.md](decisions.md#8-décisions-mesurées-en-répétant-la-démo-1er-novembre)).
+   La règle reste juste pour la boucle d'outils ; les règles 1 et 3 suffisent à justifier l'ordre.
 3. **Le plus utile au plus près de la question.** Les modèles exploitent mieux le début et la fin du
    contexte que le milieu (« lost in the middle », Liu et al. 2023). Le début porte l'identité et les
    règles ; la fin porte les documents puis la question de l'utilisateur, toujours dernière.

@@ -120,7 +120,7 @@ contexte : [../benchmarks.md](../benchmarks.md), résumé dans [modeles.md](mode
 
 ## Rejouer en direct
 
-1. Préchauffer le modèle (voir [demo-script.md](demo-script.md#préparation-avant-dentrer-en-salle)).
+1. Préchauffer le modèle (voir [demo-script.md](demo-script.md#juste-avant-dentrer-en-salle)).
 2. Lancer `uv run python -m sensai.eval.bench rag` (3 minutes sur GPU).
 3. Comparer aux résultats du tableau : les **ordres de grandeur** doivent tenir (écart d'exactitude
    de plusieurs dizaines de points), pas les valeurs exactes.

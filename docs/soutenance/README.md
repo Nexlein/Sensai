@@ -1,26 +1,29 @@
 # Préparation soutenance
 
-Dossier de préparation du keynote et des questions du jury. Chaque ligne du tableau ci-dessous
+Dossier de préparation de la défense et des questions du jury. Chaque ligne du tableau ci-dessous
 reprend une exigence annoncée, l'état réel du projet et le document qui y répond.
 
 Légende : ✅ fait · ⚠️ partiel · ❌ à faire
 
 ## Documents
 
-| Document                                 | Répond à                                                               |
-| ---------------------------------------- | ---------------------------------------------------------------------- |
-| [demo-script.md](demo-script.md)         | Démo « Moi, en Tek 1 » mot pour mot (5 moments + 12 ⭐), plan de repli |
-| [scenario.md](scenario.md)               | Scénario de la régie de collecte, corpus du benchmark RAG              |
-| [persona.md](persona.md)                 | Fiche personnage de Camille Roux (ancienne démo de la régie)           |
-| [configuration.md](configuration.md)     | Fichier de config, activation des features, température, contexte      |
-| [observabilite.md](observabilite.md)     | Logs du prompt complet, compteur de tokens, tokens/s, RAM/VRAM         |
-| [modeles.md](modeles.md)                 | Culture IA (critère 7), choix du modèle, tableau des modèles           |
-| [benchmarks.md](benchmarks.md)           | Évaluation A/B (critère 9), métriques, rejouabilité                    |
-| [prompts-de-test.md](prompts-de-test.md) | Prompts de test, limites du modèle, hallucinations                     |
-| [tests.md](tests.md)                     | Tests unitaires lisibles, tests « en vrai » contre Ollama              |
-| [securite-rgpd.md](securite-rgpd.md)     | RGPD, scénario de fuite, où le code bloque injections et fuites        |
-| [couts-benefices.md](couts-benefices.md) | Analyse coûts-bénéfices (régie de collecte et équipe)                  |
-| [decisions.md](decisions.md)             | Critère 16 : choix, exclusions, alternatives, « si c'était à refaire » |
+| Document                                 | Répond à                                                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| [demo-script.md](demo-script.md)         | Démo « Moi, en Tek 1 » mot pour mot (5 moments + 12 ⭐), plan de repli              |
+| [retours-midterm.md](retours-midterm.md) | Chaque point perdu à la mi-parcours : ce qui a changé, la preuve, la phrase à dire  |
+| [scenario-tek1.md](scenario-tek1.md)     | Scénario de la démo (Tek 1) : besoins, latence, traçabilité moment → feature → US   |
+| [scenario.md](scenario.md)               | Scénario de la régie de collecte, corpus du benchmark RAG                           |
+| [persona.md](persona.md)                 | Fiche personnage de Camille Roux (ancienne démo de la régie)                        |
+| [configuration.md](configuration.md)     | Fichier de config, activation des features, température, contexte                   |
+| [observabilite.md](observabilite.md)     | Logs du prompt complet, compteur de tokens, tokens/s, RAM/VRAM                      |
+| [modeles.md](modeles.md)                 | Culture IA (critère 7), choix du modèle, tableau des modèles                        |
+| [benchmarks.md](benchmarks.md)           | Évaluation A/B (critère 9), métriques, rejouabilité                                 |
+| [prompts-de-test.md](prompts-de-test.md) | Prompts de test, limites du modèle, hallucinations                                  |
+| [limites.md](limites.md)                 | Limites du système, chacune avec sa mesure, sa cause et sa parade                   |
+| [tests.md](tests.md)                     | Tests unitaires lisibles, tests « en vrai » contre Ollama                           |
+| [securite-rgpd.md](securite-rgpd.md)     | RGPD (étudiant et régie), scénario de fuite, où le code bloque injections et fuites |
+| [couts-benefices.md](couts-benefices.md) | Analyse coûts-bénéfices (étudiant, régie de collecte, équipe)                       |
+| [decisions.md](decisions.md)             | Critère 16 : choix, exclusions, alternatives, « si c'était à refaire »              |
 
 Les deux exemples, documents fictifs et fiche d'assistant, sont dans [`demo/`](../../demo/) :
 [`demo/tek1/`](../../demo/tek1/) pour la démo, [`demo/collecte/`](../../demo/collecte/) pour les
@@ -56,22 +59,22 @@ des observations de cette version, pas une validation de la version rebasée.
 
 ## Critères notés
 
-| Critère                                     | État | Document                                                                                                             |
-| ------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
-| 7. Culture IA (4 pts)                       | ⚠️   | [modeles.md](modeles.md), à répéter à l'oral                                                                         |
-| 9. Amélioration mesurée (3 pts)             | ✅   | [benchmarks.md](benchmarks.md) : A/B RAG et persona, script rejouable                                                |
-| Tests qui affichent plus que « OK »         | ✅   | [tests.md](tests.md) : chaque test par titre, ✓/✗, résumé par zone                                                   |
-| Limites du modèle (hallucination, codename) | ⚠️   | [prompts-de-test.md](prompts-de-test.md#limites-du-modèle)                                                           |
-| Scénario, persona, latence                  | ⚠️   | [scenario.md](scenario.md) : scénario fixé, à valider par l'équipe                                                   |
-| Jeu de données cohérent                     | ✅   | [`demo/tek1/docs/`](../../demo/tek1/docs/) : sujet, norme, erreurs courantes, entraide                               |
-| 2 user stories par feature                  | ✅   | [`../USER_STORIES.md`](../USER_STORIES.md) ; s'entraîner au quiz « story → feature »                                 |
-| Démo théâtralisée                           | ⚠️   | [demo-script.md](demo-script.md) répété en direct sur le PC d'Alban le 1er novembre ; à rejouer à voix haute         |
-| RGPD + fuite + contraintes techniques       | ⚠️   | [securite-rgpd.md](securite-rgpd.md)                                                                                 |
-| Coûts-bénéfices                             | ⚠️   | [couts-benefices.md](couts-benefices.md) : hypothèses à confirmer                                                    |
-| Sécurité montrée dans le code               | ✅   | [securite-rgpd.md](securite-rgpd.md#où-le-code-se-protège)                                                           |
-| 16. Décisions et alternatives (6 pts)       | ⚠️   | [decisions.md](decisions.md)                                                                                         |
-| Ordre du prompt justifié                    | ✅   | [observabilite.md](observabilite.md#pourquoi-cet-ordre) : règle par bloc, alternatives écartées                      |
-| Pivots et features retirées                 | ✅   | [decisions.md](decisions.md#pivots--features-modifiées-ou-retirées-en-cours-de-route) : date, raison, impact, commit |
+| Critère                               | État | Document                                                                                                             |
+| ------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
+| 7. Culture IA (4 pts)                 | ✅   | [modeles.md](modeles.md) : familles (dense ou MoE, licences), à répéter à l'oral                                     |
+| 9. Amélioration mesurée (3 pts)       | ✅   | [benchmarks.md](benchmarks.md) : A/B RAG et persona, script rejouable                                                |
+| Tests qui affichent plus que « OK »   | ✅   | [tests.md](tests.md) : chaque test par titre, ✓/✗, résumé par zone                                                   |
+| Limites du modèle et du système       | ✅   | [limites.md](limites.md), [prompts-de-test.md](prompts-de-test.md#limites-du-modèle)                                 |
+| Scénario, persona, latence            | ✅   | [scenario-tek1.md](scenario-tek1.md) (démo), [scenario.md](scenario.md) (benchmarks)                                 |
+| Jeu de données cohérent               | ✅   | [`demo/tek1/docs/`](../../demo/tek1/docs/) : sujet, norme, erreurs courantes, entraide                               |
+| 2 user stories par feature            | ✅   | [`../USER_STORIES.md`](../USER_STORIES.md) ; s'entraîner au quiz « story → feature »                                 |
+| Démo théâtralisée                     | ⚠️   | [demo-script.md](demo-script.md) répété en direct sur le PC d'Alban le 1er novembre ; à rejouer à voix haute         |
+| RGPD + fuite + contraintes techniques | ⚠️   | [securite-rgpd.md](securite-rgpd.md)                                                                                 |
+| Coûts-bénéfices                       | ⚠️   | [couts-benefices.md](couts-benefices.md) : hypothèses à confirmer                                                    |
+| Sécurité montrée dans le code         | ✅   | [securite-rgpd.md](securite-rgpd.md#où-le-code-se-protège)                                                           |
+| 16. Décisions et alternatives (6 pts) | ⚠️   | [decisions.md](decisions.md)                                                                                         |
+| Ordre du prompt justifié              | ✅   | [observabilite.md](observabilite.md#pourquoi-cet-ordre) : règle par bloc, alternatives écartées                      |
+| Pivots et features retirées           | ✅   | [decisions.md](decisions.md#pivots--features-modifiées-ou-retirées-en-cours-de-route) : date, raison, impact, commit |
 
 ## Priorités de développement avant la soutenance
 
