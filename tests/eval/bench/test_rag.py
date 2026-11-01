@@ -1,12 +1,13 @@
 """RAG A/B benchmark: questions, scoring, conditions."""
 
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
 from sensai.core.engine import ChatEngine
 from sensai.domain.errors import ProviderError
-from sensai.domain.models import Conversation
+from sensai.domain.models import Conversation, ModelOptions
 from sensai.eval.bench import rag
 from sensai.eval.bench.rag import (
     Condition,
@@ -146,3 +147,60 @@ async def test_a_second_failure_stops_the_suite(monkeypatch):
 
     with pytest.raises(ProviderError):
         await rag._answer(_engine(FlakyProvider(failures=2)), "Code du portail ?")
+
+
+class SamplingProvider(ScriptedProvider):
+    """Records the options it was built with; answers right on every other call."""
+
+    instances: ClassVar[list["SamplingProvider"]] = []
+    calls: ClassVar[int] = 0
+
+    def __init__(self, *args, options: ModelOptions, **kwargs) -> None:
+        super().__init__()
+        self.options = options
+        SamplingProvider.instances.append(self)
+
+    async def chat_stream(self, messages, tools=None, think=None):
+        from sensai.domain.events import TextChunkEvent
+
+        SamplingProvider.calls += 1
+        if self.options.temperature and SamplingProvider.calls % 2 == 0:
+            yield TextChunkEvent(content="Le jeudi.")
+            return
+        async for event in super().chat_stream(messages, tools, think):
+            yield event
+
+
+async def test_temperature_runs_each_value_unseeded_and_grades_stability(
+    monkeypatch, tmp_path
+):
+    SamplingProvider.instances = []
+    SamplingProvider.calls = 0
+    monkeypatch.setattr(rag, "OllamaLLMProvider", SamplingProvider)
+
+    async def fake_retriever(*args, **kwargs):
+        return FakeRetriever(), None
+
+    monkeypatch.setattr(rag, "build_retriever", fake_retriever)
+    persona = tmp_path / "persona.md"
+    persona.write_text("Tu es Sensai Collecte.")
+    questions = [
+        Question(1, "Quel jour passe le bac jaune en secteur B ?", [["mercredi"]]),
+    ]
+
+    results = await rag.bench_temperature(
+        "m",
+        questions,
+        tmp_path,
+        persona,
+        tmp_path / "db",
+        "http://x",
+        temperatures=(0.0, 1.0),
+        runs=2,
+    )
+
+    assert [r.temperature for r in results] == [0.0, 1.0]
+    assert all(p.options.seed is None for p in SamplingProvider.instances)
+    cold, hot = results
+    assert (cold.mean_accuracy, cold.stable, cold.identical) == (1.0, 1, 1)
+    assert hot.stable == 0 and hot.identical == 0
