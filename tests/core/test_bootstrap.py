@@ -461,3 +461,12 @@ def test_shipped_collecte_persona_matches_the_scenario():
     assert text.startswith("Tu es Sensai Collecte")
     assert "Je ne trouve pas cette information" in text
     assert "Demande à ton responsable" in text
+
+
+def test_shipped_tek1_persona_matches_the_scenario():
+    path = Path(__file__).parents[2] / "demo" / "tek1" / "persona.md"
+    text = path.read_text(encoding="utf-8")
+
+    assert text.startswith("Tu es Sensai Piscine")
+    assert "Je ne trouve pas cette information dans tes" in text
+    assert "jamais `for`" in text

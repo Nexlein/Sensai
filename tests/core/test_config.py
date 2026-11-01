@@ -634,12 +634,38 @@ def test_save_config_omits_default_persona_section(tmp_path):
     assert "[persona]" not in config_file.read_text()
 
 
-def test_shipped_example_config_turns_on_only_the_presented_features():
+def test_shipped_example_config_is_general_with_persona_and_rag_opt_in():
     root = Path(__file__).parents[2]
 
     config = load_config(root / "sensai.example.toml")
 
     assert config.interface == "web"
+    assert not config.persona.enabled and config.persona.file is None
+    assert not config.rag.enabled and config.rag.dir is None
+    assert config.guardrails.enabled and config.memory.enabled
+    assert config.tools.fs_allowed_root == "."
+    assert not (config.tools.web_search or config.tools.sandbox or config.mcp.servers)
+    assert not (config.reasoning.enabled or config.budget.enabled)
+    assert not config.eval.log_replies
+
+
+def test_shipped_example_config_turns_on_the_tek1_demo_with_its_commented_lines(
+    tmp_path,
+):
+    root = Path(__file__).parents[2]
+    text = (root / "sensai.example.toml").read_text(encoding="utf-8")
+    edited = (
+        text.replace(
+            "enabled = false                      # true, then", "enabled = true #"
+        )
+        .replace('# file = "', 'file = "')
+        .replace('# dir = "', 'dir = "')
+    )
+    config_file = tmp_path / "sensai.toml"
+    config_file.write_text(edited, encoding="utf-8")
+
+    config = load_config(config_file)
+
     persona_file, rag_dir = config.persona.file, config.rag.dir
     assert config.persona.enabled and persona_file and (root / persona_file).is_file()
     assert config.rag.enabled and rag_dir and (root / rag_dir).is_dir()
