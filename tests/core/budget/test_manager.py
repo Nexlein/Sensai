@@ -144,3 +144,19 @@ async def test_lone_summary_is_not_resummarized():
 
     assert await budget.fit(conversation) is False
     assert len(summarizer.calls) == 1
+
+
+async def test_compress_off_never_summarizes():
+    conversation = _conversation(4)
+    original = list(conversation.messages)
+    summarizer = FakeSummarizer()
+    used = sum(count_message(m) for m in conversation.messages)
+    config = BudgetConfig(
+        max_tokens=used, threshold=0.5, keep_recent_turns=2, compress=False
+    )
+    budget = ContextBudget(config, summarizer)
+
+    assert await budget.fit(conversation) is False
+    assert summarizer.calls == []
+    assert conversation.messages == original
+    assert budget.usage(conversation).ratio == 1.0

@@ -31,6 +31,8 @@ class ContextBudget:
 
     async def fit(self, conversation: Conversation) -> bool:
         """Condense the oldest turns once the threshold is reached."""
+        if not self.config.compress:
+            return False
         if self.usage(conversation).ratio < self.config.threshold:
             return False
 

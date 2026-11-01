@@ -286,6 +286,7 @@ def save_config(
                 f"max_tokens = {config.budget.max_tokens}",
                 f"threshold = {config.budget.threshold}",
                 f"keep_recent_turns = {config.budget.keep_recent_turns}",
+                f"compress = {json.dumps(config.budget.compress)}",
             ]
         )
 
