@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from sensai.core.config import (
@@ -608,3 +610,19 @@ def test_save_config_omits_default_persona_section(tmp_path):
     save_config(AppConfig(), config_file)
 
     assert "[persona]" not in config_file.read_text()
+
+
+def test_shipped_example_config_turns_on_only_the_presented_features():
+    root = Path(__file__).parents[2]
+
+    config = load_config(root / "sensai.example.toml")
+
+    assert config.interface == "web"
+    persona_file, rag_dir = config.persona.file, config.rag.dir
+    assert config.persona.enabled and persona_file and (root / persona_file).is_file()
+    assert config.rag.enabled and rag_dir and (root / rag_dir).is_dir()
+    assert config.guardrails.enabled and config.memory.enabled
+    assert config.tools.fs_allowed_root == "."
+    assert not (config.tools.web_search or config.tools.sandbox or config.mcp.servers)
+    assert not (config.reasoning.enabled or config.budget.compress)
+    assert not config.eval.log_replies
