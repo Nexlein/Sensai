@@ -19,6 +19,7 @@ base_url = "http://localhost:11434"
 fs_allowed_root = "."              # false = outils fichiers désactivés
 
 [budget]                           # M2 : compression de l'historique
+enabled = true                     # false = historique envoyé en entier, sans résumé
 max_tokens = 8192
 threshold = 0.8                    # résume les vieux tours à 80 % du budget
 keep_recent_turns = 4
@@ -87,18 +88,18 @@ Depuis le terminal : `sensai config init` (fichier documenté avec tous les rég
 
 ### Bascules de features
 
-| Feature              | Bascule actuelle                  | Manque                                |
-| -------------------- | --------------------------------- | ------------------------------------- |
-| Guardrails (EV2)     | `[guardrails] enabled`            | —                                     |
-| Mémoire (M3)         | `[memory] enabled`                | —                                     |
-| Raisonnement (A1)    | `[reasoning] enabled`             | —                                     |
-| Outils fichiers (T4) | `[tools] fs_allowed_root = false` | —                                     |
-| MCP (T1)             | présence de `[mcp.servers.*]`     | —                                     |
-| Log des réponses     | `[eval] log_replies`              | —                                     |
-| RAG (R1)             | `[rag] enabled` ou `--rag-dir`    | —                                     |
-| Recherche web (T3)   | `[tools] web_search = false`      | —                                     |
-| Sandbox (T2)         | `[tools] sandbox = false`         | —                                     |
-| Budget (M2)          | toujours actif                    | `[budget] enabled` (utile pour l'A/B) |
+| Feature              | Bascule actuelle                  | Manque |
+| -------------------- | --------------------------------- | ------ |
+| Guardrails (EV2)     | `[guardrails] enabled`            | —      |
+| Mémoire (M3)         | `[memory] enabled`                | —      |
+| Raisonnement (A1)    | `[reasoning] enabled`             | —      |
+| Outils fichiers (T4) | `[tools] fs_allowed_root = false` | —      |
+| MCP (T1)             | présence de `[mcp.servers.*]`     | —      |
+| Log des réponses     | `[eval] log_replies`              | —      |
+| RAG (R1)             | `[rag] enabled` ou `--rag-dir`    | —      |
+| Recherche web (T3)   | `[tools] web_search = false`      | —      |
+| Sandbox (T2)         | `[tools] sandbox = false`         | —      |
+| Budget (M2)          | `[budget] enabled = false`        | —      |
 
 ## Température et contexte
 
