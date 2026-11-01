@@ -72,10 +72,13 @@ Chaque feature montrée part d'un besoin d'Alban et pointe vers ses user stories
 | 5F     | « À quelle heure ouvre le bâtiment le samedi ? » | 6      | A5 Persona, R1 RAG         | [Domain Persona](../USER_STORIES.md#feature-domain-persona), [R1](../USER_STORIES.md#feature-r1-basic-rag)                                                                                                           |
 | 6      | `/persona off`, `/prompt`, `/ps`                 | —      | Observabilité              | [Full Prompt Log](../USER_STORIES.md#feature-full-prompt-log), [Loaded Model Memory](../USER_STORIES.md#feature-loaded-model-memory), [Token Counts](../USER_STORIES.md#feature-real-token-counts-and-throughput)    |
 
-**À dire honnêtement** : les user stories ont été écrites avant ce scénario, avec des utilisateurs
-génériques (« As a user ») ou ceux des scénarios précédents (réceptionniste, chef d'équipe de la
-régie). Le besoin est le même : on ne les a pas réécrites après coup, pour que leur date reste une
-preuve.
+Chaque feature a aussi une story écrite pour Alban, « As a Tek 1 student in the C pool… », avec
+le moment de la démo qui la montre : [Scenario: Tek 1 Student](../USER_STORIES.md#scenario-tek-1-student-in-the-c-pool-defense-demo).
+
+**À dire honnêtement** : les stories du tableau ont été écrites avant ce scénario, avec des
+utilisateurs génériques (« As a user ») ou ceux des scénarios précédents (réceptionniste, chef
+d'équipe de la régie). On ne les a pas réécrites après coup, pour que leur date reste une preuve.
+Les stories Tek 1 datent du 1er novembre : elles reformulent les mêmes besoins pour l'étudiant joué.
 
 ## Features coupées pour ce scénario
 

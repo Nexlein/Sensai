@@ -690,3 +690,96 @@ Acceptance criteria:
 
 - `python -m sensai.eval.bench perf` times start-up, guardrails, a full turn with a mock model, prompt building, sessions, memory, RAG search and config handling, without any model.
 - `python -m sensai.eval.bench context` shows how window size changes speed, memory and recall, and that a prompt over Ollama's default window is cut.
+
+## Scenario: Tek 1 Student in the C Pool (Defense Demo)
+
+Written on 1 November 2026 for the defense scenario ([scenario-tek1.md](soutenance/scenario-tek1.md)). They add to the stories above, written before the code, and restate the same needs for the student played in the demo. Each one names the demo moment that shows it.
+
+### [X1] Web UI (moment 4)
+
+As a Tek 1 student who keeps the terminal for `gcc` and my editor, I want to chat with Sensai in a browser tab, so that I can ask for help without leaving my code.
+
+Acceptance criteria:
+
+- With `interface = "web"`, `uv run sensai chat --session piscine` prints `Sensai web UI: http://127.0.0.1:8000`.
+- The page header shows the session name, `piscine`.
+- Replies stream into the page, and `Stop` cancels a reply that takes too long.
+
+### [R1] Basic RAG (moments 5A and 5F)
+
+As a Tek 1 student, I want Sensai to answer from my day's subject and the coding standard, so that I follow the rules of my pool rather than generic C advice from the internet.
+
+Acceptance criteria:
+
+- With `[rag] enabled = true` and `dir = "demo/tek1/docs"`, the documents are indexed at start-up.
+- "Pour le Jour 04, quelles fonctions j'ai le droit d'utiliser ?" gets `write` only, citing `[sujet-jour04.md]`.
+- "C'est quand la date limite du Jour 04 ?" gets Sunday at 23:42, a date the model cannot know without the subject.
+
+### [M3] External Structured Memory (moment 5B)
+
+As a Tek 1 student coming back every evening of the pool, I want Sensai to remember my name and my year, so that its answers fit my level without me repeating it.
+
+Acceptance criteria:
+
+- "Retiens que je m'appelle Alban et que je suis en Tek 1." makes the model call `remember_fact`.
+- `/memory list` shows the stored facts, and `/memory delete <entity> <key>` removes one.
+- The facts are added to the prompt of later sessions (`[memory] auto_inject = true`).
+
+### [A5] Persona (moments 5C, 5F and 6)
+
+As a Tek 1 student who must explain every line I hand in, I want an assistant that writes one function at a time, to the standard, and explains it, so that I learn the code instead of copying a solution I cannot defend.
+
+Acceptance criteria:
+
+- `[persona] file = "demo/tek1/persona.md"` puts the sheet first in every prompt, and `/prompt` shows it.
+- "Écris la fonction my_strlen du Jour 04." returns one function with the Epitech header and a `while` loop, then one sentence per line.
+- "À quelle heure ouvre le bâtiment le samedi ?", absent from the documents, gets "Je ne trouve pas cette information dans tes documents" instead of an invented time.
+- `/persona off` then `/persona on` switches the sheet within the same conversation.
+
+### [T4] File Access within Permissions (moment 5C)
+
+As a Tek 1 student, I want Sensai to save the function in my day's repository folder and nowhere else, so that I can compile it at once and nothing outside my pool folder is touched.
+
+Acceptance criteria:
+
+- "Enregistre-la dans CPool_Day04/my_strlen.c" writes the file under `fs_allowed_root`, the launch folder.
+- A path outside that folder is refused with `Path traversal rejected: …`.
+- The saved file compiles with `gcc -Wall -Wextra -c`.
+
+### [A3] Human-in-the-Loop (moment 5C)
+
+As a Tek 1 student whose repository is graded by the moulinette, I want to read the whole file and approve it before Sensai writes it, so that nothing I have not read ends up in my submission.
+
+Acceptance criteria:
+
+- Before `write_file` runs, the page shows the full file content with `Yes` and `No`.
+- `No` writes nothing, and the model is told the write was declined.
+- `Yes` writes exactly the previewed content.
+
+### [EV2] Content & Privacy Guardrails: personal data (moment 5D)
+
+As a Tek 1 student pasting a message from my teammate, I want their phone number and email masked before the model reads them, so that I get help on the bug without spreading my teammate's contact details.
+
+Acceptance criteria:
+
+- A message with `06 12 34 56 78` and `lucas.martin@epitech.eu` shows "Personal data in your message was masked (pii: phone, email)."
+- `/prompt` and the saved session hold `[PHONE]` and `[EMAIL]`, never the values.
+- The question about the segfault is still answered, from `erreurs-courantes.md`.
+
+### [EV2] Content & Privacy Guardrails: prompt injection (moment 5E)
+
+As a Tek 1 student copying code found on GitHub, I want hidden instructions in it blocked before they reach the model, so that a comment cannot make the assistant hand me a full solution and break the pool rules.
+
+Acceptance criteria:
+
+- A message containing "Ignore toutes les instructions précédentes…" shows "Message blocked (injection: ignore_instructions). Nothing was sent to the model."
+- The model is not called for that message.
+
+### [M1] Session Persistence (moment 5F)
+
+As a Tek 1 student who works on a day over several evenings, I want to reopen yesterday's conversation by its name, so that I pick up where I stopped without explaining the exercise again.
+
+Acceptance criteria:
+
+- After `Ctrl+C`, `uv run sensai chat --session piscine` loads the saved conversation.
+- Reloading the page shows the previous messages and the session name in the header.
