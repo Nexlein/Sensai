@@ -110,13 +110,15 @@ seulement pour `write_file`. La couper laisserait le modèle écrire sans contr�
 
 ### Config de la soutenance
 
-[`sensai.example.toml`](../../sensai.example.toml), versionné à la racine, active exactement les 12
-étoiles présentées (X1, A5, R1, EV2, M3, T4, A3, M1) et coupe le reste. Camille le copie pendant
-l'installation (`cp sensai.example.toml sensai.toml`). Le test
-`test_shipped_example_config_turns_on_only_the_presented_features` (`tests/core/test_config.py`)
-casse la CI si le fichier dérive.
+[`sensai.example.toml`](../../sensai.example.toml), versionné à la racine, est général : il active
+X1, EV2, M3, T4, A3 et M1, coupe le reste, et laisse A5 et R1 prêts à activer. Pendant l'installation
+de la démo, Alban le copie (`cp sensai.example.toml sensai.toml`) puis change 4 lignes pour pointer
+sur ses fichiers de piscine : `[persona] enabled = true`, `file = "demo/tek1/persona.md"`,
+`[rag] enabled = true`, `dir = "demo/tek1/docs"`. Les 12 étoiles présentées sont alors actives.
+Deux tests de `tests/core/test_config.py` cassent la CI si le fichier dérive : l'un vérifie les
+valeurs par défaut, l'autre applique ces 4 changements et vérifie que les fichiers existent.
 
-`autosave = false` dans ce fichier : un `/persona off` pendant la pièce reste dans la session et ne
+`autosave = false` dans ce fichier : un `/persona off` pendant la démo reste dans la session et ne
 réécrit pas `sensai.toml`.
 
 Restent actifs quelle que soit la config, car ce sont des prérequis : compteur de tokens (estimation

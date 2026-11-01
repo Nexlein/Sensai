@@ -1,5 +1,9 @@
 # Scénario : Sensai Collecte
 
+> **Plus joué en démo** depuis le 1er novembre : la démo suit un étudiant de Tek 1
+> ([demo-script.md](demo-script.md)). Ce scénario reste celui du corpus des benchmarks RAG et
+> persona ([`demo/collecte/`](../../demo/collecte/)).
+
 > Fixé depuis le bootstrap du keynote : chaque feature montrée doit servir ce scénario.
 > Les noms de personnes et de la régie sont fictifs.
 
@@ -59,7 +63,7 @@ du prompt et, si nécessaire, le chargement du modèle.
 
 ## Features au service du scénario
 
-Présentées (12 étoiles), activées par [`sensai.example.toml`](../../sensai.example.toml) :
+Présentées (12 étoiles) dans l'ancienne démo de la régie :
 
 | Feature                 | ⭐  | Usage dans le scénario                                                         |
 | ----------------------- | --- | ------------------------------------------------------------------------------ |

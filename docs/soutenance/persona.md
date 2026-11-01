@@ -1,5 +1,8 @@
 # Fiche personnage : Camille Roux
 
+> **Plus jouée en démo** depuis le 1er novembre : Alban joue son propre rôle en Tek 1
+> ([demo-script.md](demo-script.md)). Fiche gardée pour le scénario des benchmarks.
+
 > La personne que tu incarnes pendant la pièce. Tout est fictif : la régie, les communes, les usagers.
 > Camille, joué au masculin par Nielsen. Si tu changes de nom, change-le aussi dans
 > [demo-script.md](demo-script.md).
