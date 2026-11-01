@@ -4,6 +4,10 @@ from pydantic import BaseModel, Field
 class BudgetConfig(BaseModel):
     """History compression (M2): when the prompt nears `max_tokens`, old turns are summarized."""
 
+    enabled: bool = Field(
+        default=True,
+        description="Summarize old turns; false sends the whole history as is",
+    )
     max_tokens: int = Field(
         default=8192,
         gt=0,
