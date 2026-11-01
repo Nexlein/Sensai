@@ -9,6 +9,7 @@ Légende : ✅ fait · ⚠️ partiel · ❌ à faire
 
 | Document                                 | Répond à                                                                            |
 | ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| [index-jury.md](index-jury.md)           | Pendant la défense : question du jury → doc à lire et code à montrer                |
 | [demo-script.md](demo-script.md)         | Démo « Moi, en Tek 1 » mot pour mot (5 moments + 12 ⭐), plan de repli              |
 | [retours-midterm.md](retours-midterm.md) | Chaque point perdu à la mi-parcours : ce qui a changé, la preuve, la phrase à dire  |
 | [scenario-tek1.md](scenario-tek1.md)     | Scénario de la démo (Tek 1) : besoins, latence, traçabilité moment → feature → US   |
