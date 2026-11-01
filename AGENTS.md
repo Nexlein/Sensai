@@ -82,7 +82,7 @@ Defense config: `sensai.example.toml` (root, versioned) turns on only the presen
 
 Built but not wired into the runtime: `eval/logger.py` (`TurnLogger`).
 
-Persona: `[persona]` (`enabled`, `name`, `instruction` or `file`, not both) is loaded by `bootstrap.load_persona` into `ChatEngine.persona`, even when disabled, so `/persona on|off` can flip `engine.persona_enabled` (and `config.persona.enabled`) live. `PromptComposer.compose_parts` inserts it last at index 0 (source `persona`), so it leads every system message; off gives exactly the persona-less prompt. Shipped prompt: `personas/collecte.md`.
+Persona: `[persona]` (`enabled`, `name`, `instruction` or `file`, not both) is loaded by `bootstrap.load_persona` into `ChatEngine.persona`, even when disabled, so `/persona on|off` can flip `engine.persona_enabled` (and `config.persona.enabled`) live. `PromptComposer.compose_parts` inserts it last at index 0 (source `persona`), so it leads every system message; off gives exactly the persona-less prompt. Shipped prompt: `demo/collecte/persona.md`.
 
 Empty stub, not yet built: `memory/artifact.py`.
 

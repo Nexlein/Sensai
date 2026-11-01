@@ -91,7 +91,7 @@ uv run sensai chat --session my-day
 ```
 
 When the terminal shows `Sensai web UI: http://127.0.0.1:8000`, open that address in your browser.
-At start, Sensai reads the documents in `data/collecte/`, which takes a few seconds the first time.
+At start, Sensai reads the documents in `demo/collecte/docs/`, which takes a few seconds the first time.
 
 To stop Sensai, press `Ctrl+C` in the terminal. To come back later, open a terminal, go to the folder
 with `cd Sensai` and run the same command: the same `--session` name brings the conversation back.
@@ -157,7 +157,7 @@ uv run sensai chat --model llama3.2:3b             # another model for this run
 uv run sensai chat --ui web                        # http://127.0.0.1:8000
 uv run sensai chat --ui tui
 uv run sensai chat --session incident-1018         # resume or create a named session
-uv run sensai chat --rag-dir data/collecte         # answer from these documents
+uv run sensai chat --rag-dir demo/collecte/docs         # answer from these documents
 uv run sensai chat --provider mock                 # offline demo, no model needed
 ```
 
@@ -210,12 +210,12 @@ num_ctx = 8192          # default; must hold budget.max_tokens
 
 [rag]
 enabled = true
-dir = "data/collecte"
+dir = "demo/collecte/docs"
 
 [persona]
 enabled = true
 name = "Sensai Collecte"
-file = "personas/collecte.md"
+file = "demo/collecte/persona.md"
 ```
 
 ### Optional services
@@ -274,7 +274,7 @@ and testing guide: [docs/](docs/README.md).
 - [Configuration reference](docs/configuration.md) and [benchmarks](docs/benchmarks.md)
 - [Project subject](docs/SUBJECT.md), [features catalog](docs/CATALOGUE.md), [user stories](docs/USER_STORIES.md)
 - [Préparation soutenance](docs/soutenance/README.md): scenario, persona, play script, decisions
-- [Scenario dataset (fictional waste-collection authority)](data/collecte/)
+- [Scenario dataset (fictional waste-collection authority)](demo/collecte/docs/)
 
 ## Team
 

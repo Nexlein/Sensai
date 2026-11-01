@@ -455,7 +455,7 @@ async def test_build_session_reports_a_missing_persona_file(monkeypatch, tmp_pat
 
 
 def test_shipped_collecte_persona_matches_the_scenario():
-    path = Path(__file__).parents[2] / "personas" / "collecte.md"
+    path = Path(__file__).parents[2] / "demo" / "collecte" / "persona.md"
     text = path.read_text(encoding="utf-8")
 
     assert text.startswith("Tu es Sensai Collecte")

@@ -87,7 +87,7 @@ uv run sensai chat --session ma-journee
 ```
 
 Quand le terminal affiche `Sensai web UI: http://127.0.0.1:8000`, ouvrez cette adresse dans votre
-navigateur. Au démarrage, Sensai lit les documents de `data/collecte/`, ce qui prend quelques secondes
+navigateur. Au démarrage, Sensai lit les documents de `demo/collecte/docs/`, ce qui prend quelques secondes
 la première fois.
 
 Pour arrêter Sensai, faites `Ctrl+C` dans le terminal. Pour revenir plus tard, ouvrez un terminal,

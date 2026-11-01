@@ -17,7 +17,7 @@ from sensai.eval.bench.ollama import OllamaBench
 NEEDLE = "Note interne : le code du portail du dépôt est 4471."
 QUESTION = "D'après le texte ci-dessus, quel est le code du portail du dépôt ? Réponds par le code seul."
 ANSWER = "4471"
-CORPUS = Path(__file__).resolve().parents[4] / "data" / "collecte"
+CORPUS = Path(__file__).resolve().parents[4] / "demo" / "collecte" / "docs"
 
 
 def filler_text() -> str:

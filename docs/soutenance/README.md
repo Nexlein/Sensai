@@ -22,7 +22,7 @@ Légende : ✅ fait · ⚠️ partiel · ❌ à faire
 | [couts-benefices.md](couts-benefices.md) | Analyse coûts-bénéfices (régie de collecte et équipe)                  |
 | [decisions.md](decisions.md)             | Critère 16 : choix, exclusions, alternatives, « si c'était à refaire » |
 
-Le jeu de données du scénario est dans [`data/collecte/`](../../data/collecte/) (documents fictifs).
+Le jeu de données du scénario est dans [`demo/collecte/docs/`](../../demo/collecte/docs/) (documents fictifs).
 Les user stories restent dans [`../USER_STORIES.md`](../USER_STORIES.md).
 
 ## Prérequis éliminatoires
@@ -36,7 +36,7 @@ Les user stories restent dans [`../USER_STORIES.md`](../USER_STORIES.md).
 | Aucune erreur visible (exceptions interceptées)    | ✅   | `ProviderError`, `ConfigError`, erreurs d'outils en texte. Voir [securite-rgpd.md](securite-rgpd.md#gestion-des-erreurs)                                                                                                |
 | Afficher le prompt complet reconstitué (logs)      | ✅   | `/prompt` et `[eval] log_prompts` (`logs/prompts.jsonl`). Voir [observabilite.md](observabilite.md#logs-du-prompt-complet)                                                                                              |
 | Compteur de tokens                                 | ✅   | Estimation en direct + vrais comptes Ollama (`prompt_eval_count`, `eval_count`) après chaque réponse, écart loggé                                                                                                       |
-| Meilleur pré-prompt / IA spécialisée               | ✅   | `[persona]` + `personas/collecte.md`, placé en tête du prompt, `/persona on/off`. Voir [scenario.md](scenario.md#pré-prompt-proposé)                                                                                    |
+| Meilleur pré-prompt / IA spécialisée               | ✅   | `[persona]` + `demo/collecte/persona.md`, placé en tête du prompt, `/persona on/off`. Voir [scenario.md](scenario.md#pré-prompt-proposé)                                                                                |
 | Exemples dans le README partout                    | ✅   | README « What you can try » : un message à taper par feature présentée                                                                                                                                                  |
 | Installer depuis la doc seule                      | ✅   | README « Install and run » et [`../INSTALL.fr.md`](../INSTALL.fr.md), joués à l'acte 0                                                                                                                                  |
 | Config limitée aux features présentées             | ✅   | [`sensai.example.toml`](../../sensai.example.toml), voir [configuration.md](configuration.md#config-de-la-soutenance)                                                                                                   |
@@ -61,7 +61,7 @@ des observations de cette version, pas une validation de la version rebasée.
 | Tests qui affichent plus que « OK »         | ✅   | [tests.md](tests.md) : chaque test par titre, ✓/✗, résumé par zone                                                   |
 | Limites du modèle (hallucination, codename) | ⚠️   | [prompts-de-test.md](prompts-de-test.md#limites-du-modèle)                                                           |
 | Scénario, persona, latence                  | ⚠️   | [scenario.md](scenario.md) : scénario fixé, à valider par l'équipe                                                   |
-| Jeu de données cohérent                     | ⚠️   | [`data/collecte/`](../../data/collecte/) : base à enrichir                                                           |
+| Jeu de données cohérent                     | ⚠️   | [`demo/collecte/docs/`](../../demo/collecte/docs/) : base à enrichir                                                 |
 | 2 user stories par feature                  | ✅   | [`../USER_STORIES.md`](../USER_STORIES.md) ; s'entraîner au quiz « story → feature »                                 |
 | Démo théâtralisée                           | ⚠️   | [demo-script.md](demo-script.md) testé en direct ; à répéter sur le PC d'Alban                                       |
 | RGPD + fuite + contraintes techniques       | ⚠️   | [securite-rgpd.md](securite-rgpd.md)                                                                                 |

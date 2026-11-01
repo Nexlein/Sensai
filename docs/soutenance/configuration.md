@@ -52,7 +52,7 @@ table `[tools]` dans le même fichier TOML.
 ```toml
 [rag]                              # R1, désactivé par défaut
 enabled = true
-dir = "data/collecte"
+dir = "demo/collecte/docs"
 model = "nomic-embed-text"
 db = "rag.db"
 top_k = 5                          # chunks injectés par question
@@ -67,7 +67,7 @@ sandbox = true                     # T2 (run_python)
 Les drapeaux CLI restent prioritaires sur le fichier ; `--rag-dir` active le RAG à lui seul :
 
 ```bash
-uv run sensai chat --rag-dir data/collecte --rag-model nomic-embed-text --rag-db rag.db
+uv run sensai chat --rag-dir demo/collecte/docs --rag-model nomic-embed-text --rag-db rag.db
 ```
 
 Modification en direct, sans redémarrer, **enregistrée aussitôt** dans `sensai.toml`

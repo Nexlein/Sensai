@@ -522,12 +522,14 @@ def test_rag_is_off_by_default_and_tools_are_on():
 def test_rag_config_from_file(tmp_path):
     config_file = tmp_path / "sensai.toml"
     config_file.write_text(
-        '[rag]\nenabled = true\ndir = "data/collecte"\ntop_k = 3\nchunk_size = 800\n'
+        '[rag]\nenabled = true\ndir = "demo/collecte/docs"\ntop_k = 3\nchunk_size = 800\n'
     )
 
     rag = load_config(config_file).rag
 
-    assert rag == RagConfig(enabled=True, dir="data/collecte", top_k=3, chunk_size=800)
+    assert rag == RagConfig(
+        enabled=True, dir="demo/collecte/docs", top_k=3, chunk_size=800
+    )
 
 
 @pytest.mark.parametrize(
@@ -553,7 +555,7 @@ def test_save_config_round_trips_rag_and_tool_toggles(tmp_path):
     config = AppConfig(
         rag=RagConfig(
             enabled=True,
-            dir="data/collecte",
+            dir="demo/collecte/docs",
             model="mxbai-embed-large",
             db="collecte.db",
             top_k=8,
@@ -586,13 +588,13 @@ def test_persona_is_off_by_default():
 def test_persona_config_from_file(tmp_path):
     config_file = tmp_path / "sensai.toml"
     config_file.write_text(
-        '[persona]\nenabled = true\nname = "Collecte"\nfile = "personas/collecte.md"\n'
+        '[persona]\nenabled = true\nname = "Collecte"\nfile = "demo/collecte/persona.md"\n'
     )
 
     persona = load_config(config_file).persona
 
     assert persona == PersonaConfig(
-        enabled=True, name="Collecte", file="personas/collecte.md"
+        enabled=True, name="Collecte", file="demo/collecte/persona.md"
     )
 
 

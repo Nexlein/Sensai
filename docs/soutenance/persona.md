@@ -66,7 +66,7 @@ documents différents.
 Bac jaune (emballages), bac gris (ordures), bac marron (biodéchets), secteur, tournée, refus de
 collecte, autocollant orange, encombrants (sur rendez-vous), dépôt sauvage, plan hivernal, poste 210.
 
-## Les faits à connaître par cœur (tirés de `data/collecte/`)
+## Les faits à connaître par cœur (tirés de `demo/collecte/docs/`)
 
 - La Combe est en **secteur B** : bac jaune le **mercredi**, collecte à partir de 6 h.
 - Un sac fermé dans le bac jaune = **refus de collecte**, autocollant orange.

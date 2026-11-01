@@ -30,11 +30,11 @@ enabled = false                      # M2 off: tokens are counted, old turns are
 [persona]                            # A5: the Régie assistant, first in every prompt
 enabled = true                       # /persona off and /persona on switch it live
 name = "Sensai Collecte"
-file = "personas/collecte.md"
+file = "demo/collecte/persona.md"
 
 [rag]                                # R1: answers come from the Régie documents
 enabled = true
-dir = "data/collecte"
+dir = "demo/collecte/docs"
 model = "bge-m3"                     # multilingual: finds French documents nomic-embed-text misses
 db = "rag.db"
 top_k = 3                            # 3 excerpts: enough with bge-m3, and a shorter prompt to read
