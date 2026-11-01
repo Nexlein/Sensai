@@ -71,10 +71,47 @@ donné au tour 2 (oui / non). Montre le compromis « coût de contexte vs perte 
 La comparaison sans compression demande encore une bascule : le budget est toujours actif
 dans la configuration actuelle. Aucun résultat n’est consigné pour cet essai.
 
-## A/B 4 : température — essai non réalisé
+## A/B 4 : température
 
-Questions 1 à 10, condition B, `temperature` 0.0 vs 0.7 vs 1.2, 5 passages chacune sans `seed`.
-Métriques : exactitude moyenne et variance entre passages. Aucun résultat n’est encore consigné.
+**Protocole** : les 22 questions, condition « RAG + persona », `qwen3.5:4b`, `temperature` 0.0,
+0.2, 0.7 et 1.2, **5 passages chacune, `seed` non fixé** (sinon le tirage serait identique à
+chaque passage et on ne mesurerait pas la variabilité). RTX 4060 Laptop, 1er novembre 2026.
+
+```bash
+uv run python -m sensai.eval.bench temperature --repeat 5
+```
+
+| Température | Exactitude moyenne | Pire – meilleur passage | Même note à chaque passage | Mêmes mots à chaque passage | Sources citées (moyenne) |
+| ----------- | ------------------ | ----------------------- | -------------------------- | --------------------------- | ------------------------ |
+| **0.0**     | **86 %**           | 86 % – 86 %             | **22/22**                  | **19/22**                   | 15,0/18                  |
+| 0.2         | 85 %               | 82 % – 86 %             | 21/22                      | 1/22                        | 14,8/18                  |
+| 0.7         | 85 %               | 82 % – 86 %             | 20/22                      | 0/22                        | 15,2/18                  |
+| 1.2         | 82 %               | 77 % – 86 %             | 20/22                      | 0/22                        | 14,4/18                  |
+
+**Impact observé** :
+
+- La moyenne baisse peu (86 → 82 %), mais **le pire passage baisse de 9 points** : à 1.2, un
+  matin sur cinq Karim tombe sur la version à 77 %.
+- Exemple réel à 0.7, « Quel jour est collecté le bac jaune dans le secteur B ? » (réponse :
+  mercredi) : juste au 1er passage, puis « mardis et vendredis », « tous les jours ouvrables »,
+  « le lundi », « à 13 h » sur les quatre suivants. **Le document est dans le contexte et le
+  modèle invente quand même** : l'échantillonnage choisit des tokens moins probables que le bon.
+- À 1.2, « Qui faut-il prévenir pour un bac volé ? » (absent des documents) passe de « je ne
+  trouve pas » à une procédure inventée attribuée à `securite-collecte.md`.
+- Même à 0.0 sans `seed`, 3 réponses sur 22 changent de mots (pas de note) : le calcul sur GPU
+  n'est pas parfaitement déterministe. D'où `seed = 42` dans les benchmarks.
+
+**Adéquation métier** : Sensai Collecte répond à des questions factuelles (jours, consignes,
+numéros de poste) dont la bonne réponse est unique, et Karim doit recevoir la même réponse
+chaque matin. La créativité n'apporte rien ici et coûte des inventions. **`temperature = 0.0`
+est donc la valeur de `sensai.toml`** (elle était à 0.2 sans mesure : à 0.2 les mots changent
+déjà sur 21 questions sur 22). Une température haute ne servirait qu'à de la rédaction libre
+(courrier aux usagers), à régler en direct avec `/config set options.temperature 0.7`.
+
+**Limite** : la note est automatique (mots-clés). La question « Qui a lancé l'Opération
+Hérisson ? » change de note d'un passage à l'autre surtout parce que la formulation varie, pas
+parce que le fond change. 22 questions × 5 passages restent un petit échantillon : les écarts de
+1 point de moyenne ne sont pas significatifs, ceux du pire passage et de la stabilité le sont.
 
 ## Autres mesures
 

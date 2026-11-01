@@ -652,6 +652,14 @@ Acceptance criteria:
 - `python -m sensai.eval.bench rag` runs the same questions without RAG, with RAG and a generic prompt, and with RAG and the persona, through Sensai's own engine.
 - It reports accuracy, correct refusals on unanswerable questions, source citations, latency and prompt size per condition.
 
+As a team lead relying on Sensai for collection rules, I want the configured temperature to be chosen from a measurement, so that the same question gives me the same right answer every morning.
+
+Acceptance criteria:
+
+- `python -m sensai.eval.bench temperature` runs the RAG and persona condition at temperatures 0, 0.7 and 1.2, several runs each with no fixed seed.
+- It reports mean accuracy, the lowest and highest run, and how many questions keep the same grade and the same words across runs.
+- `--repeat` sets the number of runs per temperature.
+
 As a developer, I want to know which parts of Sensai cost time, so that optimization targets what is actually slow.
 
 Acceptance criteria:

@@ -178,7 +178,7 @@ GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_..."
 model = "qwen3.5:4b"
 
 [options]
-temperature = 0.2
+temperature = 0.0
 seed = 42
 
 [rag]

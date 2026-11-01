@@ -115,7 +115,7 @@ reste envoyé par défaut, même sans cette section :
 
 ```toml
 [options]
-temperature = 0.2     # 0 = déterministe, 1+ = créatif
+temperature = 0.0     # mesuré : meilleur choix pour des réponses factuelles (A/B 4)
 num_ctx = 8192        # taille de la fenêtre de contexte, en tokens
 top_p = 0.9
 seed = 42             # rend les benchmarks rejouables
@@ -132,7 +132,7 @@ Envoyée telle quelle dans la requête :
   "model": "qwen3.5:4b",
   "messages": [...],
   "stream": true,
-  "options": { "temperature": 0.2, "num_ctx": 8192, "top_p": 0.9, "seed": 42, "num_predict": 512 }
+  "options": { "temperature": 0.0, "num_ctx": 8192, "top_p": 0.9, "seed": 42, "num_predict": 512 }
 }
 ```
 
@@ -145,13 +145,13 @@ la réponse n'a plus de place. `AppConfig` le vérifie au chargement (`ConfigErr
 
 ### Observer l'impact (à montrer au jury)
 
-| Paramètre     | Expérience                                              | Ce qu'on observe                                                                                                      |
-| ------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `temperature` | Même question 5 fois à 0.0, puis à 1.2, `seed` non fixé | Observer la variabilité et les inventions éventuelles (essai à faire)                                                 |
-| `temperature` | Prompt factuel du corpus à 0.0 et 1.2                   | Comparer l'exactitude ; effet non encore mesuré                                                                       |
-| `num_ctx`     | 2048 vs 8192 avec RAG `top_k = 5` et une longue session | Comparer la mémoire et la conservation des informations ; cet essai précis reste à faire                              |
-| `num_ctx`     | Mesure mémoire                                          | Le cache KV grossit linéairement avec `num_ctx` (calcul dans [modeles.md](modeles.md#cache-kv-et-taille-du-contexte)) |
-| `num_ctx`     | Temps avant le premier token avec un long prompt        | Plus de contexte = plus de `prompt_eval_duration`                                                                     |
+| Paramètre     | Expérience                                              | Ce qu'on observe                                                                                                                   |
+| ------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `temperature` | Même question 5 fois à 0.0, puis à 1.2, `seed` non fixé | **Mesuré** (A/B 4) : à 0.0, même note 22/22 et mêmes mots 19/22 ; dès 0.2, mêmes mots 1/22 et des jours de collecte inventés à 0.7 |
+| `temperature` | 22 questions du corpus à 0.0, 0.2, 0.7, 1.2             | **Mesuré** (A/B 4) : exactitude moyenne 86 % → 85 % → 85 % → 82 %, pire passage 86 % → 82 % → 82 % → 77 %                          |
+| `num_ctx`     | 2048 vs 8192 avec RAG `top_k = 5` et une longue session | Comparer la mémoire et la conservation des informations ; cet essai précis reste à faire                                           |
+| `num_ctx`     | Mesure mémoire                                          | Le cache KV grossit linéairement avec `num_ctx` (calcul dans [modeles.md](modeles.md#cache-kv-et-taille-du-contexte))              |
+| `num_ctx`     | Temps avant le premier token avec un long prompt        | Plus de contexte = plus de `prompt_eval_duration`                                                                                  |
 
 Pour la démo, prévoir `/config set options.temperature 1.2` et `/config set options.num_ctx 2048`
 en direct (avec `budget.max_tokens` ≤ `2048 - num_predict`, ou 2048 si `num_predict` est absent), puis rejouer la même question. Le changement
@@ -165,9 +165,9 @@ sensibilité à la température. Profils proposés (fichiers `profiles/<nom>.tom
 
 | Profil                | `model`           | `num_ctx` | `temperature` | `think` | Pourquoi                                                     |
 | --------------------- | ----------------- | --------- | ------------- | ------- | ------------------------------------------------------------ |
-| CPU conseillé (16 Go) | `qwen3.5:4b`      | 8192      | 0.2           | `false` | Évite la longue réflexion par défaut du code                 |
-| Machine faible (8 Go) | `qwen3.5:4b` Q4   | 4096      | 0.2           | `false` | Moins de cache KV ; pas de raisonnement pour gagner du temps |
-| Llama 3.2 3B          | `sensai-llama3.2` | 8192      | 0.2           | `null`  | Modelfile dédié (`ollama/Modelfile`), pas de mode thinking   |
+| CPU conseillé (16 Go) | `qwen3.5:4b`      | 8192      | 0.0           | `false` | Évite la longue réflexion par défaut du code                 |
+| Machine faible (8 Go) | `qwen3.5:4b` Q4   | 4096      | 0.0           | `false` | Moins de cache KV ; pas de raisonnement pour gagner du temps |
+| Llama 3.2 3B          | `sensai-llama3.2` | 8192      | 0.0           | `null`  | Modelfile dédié (`ollama/Modelfile`), pas de mode thinking   |
 | Juge (EV1)            | modèle plus gros  | 8192      | 0.0           | `null`  | Notation stable et rejouable                                 |
 | Démo créativité       | identique         | identique | 1.2           | —       | Uniquement pour montrer l'effet de la température            |
 

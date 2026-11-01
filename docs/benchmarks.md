@@ -30,6 +30,7 @@ Raw results (Markdown and JSON) are written to `reports/bench/` (not committed).
 | qwen3.5:4b reading a full 8k window     | 3.5 s     | ~100 s   | CPU: 1.5 min before the first word                 |
 | Thinking on (`/effort low`), simple sum | 50 s      | ~7 min   | **Too slow even on GPU**; off answers right in 3 s |
 | RAG A/B, 66 questions                   | 3 min     | ~35 min  |                                                    |
+| Temperature 0 / 0.7 / 1.2, 5 runs each  | ~23 min   | -        | 0 keeps every grade; 1.2 worst run 77% vs 86%      |
 
 Everything Sensai does around the model costs milliseconds; all the waiting is the model.
 **The GPU makes a reply 5–14× faster end to end** (6.5× for qwen3.5:4b) (20–60× to read the prompt, 3–4× to write
@@ -374,6 +375,30 @@ Index: 26 chunks in 0.8 s, one retrieval 24 ms.
   gets a plausible "the operations manager" instead of a refusal. Retrieved text about a topic
   makes the model answer questions next to it that the text does not settle.
 
+## Temperature
+
+`python -m sensai.eval.bench temperature --repeat 5`: the 22 RAG questions, RAG and persona,
+qwen3.5:4b, five runs per temperature with **no seed** so sampling can vary. RTX 4060 Laptop,
+2026-11-01. The 0.2 row was run with the same function and settings.
+
+| temperature | mean accuracy | min–max | same grade every run | same words every run | source cited (mean) |
+| ----------- | ------------- | ------- | -------------------- | -------------------- | ------------------- |
+| 0.0         | 86%           | 86%–86% | 22/22                | 19/22                | 15.0/18             |
+| 0.2         | 85%           | 82%–86% | 21/22                | 1/22                 | 14.8/18             |
+| 0.7         | 85%           | 82%–86% | 20/22                | 0/22                 | 15.2/18             |
+| 1.2         | 82%           | 77%–86% | 20/22                | 0/22                 | 14.4/18             |
+
+- The mean barely moves; the **worst run** drops from 86% to 77%.
+- At 0.7 the yellow-bin day for sector B (Wednesday, in the retrieved document) was right once
+  and invented four times (Tuesday and Friday, every working day, Monday, "at 1 pm").
+- At 1.2 an unanswerable question (stolen bin) got an invented procedure with a citation.
+- Even at 0.0 without a seed, 3 answers of 22 change wording: GPU inference is not bit-exact.
+
+Sensai answers factual questions with one right answer, so `sensai.toml` now uses
+`temperature = 0.0` (it was 0.2, unmeasured; at 0.2 wording already changes on 21 of 22
+questions). Grading is by keywords, and 22 × 5 runs is a small sample: trust the worst-run and
+stability columns more than a one-point difference in the mean.
+
 ## What this means for the models
 
 | Question                    | GPU (RTX 4060)                                                                                 | CPU only                                     |
@@ -409,6 +434,7 @@ uv run python -m sensai.eval.bench tools --models qwen3.5:4b # one model
 uv run python -m sensai.eval.bench effort                    # 2.5 min GPU, 25 min CPU
 uv run python -m sensai.eval.bench context --sizes 2048,8192 # all sizes: 1 min GPU, 25 min CPU
 uv run python -m sensai.eval.bench rag                       # 3 min GPU, 35 min CPU
+uv run python -m sensai.eval.bench temperature --repeat 5    # 0 / 0.7 / 1.2, no seed: 23 min GPU
 ```
 
 Every suite prints a table and writes `reports/bench/<suite>.md` and `.json`. Model suites

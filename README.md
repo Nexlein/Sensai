@@ -106,7 +106,7 @@ line. Full reference, every key, live vs restart: [docs/configuration.md](docs/c
 model = "qwen3.5:4b"
 
 [options]
-temperature = 0.2
+temperature = 0.0     # measured best for factual answers, see docs/benchmarks.md
 num_ctx = 8192          # default; must hold budget.max_tokens
 
 [rag]
