@@ -1,0 +1,276 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Values of the bernstein chart",
+  "type": "object",
+  "required": ["global"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "required": ["registry", "tag"],
+      "properties": {
+        "registry": {
+          "description": "Registry hosting the poll, worker and result images, without scheme or trailing slash.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)*$"
+        },
+        "tag": {
+          "description": "Image tag shared by poll, worker and result (git SHA).",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+        },
+        "imagePullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "poll": {
+      "allOf": [
+        { "$ref": "#/definitions/component" },
+        {
+          "properties": {
+            "replicas": {
+              "description": "Number of poll pods; at least 1. Ignored while autoscaling is enabled.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "autoscaling": { "$ref": "#/definitions/autoscaling" },
+            "options": {
+              "description": "Labels of the four choices on the voting page.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["a", "b", "c", "d"],
+              "properties": {
+                "a": { "type": "string", "minLength": 1 },
+                "b": { "type": "string", "minLength": 1 },
+                "c": { "type": "string", "minLength": 1 },
+                "d": { "type": "string", "minLength": 1 }
+              }
+            },
+            "resources": { "type": "object" }
+          }
+        }
+      ]
+    },
+    "worker": {
+      "allOf": [
+        { "$ref": "#/definitions/component" },
+        {
+          "properties": {
+            "replicas": {
+              "description": "Number of worker pods; at least 1.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "resources": { "type": "object" }
+          }
+        }
+      ]
+    },
+    "result": {
+      "allOf": [
+        { "$ref": "#/definitions/component" },
+        {
+          "properties": {
+            "replicas": {
+              "description": "Number of result pods; at least 1. More than 1 needs sticky sessions (#26). Ignored while autoscaling is enabled.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "autoscaling": { "$ref": "#/definitions/autoscaling" },
+            "resources": { "type": "object" }
+          }
+        }
+      ]
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "domain": {
+          "description": "DNS suffix of poll.<domain> and result.<domain>, e.g. 20.1.2.3.nip.io. Empty: no Gateway.",
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$"
+        },
+        "className": {
+          "description": "GatewayClass created by the Gateway API implementation.",
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "description": "Listener port: the container port of Traefik's web entry point.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      }
+    },
+    "namespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "limitRange": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "defaultRequest": { "type": "object" },
+            "default": { "type": "object" }
+          }
+        },
+        "quota": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "hard": { "type": "object" }
+          }
+        }
+      }
+    },
+    "redis": {
+      "allOf": [
+        { "$ref": "#/definitions/component" },
+        {
+          "properties": {
+            "existingSecret": { "$ref": "#/definitions/secretName" },
+            "maxmemory": {
+              "description": "Redis memory size, e.g. 192mb.",
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(kb|mb|gb)$"
+            },
+            "persistence": { "$ref": "#/definitions/persistence" },
+            "resources": { "type": "object" }
+          }
+        }
+      ]
+    },
+    "postgres": {
+      "allOf": [
+        { "$ref": "#/definitions/component" },
+        {
+          "properties": {
+            "database": { "type": "string", "minLength": 1 },
+            "user": { "type": "string", "minLength": 1 },
+            "password": {
+              "description": "Never committed: passed with --set-string at deploy time.",
+              "type": "string"
+            },
+            "existingSecret": { "$ref": "#/definitions/secretName" },
+            "persistence": { "$ref": "#/definitions/persistence" },
+            "resources": { "type": "object" },
+            "backup": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "schedule": {
+                  "description": "Cron expression of the backup CronJob.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "storageAccount": {
+                  "description": "Storage account name; required when enabled.",
+                  "type": "string",
+                  "pattern": "^([a-z0-9]{3,24})?$"
+                },
+                "container": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$"
+                },
+                "clientId": {
+                  "description": "Client ID of the managed identity federated with the postgres-backup ServiceAccount; required when enabled.",
+                  "type": "string",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})?$"
+                },
+                "uploadImage": { "$ref": "#/definitions/image" },
+                "sizeLimit": {
+                  "description": "Kubernetes quantity, e.g. 1Gi.",
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*(Mi|Gi|Ti)$"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "autoscaling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minReplicas": { "type": "integer", "minimum": 1 },
+        "maxReplicas": { "type": "integer", "minimum": 1 },
+        "targetCPUUtilizationPercentage": {
+          "description": "Percentage of the CPU request the average pod should use.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "scaleDownStabilizationSeconds": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "required": ["size"],
+      "additionalProperties": false,
+      "properties": {
+        "storageClass": {
+          "description": "Empty for the cluster's default StorageClass.",
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$"
+        },
+        "size": {
+          "description": "Kubernetes quantity, e.g. 5Gi.",
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(Mi|Gi|Ti)$"
+        }
+      }
+    },
+    "secretName": {
+      "description": "Name of an existing Secret with a `password` key, or empty to let the chart manage it.",
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$"
+    },
+    "component": {
+      "type": "object",
+      "required": ["image"],
+      "properties": {
+        "image": { "$ref": "#/definitions/image" }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["repository"],
+      "additionalProperties": false,
+      "properties": {
+        "registry": {
+          "description": "Defaults to global.registry when empty.",
+          "type": "string",
+          "pattern": "^([A-Za-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)*)?$"
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9._-]+(/[a-z0-9._-]+)*$"
+        },
+        "tag": {
+          "description": "Defaults to global.tag when empty.",
+          "type": "string",
+          "pattern": "^([A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$"
+        },
+        "digest": {
+          "description": "Optional sha256 digest pinning the exact image.",
+          "type": "string",
+          "pattern": "^(sha256:[a-f0-9]{64})?$"
+        }
+      }
+    }
+  }
+}

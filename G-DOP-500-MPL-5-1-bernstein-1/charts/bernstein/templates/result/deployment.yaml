@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: result
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "result") | nindent 4 }}
+spec:
+  {{- /* With the autoscaler on, it owns the count: a replicas field here would reset it on every helm upgrade. */}}
+  {{- if not .Values.result.autoscaling.enabled }}
+  replicas: {{ .Values.result.replicas }}
+  {{- end }}
+  # Zero-downtime rollout: a serving pod is only removed once its replacement is
+  # Ready (maxUnavailable 0) and has stayed Ready for 5 s (minReadySeconds).
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  minReadySeconds: 5
+  # Old ReplicaSets kept for `helm rollback`.
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "bernstein.selectorLabels" (dict "context" $ "component" "result") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "bernstein.labels" (dict "context" $ "component" "result") | nindent 8 }}
+      annotations:
+        checksum/postgres-secret: {{ include "bernstein.secretChecksum" (dict "context" $ "component" "postgres") }}
+    spec:
+      # Above preStop (10 s) plus the immediate exit of Node on SIGTERM.
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        # The `node` user of the node:24-slim base image.
+        runAsUser: 1000
+        runAsGroup: 1000
+        # The server listens on port 80: lower the first port unprivileged
+        # processes may bind. Scoped to this pod's network namespace.
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
+      # Pods of one component on different nodes (and zones), so a drain or a node
+      # loss never takes all of them. A preference, not a rule: see the helper.
+      topologySpreadConstraints:
+        {{- include "bernstein.topologySpread" (dict "context" $ "component" "result") | trim | nindent 8 }}
+      containers:
+        - name: result
+          image: {{ include "bernstein.image" (dict "context" $ "component" "result") }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            {{- include "bernstein.env.postgres" (dict "context" $) | nindent 12 }}
+          # The server listens at once and retries the database connection for up to
+          # 1000 s, so /healthz answers quickly even while PostgreSQL is still starting.
+          # Liveness stays on /healthz: a database outage must not restart the pods
+          # (the process exits by itself on a database error).
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # SIGTERM is sent at the same time as the endpoint removal, so the gateway can
+          # still route requests to a terminating pod. Sleeping first keeps the pod
+          # serving until Traefik and the EndpointSlices have dropped it.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
+          {{- with .Values.result.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

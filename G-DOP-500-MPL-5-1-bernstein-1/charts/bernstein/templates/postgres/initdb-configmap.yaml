@@ -1,0 +1,14 @@
+# schema.sql for the first start of PostgreSQL. The image runs every *.sql file of
+# /docker-entrypoint-initdb.d once, on an empty data volume, before the server accepts
+# connections. This is how a first `helm install --wait` gets its tables: a post-install
+# hook only runs after --wait succeeds, and result cannot be Ready without the table.
+# Upgrades are covered by the schema Job (pre-upgrade hook).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "postgres") | nindent 4 }}
+data:
+  schema.sql: |
+    {{- .Files.Get "files/schema.sql" | trim | nindent 4 }}

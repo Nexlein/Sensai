@@ -1,0 +1,24 @@
+Bernstein is deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+Images: {{ .Values.global.registry }}/{poll,worker,result}:{{ .Values.global.tag }}
+
+1. Wait for every pod to be Ready:
+
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }} --watch
+
+2. Get the external URLs. Both pages sit behind the Gateway's public IP:
+
+  IP=$(kubectl -n {{ .Release.Namespace }} get gateway -o jsonpath='{.items[0].status.addresses[0].value}')
+  echo "poll:   http://poll.$IP.nip.io"
+  echo "result: http://result.$IP.nip.io"
+
+  An empty IP means the cloud load balancer is still being provisioned; retry in a minute.
+
+3. Without the Gateway, reach them from your machine:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/poll 8080:80     # http://localhost:8080
+  kubectl -n {{ .Release.Namespace }} port-forward svc/result 8081:80   # http://localhost:8081
+
+Release history and rollback:
+
+  helm -n {{ .Release.Namespace }} history {{ .Release.Name }}
+  helm -n {{ .Release.Namespace }} rollback {{ .Release.Name }} <revision>

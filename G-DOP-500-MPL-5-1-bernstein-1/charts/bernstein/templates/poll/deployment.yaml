@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: poll
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "poll") | nindent 4 }}
+spec:
+  {{- /* With the autoscaler on, it owns the count: a replicas field here would reset it on every helm upgrade. */}}
+  {{- if not .Values.poll.autoscaling.enabled }}
+  replicas: {{ .Values.poll.replicas }}
+  {{- end }}
+  # Zero-downtime rollout: a serving pod is only removed once its replacement is
+  # Ready (maxUnavailable 0) and has stayed Ready for 5 s (minReadySeconds).
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  minReadySeconds: 5
+  # Old ReplicaSets kept for `helm rollback`.
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "bernstein.selectorLabels" (dict "context" $ "component" "poll") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "bernstein.labels" (dict "context" $ "component" "poll") | nindent 8 }}
+      annotations:
+        checksum/redis-secret: {{ include "bernstein.secretChecksum" (dict "context" $ "component" "redis") }}
+    spec:
+      # Above preStop (10 s) + gunicorn graceful_timeout (20 s), so the kubelet never
+      # SIGKILLs a pod that is still draining.
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        # The image listens on port 80 as a non-root user: lower the first port
+        # unprivileged processes may bind. Scoped to this pod's network namespace.
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
+      # Pods of one component on different nodes (and zones), so a drain or a node
+      # loss never takes all of them. A preference, not a rule: see the helper.
+      topologySpreadConstraints:
+        {{- include "bernstein.topologySpread" (dict "context" $ "component" "poll") | trim | nindent 8 }}
+      containers:
+        - name: poll
+          image: {{ include "bernstein.image" (dict "context" $ "component" "poll") }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            {{- include "bernstein.env.redis" (dict "context" $) | nindent 12 }}
+            - name: OPTION_A
+              value: {{ .Values.poll.options.a | quote }}
+            - name: OPTION_B
+              value: {{ .Values.poll.options.b | quote }}
+            - name: OPTION_C
+              value: {{ .Values.poll.options.c | quote }}
+            - name: OPTION_D
+              value: {{ .Values.poll.options.d | quote }}
+          # Liveness only asks "is the process alive" (/healthz). It must not look at
+          # Redis: a Redis outage would then restart every poll pod. Readiness
+          # (/readyz) pings Redis, so pods leave the Service while it is down.
+          # With Redis down, each /readyz holds a gunicorn thread for ~30 s (redis-py
+          # retries). Probing every 5 s filled all 8 threads, /healthz timed out and
+          # the pods were restarted; every 10 s leaves threads free.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 6
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # SIGTERM is sent at the same time as the endpoint removal, so the gateway can
+          # still route requests to a terminating pod. Sleeping first keeps the pod
+          # serving until Traefik and the EndpointSlices have dropped it.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
+          {{- with .Values.poll.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

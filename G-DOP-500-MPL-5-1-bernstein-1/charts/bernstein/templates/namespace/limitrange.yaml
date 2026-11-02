@@ -1,0 +1,17 @@
+{{- if .Values.namespace.limitRange.enabled }}
+# Requests and limits given to any container of the namespace that declares none, so
+# no pod can run without them (and be scheduled blindly or starve a node).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: container-defaults
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "namespace") | nindent 4 }}
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        {{- toYaml .Values.namespace.limitRange.defaultRequest | nindent 8 }}
+      default:
+        {{- toYaml .Values.namespace.limitRange.default | nindent 8 }}
+{{- end }}

@@ -1,0 +1,169 @@
+# Builds the three images on every push to dev and main and pushes them to ACR, tagged with
+# the commit SHA (immutable, used by deploys) and the branch name (moving). Logs in to Azure
+# with OIDC: no password or client secret is stored in GitHub. Each pushed image is then scanned
+# with Trivy. On main, the `deploy` job then rolls the commit out on AKS. Explained in
+# docs/ci-release-images.md, docs/ci-image-scanning.md and docs/ci-deploy.md.
+name: Release images
+
+on:
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+  id-token: write
+  security-events: write
+
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [poll, worker, result]
+    env:
+      IMAGE: ${{ vars.ACR_NAME }}.azurecr.io/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      - name: Check whether this commit is already pushed
+        id: exists
+        run: |
+          if az acr manifest show-metadata -r "${{ vars.ACR_NAME }}" -n "${{ matrix.service }}:${GITHUB_SHA}" >/dev/null 2>&1; then
+            echo "${IMAGE}:${GITHUB_SHA} already exists, only moving the branch tag"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: meta
+        if: steps.exists.outputs.found == 'false'
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=ref,event=branch
+
+      - uses: docker/setup-buildx-action@v4
+
+      - if: steps.exists.outputs.found == 'false'
+        uses: docker/build-push-action@v7
+        with:
+          context: poll-application/${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+      # A commit merged from dev to main is already built: point the main tag at it.
+      - name: Move the branch tag
+        if: steps.exists.outputs.found == 'true'
+        run: docker buildx imagetools create --tag "${IMAGE}:${GITHUB_REF_NAME}" "${IMAGE}:${GITHUB_SHA}"
+
+      # Non-blocking for now (exit-code 0): the report is published, the push is not undone.
+      - name: Scan the image (report)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          output: trivy.txt
+          exit-code: "0"
+
+      - name: Scan the image (SARIF)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy.sarif
+          exit-code: "0"
+          skip-setup-trivy: true
+
+      - name: Publish the report
+        if: always()
+        run: |
+          {
+            echo "## Trivy: ${{ matrix.service }}"
+            echo '```'
+            cat trivy.txt 2>/dev/null || echo "no report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: trivy-${{ matrix.service }}
+          path: |
+            trivy.txt
+            trivy.sarif
+          if-no-files-found: ignore
+
+      # Code scanning needs GitHub Code Security on a private repository: set the repository
+      # variable CODE_SCANNING=true once it is enabled.
+      - uses: github/codeql-action/upload-sarif@v4
+        if: vars.CODE_SCANNING == 'true'
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-${{ matrix.service }}
+
+  # Rolls the images of this commit out on the cluster, on main only. Logs in as the deploy
+  # identity, whose OIDC subject is the GitHub environment (not the branch). Explained in
+  # docs/ci-deploy.md.
+  deploy:
+    needs: image
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    # Two merges never deploy at the same time; the second waits for the first.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      HELM_VERSION: v4.3.0
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # The images are already pushed by the `image` job: deploy.sh builds nothing. The
+      # identity cannot read role assignments, and Terraform already granted AcrPull.
+      - name: Deploy
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          AKS_RESOURCE_GROUP: ${{ vars.AKS_RESOURCE_GROUP }}
+          AKS_NAME: ${{ vars.AKS_NAME }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          SKIP_ACR_ATTACH: "1"
+          BACKUP_STORAGE_ACCOUNT: ${{ vars.BACKUP_STORAGE_ACCOUNT }}
+          BACKUP_CONTAINER: ${{ vars.BACKUP_CONTAINER }}
+          BACKUP_CLIENT_ID: ${{ vars.BACKUP_CLIENT_ID }}
+        run: ./scripts/deploy.sh

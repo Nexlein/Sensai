@@ -1,0 +1,12 @@
+{{- if .Values.namespace.quota.enabled }}
+# Cap on the total requests, limits and pod count of the namespace.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "namespace") | nindent 4 }}
+spec:
+  hard:
+    {{- toYaml .Values.namespace.quota.hard | nindent 4 }}
+{{- end }}

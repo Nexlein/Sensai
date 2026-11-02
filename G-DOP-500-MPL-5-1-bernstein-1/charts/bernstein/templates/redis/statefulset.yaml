@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "redis") | nindent 4 }}
+spec:
+  serviceName: redis-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "bernstein.selectorLabels" (dict "context" $ "component" "redis") | nindent 6 }}
+  # Keep the data volume when the StatefulSet is deleted (helm uninstall) or scaled
+  # down: it holds the votes not yet processed.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels:
+        {{- include "bernstein.labels" (dict "context" $ "component" "redis") | nindent 8 }}
+      annotations:
+        checksum/redis-secret: {{ include "bernstein.secretChecksum" (dict "context" $ "component" "redis") }}
+    spec:
+      # Run as the image's redis user; fsGroup makes the volume writable by it.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: redis
+          image: {{ include "bernstein.image" (dict "context" $ "component" "redis") }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          # The image entrypoint puts `redis-server` in front of arguments starting
+          # with `-`. $(REDIS_PASSWORD) is expanded by Kubernetes from env below.
+          args:
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            - --appendonly
+            - "yes"
+            - --appendfsync
+            - everysec
+            - --maxmemory
+            - {{ .Values.redis.maxmemory | quote }}
+            - --maxmemory-policy
+            - noeviction
+          ports:
+            - name: redis
+              containerPort: 6379
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bernstein.secretName" (dict "context" $ "component" "redis") }}
+                  key: password
+            # redis-cli reads its password from this variable: the probes need no
+            # `-a` option, which would show the password in the process list.
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bernstein.secretName" (dict "context" $ "component" "redis") }}
+                  key: password
+          # The image declares /data as its working directory and volume.
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          # redis-cli exits 0 on any reply, including `NOAUTH` and `LOADING` (while the
+          # AOF file is replayed after a restart), so the probes require `PONG` itself.
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "test \"$(redis-cli ping)\" = PONG"]
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "test \"$(redis-cli ping)\" = PONG"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "test \"$(redis-cli ping)\" = PONG"]
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          {{- with .Values.redis.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        # Selector labels only: volume templates can never change after creation,
+        # and the full labels include the image tag.
+        labels:
+          {{- include "bernstein.selectorLabels" (dict "context" $ "component" "redis") | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.redis.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.redis.persistence.size }}

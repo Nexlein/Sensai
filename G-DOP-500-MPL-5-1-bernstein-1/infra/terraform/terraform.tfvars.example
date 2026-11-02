@@ -1,0 +1,27 @@
+# Copy to terraform.tfvars and override only what you need.
+# Every value below is the default; no secrets belong in this file.
+
+location            = "austriaeast"
+resource_group_name = "bernstein-rg"
+acr_name            = "bernsteinacr"
+aks_name            = "bernstein-aks"
+kubernetes_version  = "1.36"
+node_vm_size        = "Standard_DS2_v2_Promo"
+node_min_count      = 2
+node_max_count      = 2
+availability_zones  = ["1", "2", "3"]
+
+tags = {
+  project    = "bernstein"
+  managed_by = "terraform"
+}
+
+budget_amount            = 60
+budget_start_date        = "2026-10-01T00:00:00Z"
+budget_actual_thresholds = [50, 80, 100]
+
+github_repository    = "EpitechPGE3-2026@216019158/G-DOP-500-MPL-5-1-bernstein-1@1405326350"
+github_push_branches = ["dev", "main"]
+
+# Required, no default.
+budget_contact_emails = ["you@example.com"]

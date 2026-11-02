@@ -1,0 +1,5 @@
+# hadolint configuration, used by the lint job in .github/workflows/ci.yml (see docs/ci.md).
+ignored:
+  # Pinning apt package versions breaks the build as soon as Debian publishes a security
+  # update and drops the old version; the base image is pinned by digest instead.
+  - DL3008

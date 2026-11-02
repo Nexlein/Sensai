@@ -1,0 +1,232 @@
+# Default values for the bernstein chart.
+# Types and required keys are enforced by values.schema.json.
+
+global:
+  # Registry hosting the poll, worker and result images, without scheme or trailing
+  # slash, e.g. `bernsteinacr.azurecr.io`. Required.
+  registry: ""
+  # Image tag shared by poll, worker and result: the git SHA built by CI. Required.
+  # Pass it with `--set-string` so an all-digit SHA is not read as a number.
+  tag: ""
+  # Pull policy for every container. Tags are immutable SHAs, so IfNotPresent is safe.
+  imagePullPolicy: IfNotPresent
+
+# Each component reads its image from `<component>.image`:
+#   registry    defaults to global.registry
+#   repository  image name inside the registry
+#   tag         defaults to global.tag
+#   digest      optional `sha256:...`, appended as `@<digest>` to pin the exact image
+
+poll:
+  image:
+    repository: poll
+    tag: ""
+  # Pods serving the voting page. Two, so that one can be lost or restarted without
+  # downtime. Ignored while autoscaling.enabled: the autoscaler owns the count then.
+  replicas: 2
+  # HorizontalPodAutoscaler, on CPU as a percentage of the CPU request (resources
+  # below). Between minReplicas and maxReplicas; scale-down waits
+  # scaleDownStabilizationSeconds after the load drops so the count does not flap.
+  # Needs metrics-server (shipped with AKS, absent from a plain kind cluster).
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    scaleDownStabilizationSeconds: 120
+  # Labels of the four choices on the voting page (OPTION_A to OPTION_D). Changing
+  # them and upgrading rolls the pods: no image rebuild needed.
+  options:
+    a: Ansible
+    b: Chef
+    c: Puppet
+    d: SaltStack
+  # CPU and memory of the poll container (gunicorn, 2 workers). The CPU request is
+  # also the base of the autoscaler's utilisation (#29).
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+worker:
+  image:
+    repository: worker
+    tag: ""
+  # Pods moving votes from Redis to PostgreSQL. Two: BLPOP hands each vote to one
+  # consumer only and the upsert is idempotent per voter, so they never conflict, and
+  # a restart of one does not pause processing.
+  replicas: 2
+  # CPU and memory of the worker container (JVM, heap at 75 % of the memory limit,
+  # so 384 MiB with the 512Mi below).
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+result:
+  image:
+    repository: result
+    tag: ""
+  # Pods serving the results page. Two, so a rolling update or a node drain always
+  # leaves one serving. Socket.IO needs the sticky cookie set by the Gateway
+  # (templates/gateway/traefikservice.yaml, #26); without gateway.domain, port-forward
+  # reaches one pod and needs nothing.
+  replicas: 2
+  # Same autoscaler as poll, off until #26: scaling out needs sticky sessions, or a
+  # browser's Socket.IO polling requests land on different pods and fail. Once #26 is
+  # done, set enabled: true and minReplicas: 2.
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    scaleDownStabilizationSeconds: 120
+  # CPU and memory of the result container (Node.js, one query per second). The CPU
+  # request is also the base of the autoscaler's utilisation (#29).
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+
+gateway:
+  # DNS suffix of the public hostnames: poll.<domain> and result.<domain>. With the
+  # public IP of Traefik that is `<ip>.nip.io` (scripts/install-gateway.sh prints it).
+  # Empty: no Gateway or HTTPRoute is rendered and the apps are only reachable with
+  # `kubectl port-forward`.
+  domain: ""
+  # GatewayClass of the implementation, created by the Traefik chart.
+  className: traefik
+  # Port of Traefik's `web` entry point inside its pod (the Service exposes it as 80).
+  port: 8000
+
+namespace:
+  # Defaults for a container that declares no requests or limits (a pod started by
+  # hand with `kubectl run`, a forgotten sidecar). Every container of the chart sets
+  # its own, so these never apply to it.
+  limitRange:
+    enabled: true
+    defaultRequest:
+      cpu: 50m
+      memory: 64Mi
+    default:
+      cpu: 200m
+      memory: 128Mi
+  # Cap on what the whole namespace may ask for. Sized for the autoscaler at its
+  # maximum (#29: 5 poll and 5 result pods) plus one surge pod per Deployment during
+  # a rollout. A deploy that would exceed it is refused instead of starving the node.
+  quota:
+    enabled: true
+    hard:
+      requests.cpu: "2"
+      requests.memory: 4Gi
+      limits.cpu: "8"
+      limits.memory: 8Gi
+      pods: "30"
+
+redis:
+  image:
+    # Official image from Docker Hub, not from global.registry.
+    registry: docker.io
+    repository: library/redis
+    # The application requires Redis 8.x. The digest pins the exact image
+    # (multi-architecture index of 8.10.2, 2026-10-13); the tag is only a readable hint.
+    tag: "8.10.2"
+    digest: sha256:2c2dff791878316e3b083188be0d578423b24813cdda5de0e80ea4f7b3e6bfd6
+  # Existing Secret holding the Redis password under the key `password`.
+  # Empty: the chart generates a random password on first install, in the Secret
+  # `redis-credentials`, and keeps it on every upgrade.
+  existingSecret: ""
+  # Memory Redis may use for the vote queue (`--maxmemory`). Keep it under
+  # resources.limits.memory: the rest is for the background AOF rewrite and the
+  # process itself. When full, Redis refuses new votes instead of dropping queued
+  # ones (`noeviction`).
+  maxmemory: 192mb
+  persistence:
+    # StorageClass of the data volume, see postgres.persistence.storageClass.
+    storageClass: managed-csi
+    # Requested size. Azure bills the next disk tier up: 1Gi is billed as 4 GiB (E1).
+    # Fixed at the first install: a StatefulSet cannot change its volume templates.
+    size: 1Gi
+  # CPU and memory of the Redis container. Redis runs commands on one thread, so a
+  # CPU limit above 1 would never be used; the limit is what caps its processing power.
+  # Memory request equals the limit: the pod's memory is guaranteed, so it is the last
+  # to be evicted when a node runs short.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+postgres:
+  image:
+    # Official image from Docker Hub, not from global.registry.
+    registry: docker.io
+    repository: library/postgres
+    # The application requires PostgreSQL 18. The digest pins the exact image
+    # (multi-architecture index of 18.6, 2026-10-07); the tag is only a readable hint.
+    tag: "18.6"
+    digest: sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+  # Database created at init and used by worker and result (POSTGRES_DB).
+  database: votes
+  # Owner of that database, used by worker and result (POSTGRES_USER).
+  user: bernstein
+  # Password of that user. Never write it in a file: pass it at deploy time with
+  # `--set-string postgres.password="$POSTGRES_PASSWORD"`. Stored by the chart in
+  # the Secret `postgres-credentials`. Required unless existingSecret is set.
+  password: ""
+  # Existing Secret holding the password under the key `password`, e.g. created
+  # with `kubectl create secret generic`. When set, password is ignored and the
+  # chart creates no Secret.
+  existingSecret: ""
+  persistence:
+    # StorageClass of the data volume. On AKS, managed-csi creates an Azure Standard
+    # SSD, zone-redundant (ZRS) when the cluster spans availability zones. Empty: the
+    # cluster's default StorageClass.
+    storageClass: managed-csi
+    # Requested size. Azure bills the next disk tier up: 5Gi is billed as 8 GiB (E2).
+    # Fixed at the first install: a StatefulSet cannot change its volume templates.
+    size: 5Gi
+  # Scheduled pg_dump to an Azure Blob container (CronJob `postgres-backup`).
+  # Off by default: it needs the storage account, identity and container that
+  # Terraform creates (outputs backup_storage_account, backup_container,
+  # backup_client_id). Authentication is workload identity: no storage key.
+  backup:
+    enabled: false
+    # Cron expression, in the cluster's time zone (UTC on AKS). Every 6 hours.
+    schedule: "0 */6 * * *"
+    storageAccount: ""
+    container: postgres-backups
+    # Client ID of the user-assigned managed identity federated with the
+    # ServiceAccount `postgres-backup`.
+    clientId: ""
+    # Runs the upload. The dump itself runs in the postgres image above, so its
+    # pg_dump always matches the server version.
+    uploadImage:
+      registry: mcr.microsoft.com
+      repository: azure-cli
+      # Multi-architecture index of 2.91.0 (2026-10-13); the tag is only a readable hint.
+      tag: "2.91.0"
+      digest: sha256:933eb8dcb81aecb6f77e03c5b8660f0a1dfa9e1d16525763a27f86ff3b83a044
+    # Scratch space for the dump between the two containers (emptyDir).
+    sizeLimit: 1Gi
+  # CPU and memory of the PostgreSQL container. The memory limit leaves room for
+  # shared_buffers (128 MiB by default) plus the connections of worker and result.
+  # Memory request equals the limit, as for Redis.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi

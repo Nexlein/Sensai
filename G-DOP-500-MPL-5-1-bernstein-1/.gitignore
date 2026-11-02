@@ -1,0 +1,14 @@
+.env
+.env.local
+.direnv/
+
+# Provided material, not part of the deliverable
+project-applications.zip
+bernstein-project.pdf
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars

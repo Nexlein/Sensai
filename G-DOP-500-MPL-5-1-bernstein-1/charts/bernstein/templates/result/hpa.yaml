@@ -1,0 +1,1 @@
+{{- include "bernstein.hpa" (dict "context" $ "component" "result") }}

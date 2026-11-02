@@ -1,0 +1,29 @@
+{{- if .Values.gateway.domain }}
+# One HTTPRoute per app, matched on the host name. Host-based rather than path-based:
+# result serves its assets and /socket.io from `/`, which a path prefix would break.
+{{- range $app := list "poll" "result" }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $app }}
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "gateway") | nindent 4 }}
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - {{ printf "%s.%s" $app $.Values.gateway.domain | quote }}
+  rules:
+    - backendRefs:
+        {{- if eq $app "result" }}
+        # Through the sticky-cookie wrapper of the Service (traefikservice.yaml).
+        - group: traefik.io
+          kind: TraefikService
+          name: result-sticky
+        {{- else }}
+        - name: {{ $app }}
+          port: 80
+        {{- end }}
+{{- end }}
+{{- end }}

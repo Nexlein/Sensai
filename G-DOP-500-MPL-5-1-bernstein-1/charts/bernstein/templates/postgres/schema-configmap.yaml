@@ -1,0 +1,16 @@
+# schema.sql as a file for the schema Job. A hook too, with a lower weight than the
+# Job: on `helm upgrade`, regular objects are only applied after pre-upgrade hooks,
+# so a plain ConfigMap would still hold the previous schema when the Job runs.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-schema
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "postgres") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+data:
+  schema.sql: |
+    {{- .Files.Get "files/schema.sql" | trim | nindent 4 }}

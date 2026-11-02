@@ -1,0 +1,16 @@
+# Stable address of the voting page inside the cluster: poll:80. The Gateway
+# (#22) sends the public traffic here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: poll
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "poll") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "bernstein.selectorLabels" (dict "context" $ "component" "poll") | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

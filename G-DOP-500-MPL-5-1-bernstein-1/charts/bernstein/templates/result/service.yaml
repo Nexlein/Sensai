@@ -1,0 +1,16 @@
+# Stable address of the results page: result:80. The Gateway (#22) sends the public
+# traffic here. With more than one replica, Socket.IO needs sticky sessions (#26).
+apiVersion: v1
+kind: Service
+metadata:
+  name: result
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "result") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "bernstein.selectorLabels" (dict "context" $ "component" "result") | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

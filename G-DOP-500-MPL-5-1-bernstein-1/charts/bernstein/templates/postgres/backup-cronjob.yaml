@@ -1,0 +1,127 @@
+{{- if .Values.postgres.backup.enabled }}
+{{- $backup := .Values.postgres.backup }}
+{{- $account := required "values: postgres.backup.storageAccount is required when postgres.backup.enabled" $backup.storageAccount }}
+{{- $upload := $backup.uploadImage }}
+# Dumps the database every `schedule` and uploads it to Azure Blob. Two steps in one
+# pod, sharing an emptyDir:
+#   1. initContainer `dump` (postgres image): pg_dump -Fc, so the client always
+#      matches the server version;
+#   2. container `upload` (azure-cli image): logs in with the workload identity
+#      token and copies the file to the container. No storage key exists.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "postgres") | nindent 4 }}
+spec:
+  schedule: {{ $backup.schedule | quote }}
+  # A slow run must never overlap the next one.
+  concurrencyPolicy: Forbid
+  # A run that could not start within 10 minutes of its slot is skipped.
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            {{- include "bernstein.labels" (dict "context" $ "component" "postgres") | nindent 12 }}
+            # Asks the workload identity webhook to inject the token file and env.
+            azure.workload.identity/use: "true"
+        spec:
+          serviceAccountName: postgres-backup
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+          initContainers:
+            - name: dump
+              image: {{ include "bernstein.image" (dict "context" $ "component" "postgres") }}
+              imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+              # pg_dump reads these PG* variables itself.
+              env:
+                - name: PGHOST
+                  value: postgres
+                - name: PGDATABASE
+                  value: {{ .Values.postgres.database | quote }}
+                - name: PGUSER
+                  value: {{ .Values.postgres.user | quote }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "bernstein.secretName" (dict "context" $ "component" "postgres") }}
+                      key: password
+              command:
+                - sh
+                - -ec
+                - |
+                  pg_dump -Fc -f /backup/dump.pgdump
+                  ls -l /backup/dump.pgdump
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          containers:
+            - name: upload
+              image: {{ printf "%s/%s:%s@%s" $upload.registry $upload.repository $upload.tag $upload.digest }}
+              imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+              env:
+                # The CLI keeps its login state here; the image's home is not writable as uid 999.
+                - name: AZURE_CONFIG_DIR
+                  value: /tmp/azure
+                - name: STORAGE_ACCOUNT
+                  value: {{ $account | quote }}
+                - name: CONTAINER
+                  value: {{ $backup.container | quote }}
+              # AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_FEDERATED_TOKEN_FILE are
+              # injected by the workload identity webhook.
+              command:
+                - sh
+                - -ec
+                - |
+                  az login --service-principal --allow-no-subscriptions \
+                    -u "$AZURE_CLIENT_ID" -t "$AZURE_TENANT_ID" \
+                    --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")" -o none
+                  name="$(date -u +%Y%m%dT%H%M%SZ).pgdump"
+                  az storage blob upload --auth-mode login \
+                    --account-name "$STORAGE_ACCOUNT" --container-name "$CONTAINER" \
+                    --name "$name" --file /backup/dump.pgdump --no-progress -o none
+                  echo "uploaded $CONTAINER/$name"
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                  readOnly: true
+                - name: azure-config
+                  mountPath: /tmp/azure
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          volumes:
+            - name: backup
+              emptyDir:
+                sizeLimit: {{ $backup.sizeLimit }}
+            - name: azure-config
+              emptyDir: {}
+{{- end }}

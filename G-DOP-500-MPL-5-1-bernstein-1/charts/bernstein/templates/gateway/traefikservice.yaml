@@ -1,0 +1,29 @@
+{{- if .Values.gateway.domain }}
+# Wraps the `result` Service to add a sticky-session cookie. Socket.IO opens with
+# several long-polling requests that must reach the pod holding the handshake state;
+# without stickiness a second result pod answers `400 Session ID unknown`.
+# Gateway API has no standard field for this (HTTPRoute sessionPersistence is not
+# implemented by Traefik), so the result HTTPRoute points at this TraefikService
+# instead of the Service. Needs the Traefik CRDs (installed with Traefik by
+# scripts/install-gateway.sh) and this namespace in Traefik's
+# providers.kubernetesGateway.crossProviderNamespaces.
+apiVersion: traefik.io/v1alpha1
+kind: TraefikService
+metadata:
+  name: result-sticky
+  labels:
+    {{- include "bernstein.labels" (dict "context" $ "component" "gateway") | nindent 4 }}
+spec:
+  weighted:
+    services:
+      - name: result
+        port: 80
+        # On the Kubernetes Service entry, which balances across the pods. A
+        # `sticky` on `weighted` itself only pins the choice between services (here
+        # one), so every client would get the same cookie and no pod affinity.
+        sticky:
+          cookie:
+            name: bernstein_result
+            httpOnly: true
+            sameSite: lax
+{{- end }}

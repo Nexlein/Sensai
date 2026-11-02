@@ -1,0 +1,126 @@
+# Pull request checks: lint the Dockerfiles, the Helm chart and Terraform, then build the
+# three images without pushing them. `lint` and `build` are the required status checks on
+# dev and main. Explained in docs/ci.md.
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HELM_VERSION: v4.3.0
+  KUBECONFORM_VERSION: v0.8.0
+  KUBERNETES_VERSION: 1.36.0
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            poll: poll-application/poll/**
+            worker: poll-application/worker/**
+            result: poll-application/result/**
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Lint Dockerfiles
+        uses: hadolint/hadolint-action@v3.5.0
+        with:
+          recursive: true
+          dockerfile: Dockerfile
+          config: .hadolint.yaml
+
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin kubeconform
+
+      - name: Lint and validate the chart
+        run: |
+          ARGS=(--set global.registry=example.azurecr.io --set-string global.tag=ci --set-string postgres.password=ci)
+          helm lint --strict charts/bernstein "${ARGS[@]}"
+          helm template bernstein charts/bernstein "${ARGS[@]}" \
+            | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}"
+
+      - name: Check that every container has CPU and memory requests and limits
+        run: |
+          ARGS=(--set global.registry=example.azurecr.io --set-string global.tag=ci --set-string postgres.password=ci)
+          missing=$(helm template bernstein charts/bernstein "${ARGS[@]}" \
+            | yq -o=json -I0 '.spec | (.template.spec // .jobTemplate.spec.template.spec) | select(. != null) | (.containers + (.initContainers // []))[] | select((.resources.requests.cpu and .resources.requests.memory and .resources.limits.cpu and .resources.limits.memory) | not) | .name')
+          if [ -n "$missing" ]; then
+            echo "Containers without requests and limits: $missing"
+            exit 1
+          fi
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.15"
+
+      - name: Check Terraform
+        working-directory: infra/terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+
+  image:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: poll-application/${{ matrix.service }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+  # Single required check for the matrix: skipped image builds (no change) count as success,
+  # a failed or cancelled one fails it.
+  build:
+    needs: [changes, image]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check image builds
+        run: |
+          if [ "${{ needs.changes.result }}" != success ]; then
+            echo "change detection: ${{ needs.changes.result }}"; exit 1
+          fi
+          case "${{ needs.image.result }}" in
+            success|skipped) echo "image builds: ${{ needs.image.result }}" ;;
+            *) echo "image builds: ${{ needs.image.result }}"; exit 1 ;;
+          esac

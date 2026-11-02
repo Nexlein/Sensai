@@ -1,0 +1,46 @@
+# Weekly update PRs for base image digests, application dependencies and GitHub Actions,
+# targeting dev. Explained in docs/ci-image-scanning.md.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories: [/poll-application/poll, /poll-application/worker, /poll-application/result]
+    target-branch: dev
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
+
+  - package-ecosystem: pip
+    directory: /poll-application/poll
+    target-branch: dev
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
+
+  - package-ecosystem: npm
+    directory: /poll-application/result
+    target-branch: dev
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
+
+  - package-ecosystem: maven
+    directory: /poll-application/worker
+    target-branch: dev
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build(deps)
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci(deps)
+    groups:
+      actions:
+        patterns: ["*"]

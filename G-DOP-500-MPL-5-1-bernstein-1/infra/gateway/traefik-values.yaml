@@ -1,0 +1,30 @@
+# Values of the Traefik Helm chart, installed once per cluster by
+# scripts/install-gateway.sh. Explained in docs/gateway.md.
+
+providers:
+  kubernetesGateway:
+    # Watch Gateway API objects (Gateway, HTTPRoute) in every namespace.
+    enabled: true
+    # Namespaces whose HTTPRoutes may point at a TraefikService (the sticky-session
+    # wrapper of result, #26). install-gateway.sh overrides it with $NAMESPACE.
+    crossProviderNamespaces:
+      - bernstein
+
+gatewayClass:
+  # Creates the GatewayClass `traefik` that our Gateway refers to.
+  enabled: true
+
+gateway:
+  # No default Gateway: the Gateway belongs to the bernstein chart, next to its routes.
+  enabled: false
+
+ports:
+  websecure:
+    # HTTP only (no certificate, no domain of our own): keeps the Service, and the
+    # load balancer rules, to port 80.
+    expose:
+      default: false
+
+ingressRoute:
+  dashboard:
+    enabled: false
